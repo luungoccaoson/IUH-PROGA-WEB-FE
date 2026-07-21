@@ -24,71 +24,69 @@ export function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-[#090d16]/80 backdrop-blur-md border-b border-white/10 py-3 shadow-lg shadow-indigo-950/20"
+          ? "bg-[#FFFFFF]/95 backdrop-blur-md border-b border-[#E5E7EB] py-3 shadow-sm"
           : "bg-transparent py-5"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-cyan-500 p-[1px] shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-all">
-            <div className="w-full h-full bg-[#090d16] rounded-[11px] flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-cyan-400 group-hover:rotate-12 transition-transform duration-300" />
-            </div>
+          <div className="w-10 h-10 rounded-xl bg-[#F6F5EF] border border-[#E5E7EB] flex items-center justify-center shadow-sm">
+            <Sparkles className="w-5 h-5 text-[#111827] group-hover:rotate-12 transition-transform duration-300" />
           </div>
           <div className="flex flex-col">
-            <span className="font-extrabold text-xl tracking-wider gradient-text font-sans">
+            <span className="font-extrabold text-xl tracking-wider text-[#111827] font-sans">
               PROGA
             </span>
-            <span className="text-[10px] uppercase tracking-widest text-indigo-400 font-mono">
+            <span className="text-[10px] uppercase tracking-widest text-[#6B7280] font-mono font-bold">
               AI Project Platform
             </span>
           </div>
         </Link>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-8 glass-panel px-6 py-2 rounded-full border border-white/10">
+        <nav className="hidden md:flex items-center gap-8 bg-[#F6F5EF] px-6 py-2 rounded-full border border-[#E5E7EB] shadow-sm">
           <a
             href="#features"
-            className="text-sm font-medium text-slate-300 hover:text-cyan-400 transition-colors flex items-center gap-1.5"
+            className="text-sm font-semibold text-[#111827] hover:text-[#137333] transition-colors flex items-center gap-1.5"
           >
-            <Zap className="w-4 h-4 text-cyan-400" />
+            <Zap className="w-4 h-4 text-[#137333]" />
             Tính năng
           </a>
           <a
             href="#ai-agents"
-            className="text-sm font-medium text-slate-300 hover:text-indigo-400 transition-colors flex items-center gap-1.5"
+            className="text-sm font-semibold text-[#111827] hover:text-[#137333] transition-colors flex items-center gap-1.5"
           >
-            <Bot className="w-4 h-4 text-indigo-400" />
+            <Bot className="w-4 h-4 text-[#111827]" />
             AI Agents
           </a>
           <a
             href="#kanban"
-            className="text-sm font-medium text-slate-300 hover:text-violet-400 transition-colors flex items-center gap-1.5"
+            className="text-sm font-semibold text-[#111827] hover:text-[#137333] transition-colors flex items-center gap-1.5"
           >
-            <LayoutDashboard className="w-4 h-4 text-violet-400" />
+            <LayoutDashboard className="w-4 h-4 text-[#137333]" />
             Bảng Kanban
           </a>
           <a
             href="#mobile-app"
-            className="text-sm font-medium text-slate-300 hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+            className="text-sm font-semibold text-[#111827] hover:text-[#137333] transition-colors flex items-center gap-1.5"
           >
-            <Smartphone className="w-4 h-4 text-emerald-400" />
+            <Smartphone className="w-4 h-4 text-[#6B7280]" />
             Mobile Sync
           </a>
         </nav>
 
-        {/* Action Buttons */}
+        {/* Action Buttons (No Theme Switcher) */}
         <div className="hidden md:flex items-center gap-4">
           <Link
             href="/login"
-            className="text-sm font-medium text-slate-300 hover:text-white px-4 py-2 rounded-lg transition-colors"
+            className="text-sm font-bold text-[#111827] hover:text-black px-4 py-2 rounded-lg transition-colors"
           >
             Đăng nhập
           </Link>
           <Link
             href="/workspaces"
-            className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-600 shadow-md shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-[#111827] hover:bg-[#1F2937] shadow-md transition-all duration-200"
           >
             <span>Vào Workspace</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -98,7 +96,7 @@ export function Navbar() {
         {/* Mobile Menu Toggle */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+          className="md:hidden p-2 rounded-lg bg-[#F6F5EF] border border-[#E5E7EB] text-[#111827]"
           aria-label="Toggle Menu"
         >
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -107,45 +105,45 @@ export function Navbar() {
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="md:hidden glass-panel border-b border-white/10 px-6 py-6 mt-3 space-y-4 animate-in fade-in slide-in-from-top-4">
+        <div className="md:hidden bg-[#FFFFFF] border-b border-[#E5E7EB] px-6 py-6 mt-3 space-y-4 animate-in fade-in slide-in-from-top-4">
           <a
             href="#features"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 hover:text-cyan-400 font-medium py-2"
+            className="block text-[#111827] font-semibold py-2"
           >
             Tính năng hệ thống
           </a>
           <a
             href="#ai-agents"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 hover:text-indigo-400 font-medium py-2"
+            className="block text-[#111827] font-semibold py-2"
           >
             Bộ ba AI Agents
           </a>
           <a
             href="#kanban"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 hover:text-violet-400 font-medium py-2"
+            className="block text-[#111827] font-semibold py-2"
           >
-            Bảng Kanban & Spaces
+            Bảng Kanban &amp; Spaces
           </a>
           <a
             href="#mobile-app"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 hover:text-emerald-400 font-medium py-2"
+            className="block text-[#111827] font-semibold py-2"
           >
             Ứng dụng Mobile Sync
           </a>
-          <div className="pt-4 border-t border-slate-800 flex flex-col gap-3">
+          <div className="pt-4 border-t border-[#E5E7EB] flex flex-col gap-3">
             <Link
               href="/login"
-              className="w-full text-center py-2.5 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 font-medium text-sm"
+              className="w-full text-center py-2.5 rounded-lg border border-[#E5E7EB] text-[#111827] font-bold text-sm"
             >
               Đăng nhập
             </Link>
             <Link
               href="/workspaces"
-              className="w-full text-center py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm shadow-lg shadow-indigo-600/30"
+              className="w-full text-center py-2.5 rounded-lg bg-[#111827] text-white font-bold text-sm shadow-md"
             >
               Vào Workspace
             </Link>
