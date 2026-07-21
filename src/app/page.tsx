@@ -7,7 +7,7 @@ import { Footer } from "@/components/shared/Footer";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#090d16] text-slate-100 selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen flex flex-col bg-white text-[#111827] selection:bg-[#111827] selection:text-white">
       {/* Top Navbar */}
       <Navbar />
 
