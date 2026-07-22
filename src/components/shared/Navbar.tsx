@@ -4,11 +4,16 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sparkles, ArrowRight, Menu, X, LayoutDashboard, Bot, Smartphone, Zap } from "lucide-react";
 
+import { useAuthStore } from "@/stores/useAuthStore";
+
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const handleScroll = () => {
       if (window.scrollY > 20) {
         setIsScrolled(true);
@@ -78,19 +83,44 @@ export function Navbar() {
 
         {/* Action Buttons (No Theme Switcher) */}
         <div className="hidden md:flex items-center gap-4">
-          <Link
-            href="/login"
-            className="text-sm font-bold text-[#111827] hover:text-black px-4 py-2 rounded-lg transition-colors"
-          >
-            Đăng nhập
-          </Link>
-          <Link
-            href="/workspaces"
-            className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-[#111827] hover:bg-[#1F2937] shadow-md transition-all duration-200"
-          >
-            <span>Vào Workspace</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
+          {mounted && isAuthenticated && user ? (
+            <div className="flex items-center gap-3.5 bg-[#F6F5EF] pl-3.5 pr-4 py-1.5 rounded-full border border-[#E5E7EB] shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shadow-sm">
+                {user.username.substring(0, 2).toUpperCase()}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-bold text-[#111827] font-sans">
+                  {user.username}
+                </span>
+                <span className="text-[10px] text-[#6B7280] font-mono leading-none">
+                  {user.email}
+                </span>
+              </div>
+              <Link
+                href="/workspaces"
+                className="ml-2 group relative inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-[#111827] hover:bg-[#1F2937] shadow-sm transition-all duration-200"
+              >
+                <span>Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-sm font-bold text-[#111827] hover:text-black px-4 py-2 rounded-lg transition-colors"
+              >
+                Đăng nhập
+              </Link>
+              <Link
+                href="/workspaces"
+                className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-[#111827] hover:bg-[#1F2937] shadow-md transition-all duration-200"
+              >
+                <span>Vào Workspace</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -135,18 +165,43 @@ export function Navbar() {
             Ứng dụng Mobile Sync
           </a>
           <div className="pt-4 border-t border-[#E5E7EB] flex flex-col gap-3">
-            <Link
-              href="/login"
-              className="w-full text-center py-2.5 rounded-lg border border-[#E5E7EB] text-[#111827] font-bold text-sm"
-            >
-              Đăng nhập
-            </Link>
-            <Link
-              href="/workspaces"
-              className="w-full text-center py-2.5 rounded-lg bg-[#111827] text-white font-bold text-sm shadow-md"
-            >
-              Vào Workspace
-            </Link>
+            {mounted && isAuthenticated && user ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-[#F6F5EF] border border-[#E5E7EB]">
+                  <div className="w-9 h-9 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center">
+                    {user.username.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-sm font-bold text-[#111827] truncate">{user.username}</p>
+                    <p className="text-xs text-[#6B7280] font-mono truncate">{user.email}</p>
+                  </div>
+                </div>
+                <Link
+                  href="/workspaces"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center block py-2.5 rounded-lg bg-[#111827] text-white font-bold text-sm shadow-md"
+                >
+                  Vào Workspace Dashboard
+                </Link>
+              </div>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-lg border border-[#E5E7EB] text-[#111827] font-bold text-sm"
+                >
+                  Đăng nhập
+                </Link>
+                <Link
+                  href="/workspaces"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-lg bg-[#111827] text-white font-bold text-sm shadow-md"
+                >
+                  Vào Workspace
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

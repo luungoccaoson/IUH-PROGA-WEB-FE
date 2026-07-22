@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { LayoutGrid, Briefcase, CheckSquare, Sparkles, LogOut } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -13,6 +13,11 @@ export default function DashboardLayout({
 }) {
   const { user, logout } = useAuthStore();
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
@@ -84,14 +89,14 @@ export default function DashboardLayout({
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shrink-0">
-                {user?.username ? user.username.substring(0, 2).toUpperCase() : "SL"}
+                {mounted && user?.username ? user.username.substring(0, 2).toUpperCase() : "SL"}
               </div>
               <div className="truncate text-xs">
                 <p className="font-bold text-[#111827] truncate">
-                  {user?.username || "Son Luu"}
+                  {mounted && user?.username ? user.username : "Son Luu"}
                 </p>
                 <p className="text-[10px] text-[#6B7280] font-mono truncate">
-                  {user?.email || "developer@proga.vn"}
+                  {mounted && user?.email ? user.email : "developer@proga.vn"}
                 </p>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { AuthResponse, User, ApiResponse } from '@/types';
 export const authService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     const response = await apiClient.post<ApiResponse<AuthResponse>>('/auth/login', {
-      email,
+      usernameOrEmail: email,
       password,
     });
     return response.data.data;
