@@ -11,13 +11,35 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout } = useAuthStore();
+  const { user, logout, loadAuthFromStorage } = useAuthStore();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    loadAuthFromStorage();
     setMounted(true);
-  }, []);
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      window.location.href = '/login';
+    }
+  }, [loadAuthFromStorage]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#F6F5EF] flex flex-col items-center justify-center font-sans text-sm text-[#6B7280]">
+        <div className="w-10 h-10 rounded-xl bg-white border border-[#E5E7EB] flex items-center justify-center shadow-sm animate-bounce mb-3">
+          <Sparkles className="w-5 h-5 text-[#111827]" />
+        </div>
+        <p className="font-bold text-[#111827] font-mono text-xs uppercase tracking-widest animate-pulse">
+          Loading dashboard...
+        </p>
+      </div>
+    );
+  }
+
+  if (typeof window !== 'undefined' && !localStorage.getItem('accessToken')) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
@@ -105,7 +127,7 @@ export default function DashboardLayout({
           <button
             onClick={() => {
               logout();
-              window.location.href = "/login";
+              window.location.href = "/";
             }}
             className="w-full py-2 rounded-xl border border-[#E5E7EB] hover:bg-[#FDEDEC] text-[#D93025] text-xs font-mono font-bold flex items-center justify-center gap-2 transition-colors"
           >

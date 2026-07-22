@@ -9,10 +9,11 @@ import { useAuthStore } from "@/stores/useAuthStore";
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, loadAuthFromStorage } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    loadAuthFromStorage();
     setMounted(true);
     const handleScroll = () => {
       if (window.scrollY > 20) {
