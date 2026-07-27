@@ -3,14 +3,28 @@ import { Workspace, Space, Task, TaskStatus, ApiResponse } from '@/types';
 
 export const workspaceService = {
   // Workspaces
-  getWorkspaces: async (): Promise<Workspace[]> => {
-    const response = await apiClient.get<ApiResponse<Workspace[]>>('/workspaces');
+  getWorkspacesByOwner: async (ownerId: string): Promise<Workspace[]> => {
+    const response = await apiClient.get<ApiResponse<Workspace[]>>(`/workspaces/owner/${ownerId}`);
     return response.data.data;
   },
 
-  createWorkspace: async (data: { name: string; description?: string }): Promise<Workspace> => {
+  getWorkspaceById: async (id: string): Promise<Workspace> => {
+    const response = await apiClient.get<ApiResponse<Workspace>>(`/workspaces/${id}`);
+    return response.data.data;
+  },
+
+  createWorkspace: async (data: { name: string; description?: string; ownerId: string }): Promise<Workspace> => {
     const response = await apiClient.post<ApiResponse<Workspace>>('/workspaces', data);
     return response.data.data;
+  },
+
+  updateWorkspace: async (id: string, data: { name: string; description?: string; ownerId: string }): Promise<Workspace> => {
+    const response = await apiClient.put<ApiResponse<Workspace>>(`/workspaces/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteWorkspace: async (id: string): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/workspaces/${id}`);
   },
 
   // Spaces

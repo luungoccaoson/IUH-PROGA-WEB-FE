@@ -1,265 +1,360 @@
 "use client";
 
-import React, { useState } from "react";
-import { Plus, MoreHorizontal, Clock } from "lucide-react";
-
-interface ProjectItem {
-  id: string;
-  name: string;
-  client: string;
-  dueDate: string;
-  statusText: string;
-  statusType: "success" | "warning";
-  progress: number;
-}
-
-const INITIAL_PROJECTS: ProjectItem[] = [
-  {
-    id: "proj-1",
-    name: "Hệ thống ERP nội bộ",
-    client: "Công ty ABC",
-    dueDate: "2026-08-15",
-    statusText: "Đúng tiến độ",
-    statusType: "success",
-    progress: 72,
-  },
-  {
-    id: "proj-2",
-    name: "Hệ sinh thái PROGA Platform",
-    client: "IUH KLTN - Khoa CNTT",
-    dueDate: "2026-09-30",
-    statusText: "Đúng tiến độ",
-    statusType: "success",
-    progress: 85,
-  },
-  {
-    id: "proj-3",
-    name: "Ứng dụng Mobile Expo Sync",
-    client: "PROGA Team",
-    dueDate: "2026-07-28",
-    statusText: "Cần chú ý",
-    statusType: "warning",
-    progress: 40,
-  },
-];
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, MoreVertical, Edit2, Trash2, Folder, Sparkles, AlertCircle } from "lucide-react";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { workspaceService } from "@/services/workspace.service";
+import { Workspace } from "@/types";
 
 export default function WorkspacesPage() {
-  const [projects, setProjects] = useState<ProjectItem[]>(INITIAL_PROJECTS);
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newProjName, setNewProjName] = useState("");
-  const [newProjClient, setNewProjClient] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  // Form states
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
+
+  // Fetch workspaces
+  const fetchWorkspaces = async () => {
+    if (!user?.id) return;
+    try {
+      setLoading(true);
+      setError("");
+      const list = await workspaceService.getWorkspacesByOwner(user.id);
+      setWorkspaces(list);
+    } catch (err: any) {
+      console.error("Error loading workspaces:", err);
+      setError("Không thể tải danh sách Workspace. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [user?.id]);
+
+  // Create Workspace
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjName.trim()) return;
+    if (!name.trim() || !user?.id) return;
 
-    const newProj: ProjectItem = {
-      id: `proj-${Date.now()}`,
-      name: newProjName,
-      client: newProjClient || "Nội bộ",
-      dueDate: "2026-10-15",
-      statusText: "Đúng tiến độ",
-      statusType: "success",
-      progress: 0,
-    };
+    try {
+      setError("");
+      const newWs = await workspaceService.createWorkspace({
+        name: name.trim(),
+        description: description.trim(),
+        ownerId: user.id,
+      });
+      setWorkspaces([newWs, ...workspaces]);
+      setShowCreateModal(false);
+      setName("");
+      setDescription("");
+    } catch (err: any) {
+      console.error("Error creating workspace:", err);
+      setError("Không thể tạo Workspace mới.");
+    }
+  };
 
-    setProjects([newProj, ...projects]);
-    setNewProjName("");
-    setNewProjClient("");
-    setShowCreateModal(false);
+  // Edit Workspace
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWorkspace || !name.trim() || !user?.id) return;
+
+    try {
+      setError("");
+      const updated = await workspaceService.updateWorkspace(selectedWorkspace.id, {
+        name: name.trim(),
+        description: description.trim(),
+        ownerId: user.id,
+      });
+      setWorkspaces(workspaces.map((w) => (w.id === updated.id ? updated : w)));
+      setShowEditModal(false);
+      setSelectedWorkspace(null);
+      setName("");
+      setDescription("");
+    } catch (err: any) {
+      console.error("Error updating workspace:", err);
+      setError("Không thể cập nhật thông tin Workspace.");
+    }
+  };
+
+  // Delete Workspace
+  const handleDelete = async () => {
+    if (!selectedWorkspace) return;
+
+    try {
+      setError("");
+      await workspaceService.deleteWorkspace(selectedWorkspace.id);
+      setWorkspaces(workspaces.filter((w) => w.id !== selectedWorkspace.id));
+      setShowDeleteModal(false);
+      setSelectedWorkspace(null);
+    } catch (err: any) {
+      console.error("Error deleting workspace:", err);
+      setError("Không thể xóa Workspace này.");
+    }
+  };
+
+  const openEditModal = (w: Workspace, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedWorkspace(w);
+    setName(w.name);
+    setDescription(w.description || "");
+    setShowEditModal(true);
+  };
+
+  const openDeleteModal = (w: Workspace, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedWorkspace(w);
+    setShowDeleteModal(true);
   };
 
   return (
     <div className="max-w-6xl space-y-8 animate-in fade-in duration-300">
-      {/* Header Bar matching image: Dashboard + [+ Dự án mới] */}
+      {/* Header Bar */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#111827] font-sans">
-          Dashboard
-        </h1>
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-[#6B7280] font-mono font-bold">
+            Quản Lý Hệ Thống
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#111827] font-sans mt-1">
+            Workspaces
+          </h1>
+        </div>
 
-        <div className="flex items-center gap-3">
+        <button
+          onClick={() => {
+            setName("");
+            setDescription("");
+            setShowCreateModal(true);
+          }}
+          className="px-4 py-2.5 rounded-xl bg-[#111827] text-white hover:bg-[#1F2937] font-bold text-sm shadow-md transition-all flex items-center gap-1.5"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Tạo Workspace</span>
+        </button>
+      </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-[#FDEDEC] border border-[#FADBD8] text-[#D93025] p-4 rounded-xl flex items-center gap-2 text-sm font-medium">
+          <AlertCircle className="w-5 h-5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-[#6B7280]">
+          <Sparkles className="w-8 h-8 text-[#111827] animate-spin mb-3" />
+          <p className="font-mono text-xs uppercase tracking-wider">Đang tải danh sách Workspace...</p>
+        </div>
+      ) : workspaces.length === 0 ? (
+        <div className="bg-[#F6F5EF] border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-sm">
+          <Folder className="w-12 h-12 text-[#6B7280] mx-auto" />
+          <h3 className="text-lg font-bold text-[#111827]">Không có Workspace nào</h3>
+          <p className="text-sm text-[#6B7280]">
+            Bắt đầu bằng cách tạo Workspace đầu tiên của bạn để quản lý các Spaces và các nhiệm vụ tích hợp AI Agents.
+          </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl bg-white border border-[#111827] text-[#111827] font-bold text-sm hover:bg-[#F6F5EF] transition-all shadow-sm flex items-center gap-1.5"
+            className="px-5 py-2.5 bg-[#111827] text-white font-bold rounded-xl text-sm hover:bg-[#1F2937] transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            <span>Dự án mới</span>
-          </button>
-          <button className="p-2 text-[#6B7280] hover:text-[#111827]">
-            <MoreHorizontal className="w-5 h-5" />
+            Tạo Workspace đầu tiên
           </button>
         </div>
-      </div>
-
-      {/* 4 Summary Stat Cards matching uploaded image in #F6F5EF warm cream */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: TỔNG DỰ ÁN */}
-        <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-sm">
-          <p className="text-xs font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-            TỔNG DỰ ÁN
-          </p>
-          <p className="text-3xl font-extrabold text-[#111827] font-sans">
-            4
-          </p>
-          <p className="text-xs text-[#4B5563] font-medium">
-            Đang quản lý
-          </p>
-        </div>
-
-        {/* Card 2: HOÀN THÀNH */}
-        <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-sm">
-          <p className="text-xs font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-            HOÀN THÀNH
-          </p>
-          <p className="text-3xl font-extrabold text-[#137333] font-sans">
-            1
-          </p>
-          <p className="text-xs text-[#4B5563] font-medium">
-            Dự án xong
-          </p>
-        </div>
-
-        {/* Card 3: CẦN CHÚ Ý */}
-        <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-sm">
-          <p className="text-xs font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-            CẦN CHÚ Ý
-          </p>
-          <p className="text-3xl font-extrabold text-[#D93025] font-sans">
-            2
-          </p>
-          <p className="text-xs text-[#4B5563] font-medium">
-            Rủi ro / Trễ
-          </p>
-        </div>
-
-        {/* Card 4: TIẾN ĐỘ TB */}
-        <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-sm">
-          <p className="text-xs font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-            TIẾN ĐỘ TB
-          </p>
-          <p className="text-3xl font-extrabold text-[#111827] font-sans">
-            56%
-          </p>
-          <p className="text-xs text-[#4B5563] font-medium">
-            Trung bình
-          </p>
-        </div>
-      </div>
-
-      {/* Projects List Section matching image */}
-      <div className="space-y-4 pt-4">
-        <h2 className="text-base font-bold text-[#111827] font-sans">
-          Tất cả dự án
-        </h2>
-
-        <div className="space-y-4">
-          {projects.map((proj) => (
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {workspaces.map((w) => (
             <div
-              key={proj.id}
-              className="bg-white p-6 rounded-2xl border border-[#3B82F6] shadow-sm hover:shadow-md transition-all space-y-4"
+              key={w.id}
+              onClick={() => router.push(`/workspaces/${w.id}`)}
+              className="bg-white p-6 rounded-2xl border border-[#E5E7EB] hover:border-[#111827] cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 group flex flex-col justify-between min-h-[180px] relative"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-bold text-[#111827] font-sans">
-                    {proj.name}
-                  </h3>
-                  <p className="text-xs text-[#6B7280] mt-1 font-mono">
-                    {proj.client} · Hạn: {proj.dueDate}
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-[#F6F5EF] border border-[#E5E7EB] flex items-center justify-center text-[#111827] group-hover:bg-[#111827] group-hover:text-white transition-colors">
+                    <Folder className="w-5 h-5" />
+                  </div>
+
+                  {/* Actions buttons */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => openEditModal(w, e)}
+                      className="p-1.5 rounded-lg hover:bg-[#F6F5EF] text-[#6B7280] hover:text-[#111827]"
+                      title="Chỉnh sửa"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => openDeleteModal(w, e)}
+                      className="p-1.5 rounded-lg hover:bg-[#FDEDEC] text-[#6B7280] hover:text-[#D93025]"
+                      title="Xóa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div>
-                  {proj.statusType === "success" && (
-                    <span className="px-3 py-1 rounded-full bg-[#E6F4EA] text-[#137333] text-xs font-bold font-sans">
-                      Đúng tiến độ
-                    </span>
-                  )}
-                  {proj.statusType === "warning" && (
-                    <span className="px-3 py-1 rounded-full bg-[#FEF3C7] text-[#D97706] text-xs font-bold font-sans">
-                      Cần chú ý
-                    </span>
-                  )}
+                  <h3 className="text-base font-bold text-[#111827] group-hover:text-[#137333] transition-colors">
+                    {w.name}
+                  </h3>
+                  <p className="text-xs text-[#6B7280] line-clamp-2 mt-1">
+                    {w.description || "Chưa có mô tả."}
+                  </p>
                 </div>
               </div>
 
-              {/* Progress Bar */}
-              <div className="space-y-1.5 pt-2 border-t border-[#F6F5EF]">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-[#6B7280]">Tiến độ</span>
-                  <span className="font-bold text-[#111827]">{proj.progress}%</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-[#F6F5EF] overflow-hidden">
-                  <div
-                    className="h-full bg-[#111827] rounded-full transition-all duration-500"
-                    style={{ width: `${proj.progress}%` }}
-                  />
-                </div>
+              <div className="pt-4 mt-4 border-t border-[#F6F5EF] text-[10px] text-[#9CA3AF] font-mono flex items-center justify-between">
+                <span>Created: {new Date(w.createdAt).toLocaleDateString("vi-VN")}</span>
+                <span className="font-bold text-[#6B7280] group-hover:text-[#111827]">Vào Workspace →</span>
               </div>
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Modal: New Project */}
+      {/* CREATE MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-lg bg-white p-6 rounded-3xl border border-[#E5E7EB] shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
-              <h3 className="text-lg font-bold text-[#111827] font-sans">
-                Tạo Dự Án Mới
-              </h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-[#6B7280] font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProject} className="space-y-4 font-sans">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-[#111827]">Tạo Workspace mới</h3>
+            <form onSubmit={handleCreate} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#111827] font-mono">
-                  Tên Dự Án *
-                </label>
+                <label className="text-xs font-bold text-[#111827] font-mono">Tên Workspace</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Hệ thống ERP nội bộ"
-                  value={newProjName}
-                  onChange={(e) => setNewProjName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F6F5EF] text-sm text-[#111827] focus:outline-none focus:border-[#111827]"
+                  placeholder="Ví dụ: Dự án tốt nghiệp"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] text-sm text-[#111827] focus:outline-none focus:border-[#111827] bg-[#F6F5EF]"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#111827] font-mono">
-                  Đơn vị / Khách hàng
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Công ty ABC"
-                  value={newProjClient}
-                  onChange={(e) => setNewProjClient(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F6F5EF] text-sm text-[#111827] focus:outline-none focus:border-[#111827]"
+                <label className="text-xs font-bold text-[#111827] font-mono">Mô tả chi tiết</label>
+                <textarea
+                  placeholder="Ví dụ: KLTN hệ thống tích hợp AI agents"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] text-sm text-[#111827] focus:outline-none focus:border-[#111827] bg-[#F6F5EF] min-h-[100px]"
                 />
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#E5E7EB] font-mono">
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-[#6B7280]"
+                  className="px-4 py-2 rounded-xl border border-[#E5E7EB] hover:bg-[#F6F5EF] text-sm font-semibold"
                 >
-                  Hủy bỏ
+                  Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-[#111827] text-white text-xs font-bold shadow-md"
+                  className="px-4 py-2 rounded-xl bg-[#111827] hover:bg-[#1F2937] text-white text-sm font-bold shadow-md"
                 >
-                  Tạo Dự Án
+                  Tạo mới
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-[#111827]">Chỉnh sửa Workspace</h3>
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#111827] font-mono">Tên Workspace</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] text-sm text-[#111827] focus:outline-none focus:border-[#111827] bg-[#F6F5EF]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#111827] font-mono">Mô tả chi tiết</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] text-sm text-[#111827] focus:outline-none focus:border-[#111827] bg-[#F6F5EF] min-h-[100px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedWorkspace(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-[#E5E7EB] hover:bg-[#F6F5EF] text-sm font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#111827] hover:bg-[#1F2937] text-white text-sm font-bold shadow-md"
+                >
+                  Cập nhật
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE MODAL */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-full bg-[#FDEDEC] text-[#D93025] flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-bold text-[#111827]">Xóa Workspace?</h3>
+              <p className="text-sm text-[#6B7280]">
+                Bạn có chắc chắn muốn xóa workspace <strong>{selectedWorkspace?.name}</strong>? Hành động này không thể hoàn tác.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedWorkspace(null);
+                }}
+                className="px-4 py-2 rounded-xl border border-[#E5E7EB] hover:bg-[#F6F5EF] text-sm font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 rounded-xl bg-[#D93025] hover:bg-[#C0392B] text-white text-sm font-bold shadow-md"
+              >
+                Xác nhận xóa
+              </button>
+            </div>
           </div>
         </div>
       )}

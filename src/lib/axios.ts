@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Single Entry Point: All requests go through API Gateway at port 8080
 const API_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8081/api/v1";
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080/api/v1";
 
 export const apiClient = axios.create({
   baseURL: API_GATEWAY_URL,
