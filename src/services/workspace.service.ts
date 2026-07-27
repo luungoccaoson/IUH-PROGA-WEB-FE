@@ -29,28 +29,50 @@ export const workspaceService = {
 
   // Spaces
   getSpacesByWorkspace: async (workspaceId: number): Promise<Space[]> => {
-    const response = await apiClient.get<ApiResponse<Space[]>>(`/workspaces/${workspaceId}/spaces`);
+    const response = await apiClient.get<ApiResponse<Space[]>>(`/spaces/workspace/${workspaceId}`);
     return response.data.data;
   },
 
-  createSpace: async (workspaceId: number, data: { name: string; startDate?: string; endDate?: string }): Promise<Space> => {
-    const response = await apiClient.post<ApiResponse<Space>>(`/workspaces/${workspaceId}/spaces`, data);
+  createSpace: async (data: { workspaceId: number; name: string; startDate?: string; endDate?: string }): Promise<Space> => {
+    const response = await apiClient.post<ApiResponse<Space>>('/spaces', data);
     return response.data.data;
+  },
+
+  updateSpace: async (id: number, data: { workspaceId: number; name: string; startDate?: string; endDate?: string }): Promise<Space> => {
+    const response = await apiClient.put<ApiResponse<Space>>(`/spaces/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteSpace: async (id: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/spaces/${id}`);
   },
 
   // Tasks & Kanban
   getTasksBySpace: async (spaceId: number): Promise<Task[]> => {
-    const response = await apiClient.get<ApiResponse<Task[]>>(`/spaces/${spaceId}/tasks`);
+    const response = await apiClient.get<ApiResponse<Task[]>>(`/tasks/space/${spaceId}`);
     return response.data.data;
   },
 
   updateTaskStatus: async (taskId: number, status: TaskStatus): Promise<Task> => {
-    const response = await apiClient.patch<ApiResponse<Task>>(`/tasks/${taskId}/status`, { status });
+    const response = await apiClient.patch<ApiResponse<Task>>(`/tasks/${taskId}/status?status=${status}`);
     return response.data.data;
   },
 
-  createTask: async (spaceId: number, data: Partial<Task>): Promise<Task> => {
-    const response = await apiClient.post<ApiResponse<Task>>(`/spaces/${spaceId}/tasks`, data);
+  createTask: async (data: {
+    spaceId: number;
+    title: string;
+    description?: string;
+    status?: TaskStatus;
+    priority?: string;
+    ownerId?: number;
+    startDate?: string;
+    dueDate?: string;
+  }): Promise<Task> => {
+    const response = await apiClient.post<ApiResponse<Task>>('/tasks', data);
     return response.data.data;
+  },
+
+  deleteTask: async (taskId: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`);
   },
 };
