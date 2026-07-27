@@ -20,10 +20,10 @@ export default function DashboardLayout({
   // Active workspace state
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
 
-  // Extract active workspace ID from URL path (e.g. /workspaces/uuid)
+  // Extract active workspace ID from URL path (e.g. /workspaces/1)
   const match = pathname.match(/^\/workspaces\/([^\/]+)/);
   const activeWorkspaceId = match && match[1] !== "page" ? match[1] : null;
-  const isUuid = activeWorkspaceId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(activeWorkspaceId);
+  const isNumberId = activeWorkspaceId && /^\d+$/.test(activeWorkspaceId);
 
   useEffect(() => {
     loadAuthFromStorage();
@@ -36,14 +36,14 @@ export default function DashboardLayout({
 
   // Load workspace details dynamically when path parameter changes
   useEffect(() => {
-    if (isUuid && activeWorkspaceId) {
-      workspaceService.getWorkspaceById(activeWorkspaceId)
+    if (isNumberId && activeWorkspaceId) {
+      workspaceService.getWorkspaceById(parseInt(activeWorkspaceId, 10))
         .then((data) => setActiveWorkspace(data))
         .catch((err) => console.error("Error loading workspace for sidebar:", err));
     } else {
       setActiveWorkspace(null);
     }
-  }, [activeWorkspaceId, isUuid]);
+  }, [activeWorkspaceId, isNumberId]);
 
   if (!mounted) {
     return (
@@ -78,7 +78,7 @@ export default function DashboardLayout({
           </Link>
 
           {/* SIDEBAR NAVIGATION STRUCTURE */}
-          {isUuid && activeWorkspace ? (
+          {isNumberId && activeWorkspace ? (
             // Workspace-specific sidebar (Dashboard, Spaces, AI)
             <div className="space-y-6">
               {/* Back to Workspaces */}

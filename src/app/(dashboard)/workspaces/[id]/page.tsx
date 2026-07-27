@@ -20,7 +20,7 @@ export default function WorkspaceDashboardPage() {
     const fetchWorkspaceDetails = async () => {
       try {
         setLoading(true);
-        const data = await workspaceService.getWorkspaceById(workspaceId);
+        const data = await workspaceService.getWorkspaceById(parseInt(workspaceId, 10));
         setWorkspace(data);
       } catch (err: any) {
         console.error("Error fetching workspace details:", err);
@@ -154,7 +154,7 @@ export default function WorkspaceDashboardPage() {
                 Ngày tạo: {new Date(workspace.createdAt).toLocaleDateString("vi-VN")}
               </span>
               <span className="px-2 py-0.5 rounded bg-[#F6F5EF] border border-[#E5E7EB] font-bold">
-                ID: {workspace.id.substring(0, 8)}
+                ID: {workspace.id}
               </span>
             </div>
           </div>
