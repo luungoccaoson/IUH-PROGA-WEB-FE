@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { LayoutGrid, Briefcase, CheckSquare, Sparkles, LogOut } from "lucide-react";
+import { LayoutGrid, Sparkles, LogOut, Folder, Compass, HelpCircle } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { usePathname } from "next/navigation";
+import { workspaceService } from "@/services/workspace.service";
+import { Workspace } from "@/types";
 
 export default function DashboardLayout({
   children,
@@ -14,6 +16,14 @@ export default function DashboardLayout({
   const { user, logout, loadAuthFromStorage } = useAuthStore();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  
+  // Active workspace state
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
+
+  // Extract active workspace ID from URL path (e.g. /workspaces/1)
+  const match = pathname.match(/^\/workspaces\/([^\/]+)/);
+  const activeWorkspaceId = match && match[1] !== "page" ? match[1] : null;
+  const isNumberId = activeWorkspaceId && /^\d+$/.test(activeWorkspaceId);
 
   useEffect(() => {
     loadAuthFromStorage();
@@ -23,6 +33,17 @@ export default function DashboardLayout({
       window.location.href = '/login';
     }
   }, [loadAuthFromStorage]);
+
+  // Load workspace details dynamically when path parameter changes
+  useEffect(() => {
+    if (isNumberId && activeWorkspaceId) {
+      workspaceService.getWorkspaceById(parseInt(activeWorkspaceId, 10))
+        .then((data) => setActiveWorkspace(data))
+        .catch((err) => console.error("Error loading workspace for sidebar:", err));
+    } else {
+      setActiveWorkspace(null);
+    }
+  }, [activeWorkspaceId, isNumberId]);
 
   if (!mounted) {
     return (
@@ -43,7 +64,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
-      {/* Left Sidebar - Warm Beige #F6F5EF matching uploaded image 100% */}
+      {/* Left Sidebar - Warm Beige #F6F5EF */}
       <aside className="w-64 border-r border-[#E5E7EB] bg-[#F6F5EF] flex flex-col justify-between p-5 hidden md:flex shrink-0">
         <div className="space-y-6">
           {/* Logo & Brand */}
@@ -56,57 +77,138 @@ export default function DashboardLayout({
             </span>
           </Link>
 
-          {/* Section Header: QUẢN LÝ */}
-          <div className="space-y-2">
-            <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-              QUẢN LÝ
-            </p>
-
-            <nav className="space-y-1 font-sans">
-              {/* Dashboard Pill */}
+          {/* SIDEBAR NAVIGATION STRUCTURE */}
+          {isNumberId && activeWorkspace ? (
+            // Workspace-specific sidebar (Dashboard, Spaces, AI)
+            <div className="space-y-6">
+              {/* Back to Workspaces */}
               <Link
                 href="/workspaces"
-                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                  pathname === "/workspaces" || pathname === "/"
-                    ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                    : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                }`}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#6B7280] hover:text-[#111827] transition-colors font-mono font-bold"
               >
-                <LayoutGrid className="w-5 h-5 text-[#111827]" />
-                <span>Dashboard</span>
+                <span>← Chọn Workspace khác</span>
               </Link>
 
-              {/* Dự án (Workspaces) */}
-              <Link
-                href="/workspaces"
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
-              >
-                <Briefcase className="w-5 h-5 text-[#6B7280]" />
-                <span>Dự án</span>
-              </Link>
+              {/* 1. Navigation */}
+              <div className="space-y-2">
+                <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280] truncate">
+                  🎯 WS: {activeWorkspace.name}
+                </p>
 
-              {/* Công việc (Tasks) */}
-              <a
-                href="#kanban"
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
-              >
-                <CheckSquare className="w-5 h-5 text-[#6B7280]" />
-                <span>Công việc</span>
-              </a>
+                <nav className="space-y-1 font-sans">
+                  {/* Dashboard */}
+                  <Link
+                    href={`/workspaces/${activeWorkspaceId}`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                      pathname === `/workspaces/${activeWorkspaceId}`
+                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
+                  >
+                    <LayoutGrid className="w-5 h-5 text-[#111827]" />
+                    <span>Dashboard</span>
+                  </Link>
 
-              {/* Phân tích AI */}
-              <a
-                href="#ai-analysis"
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
-              >
-                <Sparkles className="w-5 h-5 text-[#137333]" />
-                <span>Phân tích AI</span>
-              </a>
-            </nav>
-          </div>
+                  {/* Phân tích AI */}
+                  <a
+                    href={`/workspaces/${activeWorkspaceId}#ai-analysis`}
+                    className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
+                  >
+                    <Sparkles className="w-5 h-5 text-[#137333]" />
+                    <span>Phân tích AI</span>
+                  </a>
+                </nav>
+              </div>
+
+              {/* 2. SPACES SECTION (Replaces "Dự án", tasks removed) */}
+              <div className="space-y-2 pt-2 border-t border-[#E5E7EB]">
+                <div className="flex items-center justify-between px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280]">
+                  <span className="flex items-center gap-1">
+                    <Compass className="w-3.5 h-3.5" />
+                    Spaces
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <button className="hover:text-[#111827] font-extrabold">+</button>
+                    <button className="hover:text-[#111827]">···</button>
+                  </div>
+                </div>
+
+                <div className="space-y-1 font-sans">
+                  <div className="px-3 text-[9px] font-bold text-[#9CA3AF] uppercase font-mono tracking-wider">
+                    Gần đây
+                  </div>
+                  
+                  {/* Mock spaces */}
+                  <a
+                    href="#"
+                    className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold text-[#111827] bg-white border border-[#E5E7EB] shadow-sm hover:scale-[1.01] transition-transform"
+                  >
+                    <div className="w-5 h-5 rounded-lg bg-[#E6F4EA] flex items-center justify-center text-[#137333] font-mono font-bold text-[10px]">
+                      PR
+                    </div>
+                    <span className="truncate">PROGA Core</span>
+                  </a>
+
+                  <a
+                    href="#"
+                    className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
+                  >
+                    <div className="w-5 h-5 rounded-lg bg-[#E8F0FE] flex items-center justify-center text-[#1A73E8] font-mono font-bold text-[10px]">
+                      TE
+                    </div>
+                    <span className="truncate">Test Space</span>
+                  </a>
+
+                  <a
+                    href="#"
+                    className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-semibold text-[#6B7280] hover:text-[#111827]"
+                  >
+                    <span>More spaces</span>
+                  </a>
+
+                  <a
+                    href="#"
+                    className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-semibold text-[#6B7280] hover:text-[#111827]"
+                  >
+                    <span>Browse templates</span>
+                  </a>
+
+                  <div className="pt-2 border-t border-[#E5E7EB]/50 mt-1">
+                    <a
+                      href="#"
+                      className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-bold text-[#4B5563] hover:text-[#111827]"
+                    >
+                      <span>🔍 Bộ lọc</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Simplified main selector sidebar (Workspaces List view)
+            <div className="space-y-3">
+              <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280]">
+                Hệ Thống
+              </p>
+
+              <nav className="space-y-1 font-sans">
+                <Link
+                  href="/workspaces"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                    pathname === "/workspaces"
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                  }`}
+                >
+                  <LayoutGrid className="w-5 h-5 text-[#111827]" />
+                  <span>Danh sách Workspaces</span>
+                </Link>
+              </nav>
+            </div>
+          )}
         </div>
 
-        {/* Footer User Info & Logout (No Theme Toggle) */}
+        {/* Footer User Info & Logout */}
         <div className="pt-4 border-t border-[#E5E7EB] space-y-3 font-sans">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2 overflow-hidden">

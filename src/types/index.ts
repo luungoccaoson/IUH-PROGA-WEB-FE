@@ -6,7 +6,7 @@ export type RoleName = 'ADMIN' | 'PM' | 'MEMBER';
 
 // User & Auth
 export interface User {
-  id: string; // UUID
+  id: number;
   username: string;
   email: string;
   isAdmin: boolean;
@@ -21,16 +21,16 @@ export interface AuthResponse {
 
 // Workspace & Space
 export interface Workspace {
-  id: string; // UUID
+  id: number;
   name: string;
   description?: string;
-  ownerId: string;
+  ownerId: number;
   createdAt: string;
 }
 
 export interface Space {
-  id: string; // UUID
-  workspaceId: string;
+  id: number;
+  workspaceId: number;
   name: string;
   startDate?: string;
   endDate?: string;
@@ -39,13 +39,13 @@ export interface Space {
 
 // Task & Kanban
 export interface Task {
-  id: string; // UUID
-  spaceId: string;
+  id: number;
+  spaceId: number;
   title: string;
   description?: string;
   status: TaskStatus;
   priority: TaskPriority;
-  ownerId?: string; // Assignee ID
+  ownerId?: number; // Assignee ID
   ownerName?: string;
   startDate?: string;
   dueDate?: string;
@@ -54,8 +54,8 @@ export interface Task {
 
 export interface TaskNote {
   id: number;
-  taskId: string;
-  authorId: string;
+  taskId: number;
+  authorId: number;
   authorName: string;
   noteContent: string;
   createdAt: string;
@@ -63,9 +63,9 @@ export interface TaskNote {
 
 export interface WorkspaceLog {
   id: number;
-  workspaceId: string;
-  taskId?: string;
-  userId: string;
+  workspaceId: number;
+  taskId?: number;
+  userId: number;
   actionType: string;
   oldValue?: string;
   newValue?: string;
@@ -76,7 +76,7 @@ export interface WorkspaceLog {
 // AI Chat
 export interface ChatMessage {
   id: number;
-  threadId: string;
+  threadId: number;
   senderType: 'USER' | 'ASSISTANT' | 'SYSTEM';
   messageContent: string;
   jsonPayload?: string; // Dùng cho Task Deconstruction preview
