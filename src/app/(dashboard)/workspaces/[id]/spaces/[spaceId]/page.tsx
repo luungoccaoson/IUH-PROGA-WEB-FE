@@ -35,6 +35,20 @@ export default function SpaceDetailPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
+  // Sprints (Projects have Sprints)
+  const [sprints, setSprints] = useState([
+    { id: 1, name: "Sprint 1 - Thiết kế UI & API", startDate: "2026-07-01", endDate: "2026-07-15", status: "COMPLETED" },
+    { id: 2, name: "Sprint 2 - Kanban Board & Logic", startDate: "2026-07-16", endDate: "2026-07-31", status: "ACTIVE" },
+    { id: 3, name: "Sprint 3 - Phân Tích Báo Cáo AI", startDate: "2026-08-01", endDate: "2026-08-15", status: "FUTURE" },
+  ]);
+  const [selectedSprintId, setSelectedSprintId] = useState<number | "all">(2);
+
+  // Create sprint modal state
+  const [isCreateSprintOpen, setIsCreateSprintOpen] = useState(false);
+  const [newSprintName, setNewSprintName] = useState("");
+  const [newSprintStart, setNewSprintStart] = useState("");
+  const [newSprintEnd, setNewSprintEnd] = useState("");
+
   // Fetch all details
   const fetchData = async () => {
     try {
@@ -84,8 +98,8 @@ export default function SpaceDetailPage() {
       const updated = await workspaceService.updateSpace(spaceId, {
         workspaceId,
         name: editName.trim(),
-        startDate: editStartDate || undefined,
-        endDate: editEndDate || undefined,
+        startDate: editStartDate ? `${editStartDate}T00:00:00` : undefined,
+        endDate: editEndDate ? `${editEndDate}T23:59:59` : undefined,
       });
       setSpace(updated);
       setIsEditOpen(false);
@@ -150,19 +164,41 @@ export default function SpaceDetailPage() {
     );
   }
 
+  // Helper static task list for mock representation if no real tasks
+  const mockTasks: Task[] = [
+    { id: 1, spaceId, title: "Thiết kế sơ đồ ERD & PostgreSQL Schema", status: "DONE", priority: "HIGH", ownerName: "Son Luu", dueDate: "2026-07-05", createdAt: "2026-07-01" },
+    { id: 2, spaceId, title: "Xây dựng Auth-Service & Cấu hình Security JWT", status: "IN_PROGRESS", priority: "URGENT", ownerName: "Duy Dev", dueDate: "2026-07-12", createdAt: "2026-07-06" },
+    { id: 3, spaceId, title: "Xây dựng Giao diện Kanban Board kéo thả", status: "TODO", priority: "MEDIUM", ownerName: "Duy Dev", dueDate: "2026-07-22", createdAt: "2026-07-16" },
+    { id: 4, spaceId, title: "Tích hợp Requirement Agent tự động phân rã Task", status: "TODO", priority: "HIGH", ownerName: "Hoa Tester", dueDate: "2026-07-30", createdAt: "2026-07-23" },
+  ];
+
+  const tasksToDisplay = tasks.length ? tasks : mockTasks;
+
+  // Filter tasks based on selected sprint
+  const filteredTasks = (() => {
+    if (selectedSprintId === "all") return tasksToDisplay;
+    if (selectedSprintId === 1) {
+      return tasksToDisplay.filter(t => t.status === "DONE" || t.priority === "HIGH" || t.title.includes("ERD"));
+    }
+    if (selectedSprintId === 2) {
+      return tasksToDisplay.filter(t => t.status !== "DONE" && !t.title.includes("ERD"));
+    }
+    return [];
+  })();
+
   // Visual Helper: Segments for SVG Donut
-  const todoCount = tasks.filter(t => t.status === "TODO").length;
-  const inProgressCount = tasks.filter(t => t.status === "IN_PROGRESS").length;
-  const reviewCount = tasks.filter(t => t.status === "REVIEW").length;
-  const doneCount = tasks.filter(t => t.status === "DONE").length;
-  const totalCount = tasks.length || 31; // Fallback to mock data if empty
+  const todoCount = filteredTasks.filter(t => t.status === "TODO").length;
+  const inProgressCount = filteredTasks.filter(t => t.status === "IN_PROGRESS").length;
+  const reviewCount = filteredTasks.filter(t => t.status === "REVIEW").length;
+  const doneCount = filteredTasks.filter(t => t.status === "DONE").length;
+  const totalCount = filteredTasks.length;
 
   // SVG calculations for a simple 3-segment donut representation
-  const finalTodo = tasks.length ? todoCount : 7;
-  const finalInProgress = tasks.length ? inProgressCount : 5;
-  const finalReview = tasks.length ? reviewCount : 0;
-  const finalDone = tasks.length ? doneCount : 19;
-  const finalTotal = tasks.length ? totalCount : 31;
+  const finalTodo = todoCount;
+  const finalInProgress = inProgressCount;
+  const finalReview = reviewCount;
+  const finalDone = doneCount;
+  const finalTotal = totalCount || 1;
 
   const todoPercent = (finalTodo / finalTotal) * 100;
   const inProgressPercent = (finalInProgress / finalTotal) * 100;
@@ -175,16 +211,6 @@ export default function SpaceDetailPage() {
     { id: 2, user: "Son Luu", action: "đã tạo mới task", target: "PROGA-32: Tích hợp API Gateway", on: "Sprint 2", val: "TODO", time: "1 giờ trước", type: "CREATE" },
     { id: 3, user: "Duy Dev", action: "đã chuyển trạng thái", target: "status", on: "PROGA-25: Thiết kế sơ đồ quan hệ DB", val: "DONE", time: "3 giờ trước", type: "STATUS" },
   ];
-
-  // Helper static task list for mock representation if no real tasks
-  const mockTasks: Task[] = [
-    { id: 1, spaceId, title: "Thiết kế sơ đồ ERD & PostgreSQL Schema", status: "DONE", priority: "HIGH", ownerName: "Son Luu", dueDate: "2026-07-05", createdAt: "2026-07-01" },
-    { id: 2, spaceId, title: "Xây dựng Auth-Service & Cấu hình Security JWT", status: "IN_PROGRESS", priority: "URGENT", ownerName: "Duy Dev", dueDate: "2026-07-12", createdAt: "2026-07-06" },
-    { id: 3, spaceId, title: "Xây dựng Giao diện Kanban Board kéo thả", status: "TODO", priority: "MEDIUM", ownerName: "Duy Dev", dueDate: "2026-07-22", createdAt: "2026-07-16" },
-    { id: 4, spaceId, title: "Tích hợp Requirement Agent tự động phân rã Task", status: "TODO", priority: "HIGH", ownerName: "Hoa Tester", dueDate: "2026-07-30", createdAt: "2026-07-23" },
-  ];
-
-  const tasksToDisplay = tasks.length ? tasks : mockTasks;
 
   return (
     <div className="max-w-6xl space-y-6 animate-in fade-in duration-300">
@@ -216,14 +242,35 @@ export default function SpaceDetailPage() {
           )}
         </div>
 
-        {/* Space settings action */}
-        <button
-          onClick={() => setIsEditOpen(true)}
-          className="flex items-center gap-2 px-3 py-2 border border-[#E5E7EB] bg-[#F6F5EF] hover:bg-white text-[#4B5563] hover:text-[#111827] rounded-xl text-xs font-mono font-bold transition-all shadow-sm"
-        >
-          <Settings className="w-4 h-4" />
-          CÀI ĐẶT SPACE
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Sprint Selector */}
+          <div className="flex items-center gap-2 bg-[#F6F5EF] border border-[#E5E7EB] rounded-xl px-3 py-2 shadow-sm font-sans">
+            <span className="text-xs font-mono font-bold text-[#6B7280] uppercase">Sprint:</span>
+            <select
+              value={selectedSprintId}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedSprintId(val === "all" ? "all" : parseInt(val, 10));
+              }}
+              className="bg-transparent text-xs font-bold text-[#111827] focus:outline-none border-none cursor-pointer"
+            >
+              <option value="all">Tất cả Sprints</option>
+              {sprints.map(sprint => (
+                <option key={sprint.id} value={sprint.id}>
+                  {sprint.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setIsEditOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-[#E5E7EB] bg-[#F6F5EF] hover:bg-white text-[#4B5563] hover:text-[#111827] rounded-xl text-xs font-mono font-bold transition-all shadow-sm"
+          >
+            <Settings className="w-4 h-4" />
+            CÀI ĐẶT SPACE
+          </button>
+        </div>
       </div>
 
       {/* Horizontal Tabs */}
@@ -443,13 +490,12 @@ export default function SpaceDetailPage() {
             </div>
           </div>
         )}
-
         {/* TAB 2: TASKS LIST TABLE */}
         {activeTab === "tasks" && (
           <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-200">
             <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between">
               <h3 className="text-xs font-bold text-[#111827] uppercase tracking-wider font-mono">
-                Danh sách task hiện tại ({tasksToDisplay.length})
+                Danh sách task hiện tại ({filteredTasks.length})
               </h3>
             </div>
             
@@ -466,7 +512,7 @@ export default function SpaceDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]/60 text-sm">
-                  {tasksToDisplay.map((t, idx) => {
+                  {filteredTasks.map((t, idx) => {
                     const statusColors: Record<TaskStatus, { bg: string, text: string }> = {
                       TODO: { bg: "bg-gray-100", text: "text-gray-800" },
                       IN_PROGRESS: { bg: "bg-[#E8F0FE]", text: "text-[#1A73E8]" },
@@ -474,10 +520,10 @@ export default function SpaceDetailPage() {
                       DONE: { bg: "bg-[#E6F4EA]", text: "text-[#137333]" }
                     };
                     const priorityColors: Record<string, { bg: string, text: string }> = {
-                      LOW: { bg: "bg-gray-100", text: "text-gray-600" },
-                      MEDIUM: { bg: "bg-blue-50", text: "text-blue-700" },
-                      HIGH: { bg: "bg-orange-50", text: "text-orange-700" },
-                      URGENT: { bg: "bg-red-50", text: "text-red-700" }
+                      LOW: { bg: "bg-gray-100 text-gray-600", text: "text-gray-700" },
+                      MEDIUM: { bg: "bg-blue-50 text-blue-700", text: "text-blue-700" },
+                      HIGH: { bg: "bg-orange-50 text-orange-700", text: "text-orange-700" },
+                      URGENT: { bg: "bg-red-50 text-red-700", text: "text-red-700" }
                     };
 
                     const status = statusColors[t.status] || statusColors.TODO;
@@ -528,7 +574,7 @@ export default function SpaceDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-200">
             {/* Columns */}
             {(["TODO", "IN_PROGRESS", "REVIEW", "DONE"] as TaskStatus[]).map((status) => {
-              const colTasks = tasksToDisplay.filter(t => t.status === status);
+              const colTasks = filteredTasks.filter(t => t.status === status);
               const headerInfo = {
                 TODO: { title: "CẦN LÀM", count: colTasks.length, border: "border-t-[#9CA3AF]", bg: "bg-gray-100/50" },
                 IN_PROGRESS: { title: "ĐANG LÀM", count: colTasks.length, border: "border-t-[#1A73E8]", bg: "bg-[#E8F0FE]/30" },
