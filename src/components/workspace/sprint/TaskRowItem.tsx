@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, User } from "lucide-react";
+import { AlertTriangle, ChevronUp, User } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 
 interface TaskRowItemProps {
@@ -16,22 +16,60 @@ const taskStatusMap: Record<TaskStatus, { label: string; bg: string; text: strin
   DONE: { label: "Đã xong", bg: "bg-[#E6F4EA]", text: "text-[#137333]" },
 };
 
-const taskPriorityMap: Record<TaskPriority, { label: string; bg: string; text: string }> = {
-  LOW: { label: "Thấp", bg: "bg-gray-100", text: "text-gray-600" },
-  MEDIUM: { label: "Trung bình", bg: "bg-blue-50", text: "text-blue-700" },
-  HIGH: { label: "Cao", bg: "bg-orange-50", text: "text-orange-700" },
-  URGENT: { label: "Khẩn cấp", bg: "bg-red-50", text: "text-red-700" },
-};
-
 export function TaskRowItem({ task, isOverdue }: TaskRowItemProps) {
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
-  const priorityObj = taskPriorityMap[task.priority] || taskPriorityMap.MEDIUM;
+
+  const renderPriorityIcon = (priority: TaskPriority) => {
+    switch (priority) {
+      case "LOW":
+        return (
+          <div
+            title="Mức độ ưu tiên: Thấp (Low)"
+            className="w-5 h-5 rounded flex items-center justify-center bg-[#E6F4EA] cursor-pointer hover:scale-110 transition-transform"
+          >
+            <span className="w-2.5 h-1.5 bg-[#10B981] rounded-xs" />
+          </div>
+        );
+      case "MEDIUM":
+        return (
+          <div
+            title="Mức độ ưu tiên: Trung bình (Medium)"
+            className="w-5 h-5 rounded flex items-center justify-center bg-[#E8F0FE] cursor-pointer hover:scale-110 transition-transform"
+          >
+            <div className="flex flex-col gap-[1.5px]">
+              <span className="w-2.5 h-[2px] bg-[#3B82F6] rounded-xs" />
+              <span className="w-2.5 h-[2px] bg-[#3B82F6] rounded-xs" />
+            </div>
+          </div>
+        );
+      case "HIGH":
+        return (
+          <div
+            title="Mức độ ưu tiên: Cao (High)"
+            className="w-5 h-5 rounded flex items-center justify-center bg-[#FFEDD5] text-[#F97316] cursor-pointer hover:scale-110 transition-transform"
+          >
+            <ChevronUp className="w-4 h-4 stroke-[2.5]" />
+          </div>
+        );
+      case "URGENT":
+        return (
+          <div
+            title="Mức độ ưu tiên: Khẩn cấp (Urgent)"
+            className="w-5 h-5 rounded flex items-center justify-center bg-[#FEE2E2] text-[#EF4444] cursor-pointer hover:scale-110 transition-transform"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="p-3 bg-white hover:bg-[#F9FAFB] transition-colors flex items-center justify-between gap-4 font-sans text-xs">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0">
-          PROGA-{task.id}
+          Task-{task.id}
         </span>
         <span className="font-semibold text-[#111827] truncate">
           {task.title}
@@ -47,10 +85,8 @@ export function TaskRowItem({ task, isOverdue }: TaskRowItemProps) {
           </span>
         )}
 
-        {/* Priority Badge */}
-        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${priorityObj.bg} ${priorityObj.text}`}>
-          {priorityObj.label}
-        </span>
+        {/* Priority Icon with Hover Tooltip */}
+        {renderPriorityIcon(task.priority)}
 
         {/* Status Badge */}
         <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${statusObj.bg} ${statusObj.text}`}>
@@ -65,11 +101,6 @@ export function TaskRowItem({ task, isOverdue }: TaskRowItemProps) {
           <span className="hidden md:inline text-[11px] font-medium">
             {task.ownerName || "Chưa gán"}
           </span>
-        </div>
-
-        {/* Due Date */}
-        <div className="text-[11px] font-mono text-[#6B7280]">
-          {task.dueDate ? new Date(task.dueDate).toLocaleDateString("vi-VN") : "—"}
         </div>
       </div>
     </div>
