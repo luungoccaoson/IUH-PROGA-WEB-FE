@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sprint, SprintStatus, Task } from '@/types';
 import { sprintService } from '@/services/sprint.service';
-import { workspaceService } from '@/services/workspace.service';
+import { taskService } from '@/services/task.service';
 
 export function useSprints(spaceId: number) {
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -17,7 +17,7 @@ export function useSprints(spaceId: number) {
       setError('');
 
       const fetchedSprints = await sprintService.getSprintsBySpace(spaceId);
-      const fetchedTasks = await workspaceService.getTasksBySpace(spaceId);
+      const fetchedTasks = await taskService.getTasksBySpace(spaceId);
 
       const now = new Date();
       let updatedSprints = [...fetchedSprints];

@@ -3,11 +3,13 @@
 import React, { useState } from "react";
 import { Plus, Layers, Sparkles, AlertTriangle } from "lucide-react";
 import { useSprints } from "@/hooks/useSprints";
-import { Sprint } from "@/types";
+import { useTasks } from "@/hooks/useTasks";
+import { Sprint, TaskStatus, TaskPriority } from "@/types";
 import { SprintAccordion } from "./sprint/SprintAccordion";
 import { BacklogAccordion } from "./sprint/BacklogAccordion";
 import { CreateSprintModal } from "./sprint/CreateSprintModal";
 import { EditSprintModal } from "./sprint/EditSprintModal";
+import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 
 interface SprintTaskListProps {
   spaceId: number;
@@ -19,12 +21,22 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
     tasks,
     loading,
     error,
+    reload,
     createSprint,
     updateSprint,
     deleteSprint,
     getNextSprintDefaultName,
     isTaskOverdue,
   } = useSprints(spaceId);
+
+  const {
+    selectedTask,
+    setSelectedTask,
+    createTask,
+    updateTask,
+    updateTaskStatus,
+    deleteTask,
+  } = useTasks(spaceId, reload);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
@@ -37,6 +49,22 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
       await deleteSprint(sprintId);
     } catch (err) {
       alert("Không thể xóa Sprint!");
+    }
+  };
+
+  const handleUpdatePriority = async (taskId: number, priority: TaskPriority) => {
+    try {
+      await updateTask(taskId, { priority });
+    } catch (err) {
+      alert("Không thể cập nhật độ ưu tiên!");
+    }
+  };
+
+  const handleUpdateOwner = async (taskId: number, ownerId?: number) => {
+    try {
+      await updateTask(taskId, { ownerId });
+    } catch (err) {
+      alert("Không thể gán người thực hiện!");
     }
   };
 
@@ -98,15 +126,30 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
               isTaskOverdue={isTaskOverdue}
               onEdit={setEditingSprint}
               onDelete={handleDeleteSprint}
+              onCreateTask={createTask}
+              onSelectTask={setSelectedTask}
+              onUpdateStatus={updateTaskStatus}
+              onUpdatePriority={handleUpdatePriority}
+              onUpdateOwner={handleUpdateOwner}
+              onDeleteTask={deleteTask}
             />
           );
         })}
 
         {/* Backlog Accordion */}
-        <BacklogAccordion tasks={backlogTasks} isTaskOverdue={isTaskOverdue} />
+        <BacklogAccordion
+          tasks={backlogTasks}
+          isTaskOverdue={isTaskOverdue}
+          onCreateTask={createTask}
+          onSelectTask={setSelectedTask}
+          onUpdateStatus={updateTaskStatus}
+          onUpdatePriority={handleUpdatePriority}
+          onUpdateOwner={handleUpdateOwner}
+          onDeleteTask={deleteTask}
+        />
       </div>
 
-      {/* Modals */}
+      {/* Sprint Modals */}
       <CreateSprintModal
         isOpen={isCreateModalOpen}
         defaultName={getNextSprintDefaultName()}
@@ -118,6 +161,14 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
         sprint={editingSprint}
         onClose={() => setEditingSprint(null)}
         onSubmit={updateSprint}
+      />
+
+      {/* Task Detail Drawer Side Panel */}
+      <TaskDetailDrawer
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onUpdate={updateTask}
+        onDelete={deleteTask}
       />
     </div>
   );
