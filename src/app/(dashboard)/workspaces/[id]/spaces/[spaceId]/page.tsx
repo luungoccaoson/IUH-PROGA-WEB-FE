@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
 import { SprintTaskList } from "@/components/workspace/SprintTaskList";
 import { SprintKanbanBoard } from "@/components/workspace/SprintKanbanBoard";
@@ -14,6 +15,7 @@ import { Space, Task, Workspace } from "@/types";
 export default function SpaceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { user: currentUser } = useAuthStore();
 
   const workspaceId = parseInt(params.id as string, 10);
   const spaceId = parseInt(params.spaceId as string, 10);
@@ -27,6 +29,8 @@ export default function SpaceDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
 
   // Edit Space Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -126,6 +130,7 @@ export default function SpaceDetailPage() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onOpenSettings={() => setIsEditOpen(true)}
+          isOwner={isOwner}
         />
 
         {/* Tab Contents */}
@@ -164,6 +169,7 @@ export default function SpaceDetailPage() {
       <EditSpaceModal
         isOpen={isEditOpen}
         space={space}
+        isOwner={isOwner}
         onClose={() => setIsEditOpen(false)}
         onUpdate={handleUpdateSpace}
         onDelete={handleDeleteSpace}
