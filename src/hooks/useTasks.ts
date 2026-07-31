@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Task, TaskStatus, TaskPriority } from '@/types';
 import { taskService } from '@/services/task.service';
+import { taskWebSocketService } from '@/services/websocket.service';
 
 const formatIsoDateTime = (dateStr?: string, isEndOfDay = false): string | undefined => {
   if (!dateStr) return undefined;
@@ -11,6 +12,14 @@ const formatIsoDateTime = (dateStr?: string, isEndOfDay = false): string | undef
 export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) => void) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    const unsubscribe = taskWebSocketService.connect(spaceId, () => {
+      if (onTasksUpdated) onTasksUpdated(true);
+    });
+    return () => unsubscribe();
+  }, [spaceId, onTasksUpdated]);
 
   // Inline Quick Create Task
   const createTask = useCallback(

@@ -172,7 +172,19 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
             return (
               <div
                 key={col.key}
-                className={`bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-4 border-t-4 ${col.border} shadow-sm min-h-[480px] flex flex-col`}
+                onDragOver={(e) => {
+                  if (!isClosedSprint) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (isClosedSprint) return;
+                  e.preventDefault();
+                  const taskIdStr = e.dataTransfer.getData("taskId");
+                  if (taskIdStr) {
+                    const taskId = parseInt(taskIdStr, 10);
+                    updateTaskStatus(taskId, col.key);
+                  }
+                }}
+                className={`bg-white border border-[#E5E7EB] hover:border-[#111827]/40 rounded-2xl p-4 space-y-4 border-t-4 ${col.border} shadow-sm min-h-[480px] flex flex-col transition-all`}
               >
                 {/* Column Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
@@ -196,9 +208,16 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                     return (
                       <div
                         key={task.id}
+                        draggable={!isReadOnly}
+                        onDragStart={(e) => {
+                          if (isReadOnly) return;
+                          e.dataTransfer.setData("taskId", task.id.toString());
+                          e.dataTransfer.setData("sourceStatus", task.status);
+                        }}
                         onClick={() => setSelectedTask(task)}
-                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 cursor-pointer transition-all hover:scale-[1.01] group ${isReadOnly ? "bg-gray-50/70" : ""
-                          }`}
+                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
+                          isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
+                        }`}
                       >
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
