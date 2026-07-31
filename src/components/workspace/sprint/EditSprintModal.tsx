@@ -52,7 +52,7 @@ export function EditSprintModal({ sprint, onClose, onSubmit }: EditSprintModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-[#E5E7EB]">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
           <h3 className="font-extrabold text-[#111827] text-base font-sans flex items-center gap-2">

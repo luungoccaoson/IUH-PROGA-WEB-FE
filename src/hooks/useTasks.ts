@@ -2,7 +2,13 @@ import { useState, useCallback } from 'react';
 import { Task, TaskStatus, TaskPriority } from '@/types';
 import { taskService } from '@/services/task.service';
 
-export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
+const formatIsoDateTime = (dateStr?: string, isEndOfDay = false): string | undefined => {
+  if (!dateStr) return undefined;
+  if (dateStr.includes('T')) return dateStr;
+  return isEndOfDay ? `${dateStr}T23:59:59` : `${dateStr}T00:00:00`;
+};
+
+export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) => void) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -18,7 +24,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
           status: 'TODO',
           priority: 'MEDIUM',
         });
-        if (onTasksUpdated) onTasksUpdated();
+        if (onTasksUpdated) onTasksUpdated(true);
         return newTask;
       } catch (err) {
         console.error('Failed to create task:', err);
@@ -52,6 +58,16 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
           ? selectedTask
           : await taskService.getTaskById(taskId);
 
+        const formattedStartDate = formatIsoDateTime(
+          data.startDate !== undefined ? data.startDate : existingTask.startDate,
+          false
+        );
+
+        const formattedDueDate = formatIsoDateTime(
+          data.dueDate !== undefined ? data.dueDate : existingTask.dueDate,
+          true
+        );
+
         const updated = await taskService.updateTask(taskId, {
           spaceId: existingTask.spaceId,
           sprintId: data.sprintId !== undefined ? data.sprintId : existingTask.sprintId,
@@ -60,15 +76,15 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
           status: data.status || existingTask.status,
           priority: data.priority || existingTask.priority,
           ownerId: data.ownerId !== undefined ? data.ownerId : existingTask.ownerId,
-          startDate: data.startDate !== undefined ? data.startDate : existingTask.startDate,
-          dueDate: data.dueDate !== undefined ? data.dueDate : existingTask.dueDate,
+          startDate: formattedStartDate,
+          dueDate: formattedDueDate,
         });
 
         if (selectedTask && selectedTask.id === taskId) {
           setSelectedTask(updated);
         }
 
-        if (onTasksUpdated) onTasksUpdated();
+        if (onTasksUpdated) onTasksUpdated(true);
         return updated;
       } catch (err) {
         console.error('Failed to update task:', err);
@@ -80,7 +96,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
     [spaceId, selectedTask, onTasksUpdated]
   );
 
-  // Quick Update Status
+  // Quick Update Status (Silent update without screen reload)
   const updateTaskStatus = useCallback(
     async (taskId: number, status: TaskStatus) => {
       try {
@@ -88,7 +104,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
         if (selectedTask && selectedTask.id === taskId) {
           setSelectedTask(updated);
         }
-        if (onTasksUpdated) onTasksUpdated();
+        if (onTasksUpdated) onTasksUpdated(true);
         return updated;
       } catch (err) {
         console.error('Failed to update task status:', err);
@@ -107,7 +123,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: () => void) {
         if (selectedTask && selectedTask.id === taskId) {
           setSelectedTask(null);
         }
-        if (onTasksUpdated) onTasksUpdated();
+        if (onTasksUpdated) onTasksUpdated(true);
       } catch (err) {
         console.error('Failed to delete task:', err);
         throw err;

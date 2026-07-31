@@ -30,9 +30,9 @@ export function BacklogAccordion({
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm">
       {/* Header */}
-      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between">
+      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between rounded-t-2xl">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -55,7 +55,7 @@ export function BacklogAccordion({
       {isOpen && (
         <div className="p-4 space-y-3">
           {tasks.length > 0 && (
-            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl overflow-hidden">
+            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl">
               {tasks.map((task) => (
                 <TaskRowItem
                   key={task.id}

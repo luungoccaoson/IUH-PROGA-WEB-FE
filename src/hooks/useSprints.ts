@@ -10,10 +10,10 @@ export function useSprints(spaceId: number) {
   const [error, setError] = useState<string>('');
 
   // Fetch Sprints & Tasks for Space
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     if (!spaceId) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       setError('');
 
       const fetchedSprints = await sprintService.getSprintsBySpace(spaceId);

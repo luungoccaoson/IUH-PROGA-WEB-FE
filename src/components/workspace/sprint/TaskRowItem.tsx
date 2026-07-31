@@ -38,7 +38,7 @@ export function TaskRowItem({
   onUpdateOwner,
   onDelete,
 }: TaskRowItemProps) {
-  const isReadOnly = isClosedSprint || task.status === "DONE";
+  const isReadOnly = isClosedSprint;
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
 
   // Popover States
@@ -154,7 +154,7 @@ export function TaskRowItem({
 
             {/* Custom Priority Dropdown Card */}
             {showPriorityPopover && (
-              <div className="absolute right-0 top-7 z-50 w-36 bg-white rounded-xl shadow-xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-36 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
                 {(["LOW", "MEDIUM", "HIGH", "URGENT"] as TaskPriority[]).map((p) => {
                   const pLabels: Record<TaskPriority, string> = {
                     LOW: "Thấp",
@@ -201,7 +201,7 @@ export function TaskRowItem({
             </button>
 
             {showStatusPopover && (
-              <div className="absolute right-0 top-7 z-50 w-32 bg-white rounded-xl shadow-xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-32 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
                 {(["TODO", "IN_PROGRESS", "DONE"] as TaskStatus[]).map((st) => {
                   const isSelected = task.status === st;
                   const stInfo = taskStatusMap[st];
@@ -232,21 +232,35 @@ export function TaskRowItem({
                 e.stopPropagation();
                 if (!isReadOnly) setShowAssigneePopover(!showAssigneePopover);
               }}
-              className={`flex items-center gap-1.5 p-1 rounded-lg hover:bg-[#E5E7EB] transition-colors ${
+              className={`p-0.5 rounded-full transition-transform hover:scale-105 ${
                 isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
               }`}
               title={task.ownerName ? `Người thực hiện: ${task.ownerName}` : "Chưa gán người thực hiện"}
             >
-              <div className="w-5 h-5 rounded-full bg-[#E5E7EB] flex items-center justify-center text-[10px] font-bold text-[#4B5563] shrink-0">
-                <User className="w-3 h-3" />
-              </div>
-              <span className="hidden md:inline text-[11px] font-medium text-[#4B5563] max-w-[90px] truncate">
-                {task.ownerName || "Chưa gán"}
-              </span>
+              {task.ownerId && task.ownerName ? (
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold font-mono shrink-0 border border-white shadow-xs ${
+                    task.ownerId % 2 === 0
+                      ? "bg-purple-600 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}
+                >
+                  {task.ownerName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .substring(0, 2)
+                    .toUpperCase()}
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-[#E5E7EB] hover:bg-[#D1D5DB] flex items-center justify-center text-[#6B7280] shrink-0 border border-white shadow-2xs">
+                  <User className="w-3.5 h-3.5" />
+                </div>
+              )}
             </button>
 
             {showAssigneePopover && (
-              <div className="absolute right-0 top-8 z-50 w-44 bg-white rounded-xl shadow-xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-44 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

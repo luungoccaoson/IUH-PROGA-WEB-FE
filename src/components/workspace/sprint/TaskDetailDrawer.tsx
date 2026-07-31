@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface TaskDetailDrawerProps {
   task: Task | null;
+  isClosedSprint?: boolean;
   onClose: () => void;
   onUpdate: (
     taskId: number,
@@ -29,7 +30,7 @@ const PROJECT_MEMBERS = [
   { id: 5, name: "Hoa Tester (QA)", role: "QA" },
 ];
 
-export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, isClosedSprint = false, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -54,7 +55,7 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
 
   if (!task) return null;
 
-  const isReadOnly = task.status === "DONE";
+  const isReadOnly = isClosedSprint;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +96,7 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
   return (
     <>
       {/* Non-blocking Side-by-side Layout Panel (No dark overlay backdrop!) */}
-      <div className="fixed right-0 top-0 bottom-0 z-40 w-96 max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
+      <div className="fixed right-0 top-0 bottom-0 z-40 w-[350px] max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
         {/* Header bar */}
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2">
@@ -160,9 +161,9 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
-                <option value="TODO">Cần làm (TODO)</option>
-                <option value="IN_PROGRESS">Đang làm (IN_PROGRESS)</option>
-                <option value="DONE">Đã xong (DONE)</option>
+                <option value="TODO">Cần làm</option>
+                <option value="IN_PROGRESS">Đang làm</option>
+                <option value="DONE">Đã xong</option>
               </select>
             </div>
 
@@ -177,10 +178,10 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
-                <option value="LOW">Thấp (Low)</option>
-                <option value="MEDIUM">Trung bình (Medium)</option>
-                <option value="HIGH">Cao (High)</option>
-                <option value="URGENT">Khẩn cấp (Urgent)</option>
+                <option value="LOW">Thấp</option>
+                <option value="MEDIUM">Trung bình</option>
+                <option value="HIGH">Cao</option>
+                <option value="URGENT">Khẩn cấp</option>
               </select>
             </div>
 

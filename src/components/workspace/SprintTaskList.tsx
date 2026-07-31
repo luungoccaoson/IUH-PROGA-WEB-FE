@@ -81,73 +81,77 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
   const sprintIds = new Set(sprints.map((s) => s.id));
   const backlogTasks = tasks.filter((t) => !t.sprintId || !sprintIds.has(t.sprintId));
 
+  const isDrawerOpen = Boolean(selectedTask);
+
   return (
-    <div className="space-y-6">
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#F6F5EF] flex items-center justify-center text-[#111827] border border-[#E5E7EB]">
-            <Layers className="w-5 h-5" />
+    <div className="relative font-sans">
+      <div className={`space-y-6 transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[320px]" : "mr-0"}`}>
+        {/* Top Header Bar */}
+        <div className="flex items-center justify-between bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#F6F5EF] flex items-center justify-center text-[#111827] border border-[#E5E7EB]">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold text-[#111827] font-sans">
+                Quản lý Sprints & Công việc tồn đọng (Backlog)
+              </h2>
+              <p className="text-xs text-[#6B7280]">
+                Tự động bắt đầu và hoàn thành Sprint theo mốc thời gian quy định
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-extrabold text-[#111827] font-sans">
-              Quản lý Sprints & Công việc tồn đọng (Backlog)
-            </h2>
-            <p className="text-xs text-[#6B7280]">
-              Tự động bắt đầu và hoàn thành Sprint theo mốc thời gian quy định
-            </p>
-          </div>
+
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            TẠO SPRINT MỚI
+          </button>
         </div>
 
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          TẠO SPRINT MỚI
-        </button>
-      </div>
+        {error && (
+          <div className="bg-[#FDEDEC] border border-[#FADBD8] text-[#D93025] p-4 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-      {error && (
-        <div className="bg-[#FDEDEC] border border-[#FADBD8] text-[#D93025] p-4 rounded-xl text-xs font-bold flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+        {/* Sprints Accordions */}
+        <div className="space-y-4">
+          {sprints.map((sprint) => {
+            const sprintTasks = tasks.filter((t) => t.sprintId === sprint.id);
+            return (
+              <SprintAccordion
+                key={sprint.id}
+                sprint={sprint}
+                tasks={sprintTasks}
+                isTaskOverdue={isTaskOverdue}
+                onEdit={setEditingSprint}
+                onDelete={(id) => setDeletingSprintId(id)}
+                onCreateTask={createTask}
+                onSelectTask={setSelectedTask}
+                onUpdateStatus={updateTaskStatus}
+                onUpdatePriority={handleUpdatePriority}
+                onUpdateOwner={handleUpdateOwner}
+                onDeleteTask={deleteTask}
+              />
+            );
+          })}
+
+          {/* Backlog Accordion */}
+          <BacklogAccordion
+            tasks={backlogTasks}
+            isTaskOverdue={isTaskOverdue}
+            onCreateTask={createTask}
+            onSelectTask={setSelectedTask}
+            onUpdateStatus={updateTaskStatus}
+            onUpdatePriority={handleUpdatePriority}
+            onUpdateOwner={handleUpdateOwner}
+            onDeleteTask={deleteTask}
+          />
         </div>
-      )}
-
-      {/* Sprints Accordions */}
-      <div className="space-y-4">
-        {sprints.map((sprint) => {
-          const sprintTasks = tasks.filter((t) => t.sprintId === sprint.id);
-          return (
-            <SprintAccordion
-              key={sprint.id}
-              sprint={sprint}
-              tasks={sprintTasks}
-              isTaskOverdue={isTaskOverdue}
-              onEdit={setEditingSprint}
-              onDelete={(id) => setDeletingSprintId(id)}
-              onCreateTask={createTask}
-              onSelectTask={setSelectedTask}
-              onUpdateStatus={updateTaskStatus}
-              onUpdatePriority={handleUpdatePriority}
-              onUpdateOwner={handleUpdateOwner}
-              onDeleteTask={deleteTask}
-            />
-          );
-        })}
-
-        {/* Backlog Accordion */}
-        <BacklogAccordion
-          tasks={backlogTasks}
-          isTaskOverdue={isTaskOverdue}
-          onCreateTask={createTask}
-          onSelectTask={setSelectedTask}
-          onUpdateStatus={updateTaskStatus}
-          onUpdatePriority={handleUpdatePriority}
-          onUpdateOwner={handleUpdateOwner}
-          onDeleteTask={deleteTask}
-        />
       </div>
 
       {/* Sprint Modals */}
@@ -178,6 +182,12 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
+        isClosedSprint={
+          Boolean(
+            selectedTask?.sprintId &&
+              sprints.find((s) => s.id === selectedTask.sprintId)?.status === "CLOSED"
+          )
+        }
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
