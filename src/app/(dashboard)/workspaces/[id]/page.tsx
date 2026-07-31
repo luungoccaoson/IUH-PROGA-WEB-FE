@@ -6,7 +6,7 @@ import { Plus, Sparkles, Calendar, Lock, Globe, ShieldAlert, UserPlus, Search, C
 import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
 import { userService } from "@/services/user.service";
-import { Workspace, Space, User } from "@/types";
+import { Workspace, Space, User, WorkspaceMember } from "@/types";
 
 export default function WorkspaceDashboardPage() {
   const params = useParams();
@@ -16,6 +16,7 @@ export default function WorkspaceDashboardPage() {
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,9 +50,15 @@ export default function WorkspaceDashboardPage() {
       const wsData = await workspaceService.getWorkspaceById(workspaceId);
       setWorkspace(wsData);
 
-      // Pass currentUser.id to backend for Private Space filtering
       const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId);
       setSpaces(spacesList);
+
+      try {
+        const memberList = await workspaceService.getWorkspaceMembers(workspaceId);
+        setMembers(memberList);
+      } catch (e) {
+        console.error("Error loading workspace members:", e);
+      }
     } catch (err: any) {
       console.error("Error fetching workspace details:", err);
       setError("Không thể tải thông tin workspace.");
@@ -88,6 +95,16 @@ export default function WorkspaceDashboardPage() {
     try {
       await workspaceService.inviteMember(workspaceId, targetUser.id);
       setInvitedUserIds([...invitedUserIds, targetUser.id]);
+      setMembers((prev) => [
+        ...prev,
+        {
+          workspaceId,
+          userId: targetUser.id,
+          roleId: 3,
+          status: "PENDING",
+          joinedAt: new Date().toISOString(),
+        },
+      ]);
     } catch (err) {
       alert("Không thể gửi lời mời tham gia Workspace!");
     }
@@ -244,12 +261,12 @@ export default function WorkspaceDashboardPage() {
 
         <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-2xs">
           <p className="text-xs font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-            VAI TRÒ CỦA BẠN
+            THÀNH VIÊN WORKSPACE
           </p>
-          <p className="text-xl font-extrabold text-[#137333] uppercase">
-            {isOwner ? "Chủ sở hữu" : "Thành viên"}
+          <p className="text-3xl font-extrabold text-[#137333]">
+            {members.length > 0 ? members.length : 1}
           </p>
-          <p className="text-xs text-[#4B5563] font-medium">Quyền hạn trong hệ thống</p>
+          <p className="text-xs text-[#4B5563] font-medium">Thành viên & Lời mời</p>
         </div>
 
         <div className="bg-[#F6F5EF] p-5 rounded-2xl border border-[#E5E7EB] space-y-2 shadow-2xs">

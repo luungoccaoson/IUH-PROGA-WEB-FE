@@ -134,7 +134,12 @@ export default function WorkspacesPage() {
     if (!user?.id) return;
     try {
       await workspaceService.acceptInvitation(wsId, user.id);
-      fetchWorkspaces();
+      const acceptedWs = classified.pendingWorkspaces.find((w) => w.id === wsId);
+      setClassified((prev) => ({
+        ...prev,
+        pendingWorkspaces: prev.pendingWorkspaces.filter((w) => w.id !== wsId),
+        joinedWorkspaces: acceptedWs ? [acceptedWs, ...prev.joinedWorkspaces] : prev.joinedWorkspaces,
+      }));
     } catch (err) {
       alert("Không thể chấp nhận lời mời!");
     }
@@ -146,7 +151,10 @@ export default function WorkspacesPage() {
     if (!user?.id) return;
     try {
       await workspaceService.declineInvitation(wsId, user.id);
-      fetchWorkspaces();
+      setClassified((prev) => ({
+        ...prev,
+        pendingWorkspaces: prev.pendingWorkspaces.filter((w) => w.id !== wsId),
+      }));
     } catch (err) {
       alert("Không thể từ chối lời mời!");
     }

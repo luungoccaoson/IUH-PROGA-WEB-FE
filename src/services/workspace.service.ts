@@ -25,6 +25,11 @@ export const workspaceService = {
     await apiClient.put(`/workspaces/${workspaceId}/invitations/decline?userId=${userId}`);
   },
 
+  getWorkspaceMembers: async (workspaceId: number): Promise<import('@/types').WorkspaceMember[]> => {
+    const response = await apiClient.get<ApiResponse<import('@/types').WorkspaceMember[]>>(`/workspaces/${workspaceId}/members`);
+    return response.data.data;
+  },
+
   getWorkspaceById: async (id: number): Promise<Workspace> => {
     const response = await apiClient.get<ApiResponse<Workspace>>(`/workspaces/${id}`);
     return response.data.data;
