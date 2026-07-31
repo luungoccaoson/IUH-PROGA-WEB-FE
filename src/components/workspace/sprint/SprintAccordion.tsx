@@ -1,0 +1,117 @@
+"use client";
+
+import React, { useState } from "react";
+import { ChevronDown, ChevronRight, Calendar, Edit3, Trash2 } from "lucide-react";
+import { Sprint, Task } from "@/types";
+import { TaskRowItem } from "./TaskRowItem";
+
+interface SprintAccordionProps {
+  sprint: Sprint;
+  tasks: Task[];
+  isTaskOverdue: (task: Task) => boolean;
+  onEdit: (sprint: Sprint) => void;
+  onDelete: (sprintId: number) => void;
+}
+
+const statusBadges: Record<Sprint['status'], { label: string; bg: string; text: string; border: string }> = {
+  ACTIVE: { label: "ĐANG DIỄN RA", bg: "bg-[#E6F4EA]", text: "text-[#137333]", border: "border-[#D1E7DD]" },
+  FUTURE: { label: "SẮP TỚI", bg: "bg-[#E8F0FE]", text: "text-[#1A73E8]", border: "border-[#D2E3FC]" },
+  CLOSED: { label: "ĐÃ ĐÓNG", bg: "bg-[#F1F3F4]", text: "text-[#5F6368]", border: "border-[#E0E0E0]" },
+};
+
+export function SprintAccordion({
+  sprint,
+  tasks,
+  isTaskOverdue,
+  onEdit,
+  onDelete,
+}: SprintAccordionProps) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
+  const todoCount = tasks.filter((t) => t.status === "TODO").length;
+  const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS").length;
+  const doneCount = tasks.filter((t) => t.status === "DONE").length;
+
+  return (
+    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden transition-all">
+      {/* Header */}
+      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1 hover:bg-[#E5E7EB] rounded-lg text-[#6B7280] transition-colors"
+          >
+            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+
+          <h3 className="font-extrabold text-[#111827] text-sm font-sans truncate">
+            {sprint.name}
+          </h3>
+
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${badge.bg} ${badge.text} ${badge.border}`}>
+            {badge.label}
+          </span>
+
+          <div className="flex items-center gap-1.5 text-xs text-[#6B7280] font-mono bg-white px-2.5 py-1 rounded-lg border border-[#E5E7EB]">
+            <Calendar className="w-3.5 h-3.5 text-[#9CA3AF]" />
+            {sprint.startDate ? (
+              <span>
+                {new Date(sprint.startDate).toLocaleDateString("vi-VN")} - {sprint.endDate ? new Date(sprint.endDate).toLocaleDateString("vi-VN") : "Chưa đặt"}
+              </span>
+            ) : (
+              <span className="italic text-[#9CA3AF]">Chưa chọn ngày</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md font-bold">{todoCount} Cần làm</span>
+            <span className="px-2 py-0.5 bg-[#E8F0FE] text-[#1A73E8] rounded-md font-bold">{inProgressCount} Đang làm</span>
+            <span className="px-2 py-0.5 bg-[#E6F4EA] text-[#137333] rounded-md font-bold">{doneCount} Đã xong</span>
+          </div>
+
+          <button
+            onClick={() => onEdit(sprint)}
+            title="Chỉnh sửa ngày / tên Sprint"
+            className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors"
+          >
+            <Edit3 className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => onDelete(sprint.id)}
+            title="Xóa Sprint"
+            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      {isOpen && (
+        <div className="p-4 space-y-3">
+          {sprint.goal && (
+            <p className="text-xs text-[#6B7280] bg-[#F6F5EF] p-2.5 rounded-xl border border-[#E5E7EB] italic">
+              <span className="font-bold not-italic text-[#111827]">Mục tiêu:</span> {sprint.goal}
+            </p>
+          )}
+
+          {tasks.length === 0 ? (
+            <div className="py-6 text-center text-xs text-[#9CA3AF] border-2 border-dashed border-[#E5E7EB] rounded-xl font-mono">
+              Chưa có công việc nào trong Sprint này.
+            </div>
+          ) : (
+            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl overflow-hidden">
+              {tasks.map((task) => (
+                <TaskRowItem key={task.id} task={task} isOverdue={isTaskOverdue(task)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
