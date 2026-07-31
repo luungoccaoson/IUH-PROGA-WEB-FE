@@ -2,21 +2,37 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Task } from "@/types";
+import { Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskRowItem } from "./TaskRowItem";
+import { InlineCreateTask } from "./InlineCreateTask";
 
 interface BacklogAccordionProps {
   tasks: Task[];
   isTaskOverdue: (task: Task) => boolean;
+  onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
+  onSelectTask: (task: Task) => void;
+  onUpdateStatus: (taskId: number, status: TaskStatus) => void;
+  onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
+  onUpdateOwner: (taskId: number, ownerId?: number) => void;
+  onDeleteTask: (taskId: number) => void;
 }
 
-export function BacklogAccordion({ tasks, isTaskOverdue }: BacklogAccordionProps) {
+export function BacklogAccordion({
+  tasks,
+  isTaskOverdue,
+  onCreateTask,
+  onSelectTask,
+  onUpdateStatus,
+  onUpdatePriority,
+  onUpdateOwner,
+  onDeleteTask,
+}: BacklogAccordionProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm">
       {/* Header */}
-      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between">
+      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between rounded-t-2xl">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -37,18 +53,26 @@ export function BacklogAccordion({ tasks, isTaskOverdue }: BacklogAccordionProps
 
       {/* Body */}
       {isOpen && (
-        <div className="p-4">
-          {tasks.length === 0 ? (
-            <div className="py-6 text-center text-xs text-[#9CA3AF] border-2 border-dashed border-[#E5E7EB] rounded-xl font-mono">
-              Không có công việc nào ở Backlog.
-            </div>
-          ) : (
-            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl overflow-hidden">
+        <div className="p-4 space-y-3">
+          {tasks.length > 0 && (
+            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl">
               {tasks.map((task) => (
-                <TaskRowItem key={task.id} task={task} isOverdue={isTaskOverdue(task)} />
+                <TaskRowItem
+                  key={task.id}
+                  task={task}
+                  isOverdue={isTaskOverdue(task)}
+                  onSelect={onSelectTask}
+                  onUpdateStatus={onUpdateStatus}
+                  onUpdatePriority={onUpdatePriority}
+                  onUpdateOwner={onUpdateOwner}
+                  onDelete={onDeleteTask}
+                />
               ))}
             </div>
           )}
+
+          {/* Inline Task Creation Button/Form for Backlog */}
+          <InlineCreateTask sprintId={null} onCreate={onCreateTask} />
         </div>
       )}
     </div>

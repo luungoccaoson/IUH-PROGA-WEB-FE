@@ -190,21 +190,18 @@ export default function SpaceDetailPage() {
   // Visual Helper: Segments for SVG Donut
   const todoCount = filteredTasks.filter(t => t.status === "TODO").length;
   const inProgressCount = filteredTasks.filter(t => t.status === "IN_PROGRESS").length;
-  const reviewCount = filteredTasks.filter(t => t.status === "REVIEW").length;
   const doneCount = filteredTasks.filter(t => t.status === "DONE").length;
   const totalCount = filteredTasks.length;
 
   // SVG calculations for a simple 3-segment donut representation
   const finalTodo = todoCount;
   const finalInProgress = inProgressCount;
-  const finalReview = reviewCount;
   const finalDone = doneCount;
   const finalTotal = totalCount || 1;
 
   const todoPercent = (finalTodo / finalTotal) * 100;
   const inProgressPercent = (finalInProgress / finalTotal) * 100;
   const donePercent = (finalDone / finalTotal) * 100;
-  const reviewPercent = (finalReview / finalTotal) * 100;
 
   // Mock Activity log data
   const mockActivities = [

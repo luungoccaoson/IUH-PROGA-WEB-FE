@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, Calendar, Edit3, Trash2 } from "lucide-react";
-import { Sprint, Task } from "@/types";
+import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskRowItem } from "./TaskRowItem";
+import { InlineCreateTask } from "./InlineCreateTask";
 
 interface SprintAccordionProps {
   sprint: Sprint;
@@ -11,6 +12,12 @@ interface SprintAccordionProps {
   isTaskOverdue: (task: Task) => boolean;
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
+  onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
+  onSelectTask: (task: Task) => void;
+  onUpdateStatus: (taskId: number, status: TaskStatus) => void;
+  onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
+  onUpdateOwner: (taskId: number, ownerId?: number) => void;
+  onDeleteTask: (taskId: number) => void;
 }
 
 const statusBadges: Record<Sprint['status'], { label: string; bg: string; text: string; border: string }> = {
@@ -25,8 +32,13 @@ export function SprintAccordion({
   isTaskOverdue,
   onEdit,
   onDelete,
+  onCreateTask,
+  onSelectTask,
+  onUpdateStatus,
+  onUpdatePriority,
+  onUpdateOwner,
+  onDeleteTask,
 }: SprintAccordionProps) {
-  // CLOSED sprints default to collapsed (false), ACTIVE/FUTURE default to open (true)
   const [isOpen, setIsOpen] = useState(sprint.status !== "CLOSED");
 
   const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
@@ -34,9 +46,9 @@ export function SprintAccordion({
   const isFuture = sprint.status === "FUTURE";
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden transition-all">
+    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm transition-all">
       {/* Header */}
-      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between gap-4">
+      <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between gap-4 rounded-t-2xl">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -66,7 +78,6 @@ export function SprintAccordion({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Allow edit for ACTIVE and FUTURE sprints, disabled for CLOSED */}
           {!isClosed && (
             <button
               onClick={() => onEdit(sprint)}
@@ -77,7 +88,6 @@ export function SprintAccordion({
             </button>
           )}
 
-          {/* Allow delete ONLY for FUTURE sprints */}
           {isFuture && (
             <button
               onClick={() => onDelete(sprint.id)}
@@ -99,16 +109,27 @@ export function SprintAccordion({
             </p>
           )}
 
-          {tasks.length === 0 ? (
-            <div className="py-6 text-center text-xs text-[#9CA3AF] border-2 border-dashed border-[#E5E7EB] rounded-xl font-mono">
-              Chưa có công việc nào trong Sprint này.
-            </div>
-          ) : (
-            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl overflow-hidden">
+          {tasks.length > 0 && (
+            <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl">
               {tasks.map((task) => (
-                <TaskRowItem key={task.id} task={task} isOverdue={isTaskOverdue(task)} />
+                <TaskRowItem
+                  key={task.id}
+                  task={task}
+                  isOverdue={isTaskOverdue(task)}
+                  isClosedSprint={isClosed}
+                  onSelect={onSelectTask}
+                  onUpdateStatus={onUpdateStatus}
+                  onUpdatePriority={onUpdatePriority}
+                  onUpdateOwner={onUpdateOwner}
+                  onDelete={onDeleteTask}
+                />
               ))}
             </div>
+          )}
+
+          {/* Inline Task Creation Button/Form at bottom of Sprint */}
+          {!isClosed && (
+            <InlineCreateTask sprintId={sprint.id} onCreate={onCreateTask} />
           )}
         </div>
       )}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sprint, SprintStatus, Task } from '@/types';
 import { sprintService } from '@/services/sprint.service';
-import { workspaceService } from '@/services/workspace.service';
+import { taskService } from '@/services/task.service';
 
 export function useSprints(spaceId: number) {
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -10,14 +10,14 @@ export function useSprints(spaceId: number) {
   const [error, setError] = useState<string>('');
 
   // Fetch Sprints & Tasks for Space
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     if (!spaceId) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       setError('');
 
       const fetchedSprints = await sprintService.getSprintsBySpace(spaceId);
-      const fetchedTasks = await workspaceService.getTasksBySpace(spaceId);
+      const fetchedTasks = await taskService.getTasksBySpace(spaceId);
 
       const now = new Date();
       let updatedSprints = [...fetchedSprints];
@@ -47,6 +47,30 @@ export function useSprints(spaceId: number) {
           try {
             await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
             sprint.status = 'CLOSED';
+
+            // Find active sprint or first future sprint in space
+            const activeSprint = updatedSprints.find((s) => s.id !== sprint.id && s.status === 'ACTIVE') 
+              || updatedSprints.find((s) => s.id !== sprint.id && s.status === 'FUTURE');
+
+            if (activeSprint) {
+              // Move unfinished overdue tasks to active sprint
+              const overdueTasks = updatedTasks.filter(
+                (t) => t.sprintId === sprint.id && t.status !== 'DONE' && t.dueDate && new Date(t.dueDate) < now
+              );
+
+              for (const task of overdueTasks) {
+                try {
+                  await taskService.updateTask(task.id, {
+                    spaceId: task.spaceId,
+                    sprintId: activeSprint.id,
+                    title: task.title,
+                  });
+                  task.sprintId = activeSprint.id;
+                } catch (e) {
+                  console.error(`Failed to move overdue task ${task.id} to active sprint`, e);
+                }
+              }
+            }
           } catch (err) {
             console.error(`Failed to auto-close sprint ${sprint.id}`, err);
           }
