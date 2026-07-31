@@ -14,9 +14,10 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface SprintTaskListProps {
   spaceId: number;
+  onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
-export function SprintTaskList({ spaceId }: SprintTaskListProps) {
+export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListProps) {
   const {
     sprints,
     tasks,
@@ -38,6 +39,12 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
     updateTaskStatus,
     deleteTask,
   } = useTasks(spaceId, reload);
+
+  React.useEffect(() => {
+    if (onDrawerStateChange) {
+      onDrawerStateChange(Boolean(selectedTask));
+    }
+  }, [selectedTask, onDrawerStateChange]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
