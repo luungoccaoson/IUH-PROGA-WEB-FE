@@ -7,6 +7,7 @@ import {
   Sparkles, History, ListTodo, KanbanSquare, FileText, ChevronRight, User, AlertCircle
 } from "lucide-react";
 import { workspaceService } from "@/services/workspace.service";
+import { SprintTaskList } from "@/components/workspace/SprintTaskList";
 import { Space, Task, TaskStatus, Workspace } from "@/types";
 
 type TabType = "overview" | "tasks" | "kanban";
@@ -490,82 +491,10 @@ export default function SpaceDetailPage() {
             </div>
           </div>
         )}
-        {/* TAB 2: TASKS LIST TABLE */}
+        {/* TAB 2: TASKS LIST TABLE (SPRINTS & BACKLOG) */}
         {activeTab === "tasks" && (
-          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-200">
-            <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between">
-              <h3 className="text-xs font-bold text-[#111827] uppercase tracking-wider font-mono">
-                Danh sách task hiện tại ({filteredTasks.length})
-              </h3>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse font-sans">
-                <thead>
-                  <tr className="bg-[#F6F5EF] border-b border-[#E5E7EB] text-xs font-bold text-[#6B7280] font-mono uppercase">
-                    <th className="py-3.5 px-4 w-20">Code</th>
-                    <th className="py-3.5 px-4">Tiêu đề task</th>
-                    <th className="py-3.5 px-4">Người thực hiện</th>
-                    <th className="py-3.5 px-4 w-28">Trạng thái</th>
-                    <th className="py-3.5 px-4 w-24">Độ ưu tiên</th>
-                    <th className="py-3.5 px-4 w-32">Ngày hết hạn</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E7EB]/60 text-sm">
-                  {filteredTasks.map((t, idx) => {
-                    const statusColors: Record<TaskStatus, { bg: string, text: string }> = {
-                      TODO: { bg: "bg-gray-100", text: "text-gray-800" },
-                      IN_PROGRESS: { bg: "bg-[#E8F0FE]", text: "text-[#1A73E8]" },
-                      REVIEW: { bg: "bg-amber-100", text: "text-amber-800" },
-                      DONE: { bg: "bg-[#E6F4EA]", text: "text-[#137333]" }
-                    };
-                    const priorityColors: Record<string, { bg: string, text: string }> = {
-                      LOW: { bg: "bg-gray-100 text-gray-600", text: "text-gray-700" },
-                      MEDIUM: { bg: "bg-blue-50 text-blue-700", text: "text-blue-700" },
-                      HIGH: { bg: "bg-orange-50 text-orange-700", text: "text-orange-700" },
-                      URGENT: { bg: "bg-red-50 text-red-700", text: "text-red-700" }
-                    };
-
-                    const status = statusColors[t.status] || statusColors.TODO;
-                    const priority = priorityColors[t.priority] || priorityColors.MEDIUM;
-
-                    return (
-                      <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs font-bold text-[#6B7280]">
-                          TASK-{t.id}
-                        </td>
-                        <td className="py-3 px-4 font-semibold text-[#111827]">
-                          {t.title}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 rounded-full bg-[#E5E7EB] flex items-center justify-center text-[10px] font-bold text-[#4B5563]">
-                              <User className="w-3.5 h-3.5" />
-                            </div>
-                            <span className="text-xs font-medium text-[#4B5563]">
-                              {t.ownerName || "Chưa giao"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${status.bg} ${status.text}`}>
-                            {t.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${priority.bg} ${priority.text}`}>
-                            {t.priority}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-xs font-mono text-[#6B7280]">
-                          {t.dueDate ? new Date(t.dueDate).toLocaleDateString("vi-VN") : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="animate-in fade-in duration-200">
+            <SprintTaskList spaceId={spaceId} />
           </div>
         )}
 
