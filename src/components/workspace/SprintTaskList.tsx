@@ -10,6 +10,7 @@ import { BacklogAccordion } from "./sprint/BacklogAccordion";
 import { CreateSprintModal } from "./sprint/CreateSprintModal";
 import { EditSprintModal } from "./sprint/EditSprintModal";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface SprintTaskListProps {
   spaceId: number;
@@ -40,13 +41,13 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
+  const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
 
-  const handleDeleteSprint = async (sprintId: number) => {
-    if (!window.confirm("Bạn có chắc muốn xóa Sprint này không? Các task trong Sprint sẽ được chuyển về Backlog.")) {
-      return;
-    }
+  const handleConfirmDeleteSprint = async () => {
+    if (!deletingSprintId) return;
     try {
-      await deleteSprint(sprintId);
+      await deleteSprint(deletingSprintId);
+      setDeletingSprintId(null);
     } catch (err) {
       alert("Không thể xóa Sprint!");
     }
@@ -125,7 +126,7 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
               tasks={sprintTasks}
               isTaskOverdue={isTaskOverdue}
               onEdit={setEditingSprint}
-              onDelete={handleDeleteSprint}
+              onDelete={(id) => setDeletingSprintId(id)}
               onCreateTask={createTask}
               onSelectTask={setSelectedTask}
               onUpdateStatus={updateTaskStatus}
@@ -163,7 +164,18 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
         onSubmit={updateSprint}
       />
 
-      {/* Task Detail Drawer Side Panel */}
+      {/* Confirmation Dialog for Sprint Delete */}
+      <ConfirmDialog
+        isOpen={deletingSprintId !== null}
+        title="Xóa Sprint"
+        message="Bạn có chắc chắn muốn xóa Sprint này không? Các công việc chưa hoàn thành trong Sprint này sẽ tự động chuyển về Backlog."
+        confirmText="Xóa Sprint"
+        cancelText="Hủy"
+        onConfirm={handleConfirmDeleteSprint}
+        onCancel={() => setDeletingSprintId(null)}
+      />
+
+      {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
         onClose={() => setSelectedTask(null)}

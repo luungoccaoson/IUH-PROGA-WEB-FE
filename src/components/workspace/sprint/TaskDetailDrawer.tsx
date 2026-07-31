@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Trash2, Calendar, User, AlignLeft, AlertTriangle, ChevronUp, Check } from "lucide-react";
+import { X, Trash2, Calendar, AlignLeft, Check, Lock } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface TaskDetailDrawerProps {
   task: Task | null;
@@ -22,7 +23,6 @@ interface TaskDetailDrawerProps {
   onDelete: (taskId: number) => Promise<any>;
 }
 
-// Project Members list for Assignee selection
 const PROJECT_MEMBERS = [
   { id: 2, name: "Son Luu (PM)", role: "PM" },
   { id: 4, name: "Duy Dev (Developer)", role: "Developer" },
@@ -38,6 +38,7 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (task) {
@@ -52,6 +53,8 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
   }, [task]);
 
   if (!task) return null;
+
+  const isReadOnly = task.status === "DONE";
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,13 +79,11 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm(`Bạn có chắc muốn xóa công việc "Task-${task.id}: ${task.title}" không?`)) {
-      return;
-    }
+  const handleConfirmDelete = async () => {
     try {
       setIsSubmitting(true);
       await onDelete(task.id);
+      setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
       alert("Không thể xóa task!");
@@ -92,28 +93,36 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-lg h-full shadow-2xl flex flex-col border-l border-[#E5E7EB] font-sans">
+    <>
+      {/* Non-blocking Side-by-side Layout Panel (No dark overlay backdrop!) */}
+      <div className="fixed right-0 top-0 bottom-0 z-40 w-96 max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
         {/* Header bar */}
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB]">
               Task-{task.id}
             </span>
+            {isReadOnly && (
+              <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                <Lock className="w-3 h-3" /> ĐÃ XONG
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleDelete}
-              title="Xóa công việc"
-              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                title="Xóa công việc"
+                className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={onClose}
-              title="Đóng"
+              title="Đóng bảng chi tiết"
               className="p-1.5 hover:bg-[#E5E7EB] text-[#6B7280] rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
@@ -122,7 +131,7 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
         </div>
 
         {/* Content body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
           {/* Task Title Edit */}
           <div className="space-y-1">
             <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px]">
@@ -131,27 +140,28 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
             <input
               type="text"
               required
+              disabled={isReadOnly}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full text-base font-extrabold text-[#111827] border-b border-transparent hover:border-[#E5E7EB] focus:border-[#111827] focus:outline-none py-1 transition-colors"
+              className="w-full text-base font-extrabold text-[#111827] border-b border-transparent hover:border-[#E5E7EB] focus:border-[#111827] focus:outline-none py-1 transition-colors disabled:bg-transparent"
             />
           </div>
 
           {/* Quick Settings Grid (Status, Priority, Assignee) */}
-          <div className="grid grid-cols-2 gap-4 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
-            {/* Status Selector */}
+          <div className="grid grid-cols-2 gap-3 bg-[#F9FAFB] p-3.5 rounded-2xl border border-[#E5E7EB]">
+            {/* Status Selector (3 States) */}
             <div className="space-y-1">
               <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px]">
                 Trạng thái
               </label>
               <select
+                disabled={isReadOnly}
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none"
+                className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="TODO">Cần làm (TODO)</option>
                 <option value="IN_PROGRESS">Đang làm (IN_PROGRESS)</option>
-                <option value="REVIEW">Đang duyệt (REVIEW)</option>
                 <option value="DONE">Đã xong (DONE)</option>
               </select>
             </div>
@@ -162,9 +172,10 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
                 Độ ưu tiên
               </label>
               <select
+                disabled={isReadOnly}
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none"
+                className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="LOW">Thấp (Low)</option>
                 <option value="MEDIUM">Trung bình (Medium)</option>
@@ -179,9 +190,10 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
                 Người thực hiện (Assignee)
               </label>
               <select
+                disabled={isReadOnly}
                 value={ownerId || ""}
                 onChange={(e) => setOwnerId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none"
+                className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="">-- Chưa gán người thực hiện --</option>
                 {PROJECT_MEMBERS.map((m) => (
@@ -194,7 +206,7 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
           </div>
 
           {/* Dates Section */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
@@ -202,9 +214,10 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
               </label>
               <input
                 type="date"
+                disabled={isReadOnly}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827]"
+                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100"
               />
             </div>
 
@@ -215,49 +228,64 @@ export function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: TaskDeta
               </label>
               <input
                 type="date"
+                disabled={isReadOnly}
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827]"
+                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100"
               />
             </div>
           </div>
 
           {/* Description Editor */}
-          <div className="space-y-1 pt-2">
+          <div className="space-y-1 pt-1">
             <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
               <AlignLeft className="w-3 h-3" />
               Mô tả chi tiết (Description)
             </label>
             <textarea
-              rows={6}
+              rows={5}
+              disabled={isReadOnly}
               placeholder="Thêm mô tả chi tiết cho công việc tại đây..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-3 border border-[#E5E7EB] rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] text-xs font-medium text-[#111827] leading-relaxed"
+              className="w-full p-3 border border-[#E5E7EB] rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] text-xs font-medium text-[#111827] leading-relaxed disabled:bg-gray-50"
             />
           </div>
 
           {/* Footer Bar */}
-          <div className="pt-4 border-t border-[#E5E7EB] flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#4B5563]"
-            >
-              Hủy
-            </button>
+          {!isReadOnly && (
+            <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#4B5563]"
+              >
+                Hủy
+              </button>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Check className="w-3.5 h-3.5" />
-              {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-            </button>
-          </div>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Check className="w-3.5 h-3.5" />
+                {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
+            </div>
+          )}
         </form>
       </div>
-    </div>
+
+      {/* Confirmation Dialog for Task Delete */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Xóa công việc"
+        message={`Bạn có chắc chắn muốn xóa công việc "Task-${task.id}: ${task.title}" không?`}
+        confirmText="Xóa công việc"
+        cancelText="Hủy"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+    </>
   );
 }

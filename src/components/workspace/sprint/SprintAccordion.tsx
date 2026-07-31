@@ -116,6 +116,7 @@ export function SprintAccordion({
                   key={task.id}
                   task={task}
                   isOverdue={isTaskOverdue(task)}
+                  isClosedSprint={isClosed}
                   onSelect={onSelectTask}
                   onUpdateStatus={onUpdateStatus}
                   onUpdatePriority={onUpdatePriority}
