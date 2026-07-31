@@ -15,6 +15,7 @@ interface BacklogAccordionProps {
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
   onUpdateOwner: (taskId: number, ownerId?: number) => void;
   onDeleteTask: (taskId: number) => void;
+  onMoveTask?: (taskId: number, targetSprintId: number | null) => void;
 }
 
 export function BacklogAccordion({
@@ -26,11 +27,23 @@ export function BacklogAccordion({
   onUpdatePriority,
   onUpdateOwner,
   onDeleteTask,
+  onMoveTask,
 }: BacklogAccordionProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm">
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const taskIdStr = e.dataTransfer.getData("taskId");
+        if (taskIdStr && onMoveTask) {
+          const taskId = parseInt(taskIdStr, 10);
+          onMoveTask(taskId, null); // move to backlog
+        }
+      }}
+      className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:border-[#111827]/40 transition-all"
+    >
       {/* Header */}
       <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between rounded-t-2xl">
         <div className="flex items-center gap-3">

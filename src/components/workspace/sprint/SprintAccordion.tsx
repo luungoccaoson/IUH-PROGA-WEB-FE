@@ -18,6 +18,7 @@ interface SprintAccordionProps {
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
   onUpdateOwner: (taskId: number, ownerId?: number) => void;
   onDeleteTask: (taskId: number) => void;
+  onMoveTask?: (taskId: number, targetSprintId: number | null) => void;
 }
 
 const statusBadges: Record<Sprint['status'], { label: string; bg: string; text: string; border: string }> = {
@@ -38,6 +39,7 @@ export function SprintAccordion({
   onUpdatePriority,
   onUpdateOwner,
   onDeleteTask,
+  onMoveTask,
 }: SprintAccordionProps) {
   const [isOpen, setIsOpen] = useState(sprint.status !== "CLOSED");
 
@@ -46,7 +48,23 @@ export function SprintAccordion({
   const isFuture = sprint.status === "FUTURE";
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm transition-all">
+    <div
+      onDragOver={(e) => {
+        if (!isClosed) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (isClosed) return;
+        e.preventDefault();
+        const taskIdStr = e.dataTransfer.getData("taskId");
+        if (taskIdStr && onMoveTask) {
+          const taskId = parseInt(taskIdStr, 10);
+          onMoveTask(taskId, sprint.id);
+        }
+      }}
+      className={`bg-white border border-[#E5E7EB] rounded-2xl shadow-sm transition-all ${
+        isClosed ? "" : "hover:border-[#111827]/40"
+      }`}
+    >
       {/* Header */}
       <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between gap-4 rounded-t-2xl">
         <div className="flex items-center gap-3 min-w-0">

@@ -8,6 +8,28 @@ export const workspaceService = {
     return response.data.data;
   },
 
+  getClassifiedWorkspaces: async (userId: number): Promise<import('@/types').ClassifiedWorkspaces> => {
+    const response = await apiClient.get<ApiResponse<import('@/types').ClassifiedWorkspaces>>(`/workspaces/user/${userId}/classified`);
+    return response.data.data;
+  },
+
+  inviteMember: async (workspaceId: number, userId: number, roleId = 3): Promise<void> => {
+    await apiClient.post(`/workspaces/${workspaceId}/invite?userId=${userId}&roleId=${roleId}`);
+  },
+
+  acceptInvitation: async (workspaceId: number, userId: number): Promise<void> => {
+    await apiClient.put(`/workspaces/${workspaceId}/invitations/accept?userId=${userId}`);
+  },
+
+  declineInvitation: async (workspaceId: number, userId: number): Promise<void> => {
+    await apiClient.put(`/workspaces/${workspaceId}/invitations/decline?userId=${userId}`);
+  },
+
+  getWorkspaceMembers: async (workspaceId: number): Promise<import('@/types').WorkspaceMember[]> => {
+    const response = await apiClient.get<ApiResponse<import('@/types').WorkspaceMember[]>>(`/workspaces/${workspaceId}/members`);
+    return response.data.data;
+  },
+
   getWorkspaceById: async (id: number): Promise<Workspace> => {
     const response = await apiClient.get<ApiResponse<Workspace>>(`/workspaces/${id}`);
     return response.data.data;
@@ -33,12 +55,12 @@ export const workspaceService = {
     return response.data.data;
   },
 
-  createSpace: async (data: { workspaceId: number; name: string; startDate?: string; endDate?: string }): Promise<Space> => {
+  createSpace: async (data: { workspaceId: number; name: string; startDate?: string; endDate?: string; isPrivate?: boolean }): Promise<Space> => {
     const response = await apiClient.post<ApiResponse<Space>>('/spaces', data);
     return response.data.data;
   },
 
-  updateSpace: async (id: number, data: { workspaceId: number; name: string; startDate?: string; endDate?: string }): Promise<Space> => {
+  updateSpace: async (id: number, data: { workspaceId: number; name: string; startDate?: string; endDate?: string; isPrivate?: boolean }): Promise<Space> => {
     const response = await apiClient.put<ApiResponse<Space>>(`/spaces/${id}`, data);
     return response.data.data;
   },

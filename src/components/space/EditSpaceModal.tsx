@@ -7,6 +7,7 @@ import { Space } from "@/types";
 interface EditSpaceModalProps {
   isOpen: boolean;
   space: Space | null;
+  isOwner?: boolean;
   onClose: () => void;
   onUpdate: (data: { name: string; startDate?: string; endDate?: string }) => Promise<any>;
   onDelete: () => Promise<any>;
@@ -15,6 +16,7 @@ interface EditSpaceModalProps {
 export function EditSpaceModal({
   isOpen,
   space,
+  isOwner = true,
   onClose,
   onUpdate,
   onDelete,
@@ -23,6 +25,7 @@ export function EditSpaceModal({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export function EditSpaceModal({
       setName(space.name);
       setStartDate(space.startDate ? space.startDate.substring(0, 10) : "");
       setEndDate(space.endDate ? space.endDate.substring(0, 10) : "");
+      setShowConfirmDelete(false);
       setError("");
     }
   }, [space, isOpen]);
@@ -132,33 +136,67 @@ export function EditSpaceModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Xóa Space
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#4B5563]"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold disabled:opacity-50"
-              >
-                {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-              </button>
+          {showConfirmDelete ? (
+            <div className="bg-[#FDEDEC] p-4 rounded-xl border border-[#FADBD8] space-y-3 animate-in fade-in duration-150">
+              <p className="text-xs font-bold text-[#D93025]">
+                Bạn có chắc chắn muốn xóa Space <strong>{space.name}</strong> không?
+              </p>
+              <p className="text-[11px] text-[#4B5563]">
+                Hành động này sẽ xóa vĩnh viễn Space và tất cả Sprint, Task liên quan. Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(false)}
+                  className="px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-lg text-xs font-semibold text-[#4B5563]"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isSubmitting}
+                  className="px-3 py-1.5 bg-[#D93025] hover:bg-[#C0392B] text-white rounded-lg text-xs font-bold shadow-2xs disabled:opacity-50"
+                >
+                  {isSubmitting ? "Đang xóa..." : "Xác nhận xóa vĩnh viễn"}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(true)}
+                  className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Xóa Space
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#4B5563]"
+                >
+                  Hủy
+                </button>
+                {isOwner && (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>

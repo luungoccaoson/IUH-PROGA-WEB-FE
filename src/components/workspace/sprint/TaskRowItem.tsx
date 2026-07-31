@@ -104,9 +104,17 @@ export function TaskRowItem({
 
   return (
     <>
-      <div className={`p-3 transition-colors flex items-center justify-between gap-4 font-sans text-xs group ${
-        isReadOnly ? "bg-gray-50/70" : "bg-white hover:bg-[#F9FAFB]"
-      }`}>
+      <div
+        draggable={!isReadOnly}
+        onDragStart={(e) => {
+          if (isReadOnly) return;
+          e.dataTransfer.setData("taskId", task.id.toString());
+          e.dataTransfer.setData("sourceSprintId", (task.sprintId || "backlog").toString());
+        }}
+        className={`p-3 transition-colors flex items-center justify-between gap-4 font-sans text-xs group ${
+          isReadOnly ? "bg-gray-50/70 cursor-default" : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+        }`}
+      >
         {/* Left side: Task Code & Title (Click to open right detail drawer) */}
         <div
           onClick={() => onSelect && onSelect(task)}

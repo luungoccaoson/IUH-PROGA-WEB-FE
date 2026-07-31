@@ -76,6 +76,22 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
     }
   };
 
+  const handleMoveTask = async (taskId: number, targetSprintId: number | null) => {
+    if (targetSprintId !== null) {
+      const targetSprint = sprints.find((s) => s.id === targetSprintId);
+      if (targetSprint?.status === "CLOSED") {
+        alert("Không thể di chuyển công việc vào Sprint đã đóng!");
+        return;
+      }
+    }
+
+    try {
+      await updateTask(taskId, { sprintId: targetSprintId });
+    } catch (err) {
+      console.error("Failed to move task:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#6B7280]">
@@ -143,6 +159,7 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
                 onUpdatePriority={handleUpdatePriority}
                 onUpdateOwner={handleUpdateOwner}
                 onDeleteTask={deleteTask}
+                onMoveTask={handleMoveTask}
               />
             );
           })}
@@ -157,6 +174,7 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
             onUpdatePriority={handleUpdatePriority}
             onUpdateOwner={handleUpdateOwner}
             onDeleteTask={deleteTask}
+            onMoveTask={handleMoveTask}
           />
         </div>
       </div>

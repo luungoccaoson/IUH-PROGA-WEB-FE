@@ -14,6 +14,7 @@ interface SpaceHeaderProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   onOpenSettings: () => void;
+  isOwner?: boolean;
 }
 
 export function SpaceHeader({
@@ -23,6 +24,7 @@ export function SpaceHeader({
   activeTab,
   setActiveTab,
   onOpenSettings,
+  isOwner = true,
 }: SpaceHeaderProps) {
   const router = useRouter();
 
@@ -65,13 +67,15 @@ export function SpaceHeader({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onOpenSettings}
-            className="p-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-[#4B5563] transition-colors shadow-2xs"
-            title="Cài đặt Space"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
+          {isOwner && (
+            <button
+              onClick={onOpenSettings}
+              className="p-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-[#4B5563] transition-colors shadow-2xs"
+              title="Cài đặt Space"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

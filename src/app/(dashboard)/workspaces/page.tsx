@@ -2,15 +2,23 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MoreVertical, Edit2, Trash2, Folder, Sparkles, AlertCircle } from "lucide-react";
+import { Plus, Edit2, Trash2, Folder, Sparkles, AlertCircle, Users, Mail, Check, X, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
-import { Workspace } from "@/types";
+import { Workspace, ClassifiedWorkspaces } from "@/types";
+
+type TabCategory = "owned" | "joined" | "pending";
 
 export default function WorkspacesPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+
+  const [activeTab, setActiveTab] = useState<TabCategory>("owned");
+  const [classified, setClassified] = useState<ClassifiedWorkspaces>({
+    ownedWorkspaces: [],
+    joinedWorkspaces: [],
+    pendingWorkspaces: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -24,17 +32,23 @@ export default function WorkspacesPage() {
   const [description, setDescription] = useState("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
 
-  // Fetch workspaces
+  // Fetch classified workspaces
   const fetchWorkspaces = async () => {
     if (!user?.id) return;
     try {
       setLoading(true);
       setError("");
-      const list = await workspaceService.getWorkspacesByOwner(user.id);
-      setWorkspaces(list);
+      const data = await workspaceService.getClassifiedWorkspaces(user.id);
+      setClassified(data);
     } catch (err: any) {
       console.error("Error loading workspaces:", err);
-      setError("Không thể tải danh sách Workspace. Vui lòng thử lại.");
+      // Fallback if classified API fails
+      try {
+        const owned = await workspaceService.getWorkspacesByOwner(user.id);
+        setClassified({ ownedWorkspaces: owned, joinedWorkspaces: [], pendingWorkspaces: [] });
+      } catch (e) {
+        setError("Không thể tải danh sách Workspace. Vui lòng thử lại.");
+      }
     } finally {
       setLoading(false);
     }
@@ -56,7 +70,10 @@ export default function WorkspacesPage() {
         description: description.trim(),
         ownerId: user.id,
       });
-      setWorkspaces([newWs, ...workspaces]);
+      setClassified((prev) => ({
+        ...prev,
+        ownedWorkspaces: [newWs, ...prev.ownedWorkspaces],
+      }));
       setShowCreateModal(false);
       setName("");
       setDescription("");
@@ -78,7 +95,10 @@ export default function WorkspacesPage() {
         description: description.trim(),
         ownerId: user.id,
       });
-      setWorkspaces(workspaces.map((w) => (w.id === updated.id ? updated : w)));
+      setClassified((prev) => ({
+        ...prev,
+        ownedWorkspaces: prev.ownedWorkspaces.map((w) => (w.id === updated.id ? updated : w)),
+      }));
       setShowEditModal(false);
       setSelectedWorkspace(null);
       setName("");
@@ -96,12 +116,47 @@ export default function WorkspacesPage() {
     try {
       setError("");
       await workspaceService.deleteWorkspace(selectedWorkspace.id);
-      setWorkspaces(workspaces.filter((w) => w.id !== selectedWorkspace.id));
+      setClassified((prev) => ({
+        ...prev,
+        ownedWorkspaces: prev.ownedWorkspaces.filter((w) => w.id !== selectedWorkspace.id),
+      }));
       setShowDeleteModal(false);
       setSelectedWorkspace(null);
     } catch (err: any) {
       console.error("Error deleting workspace:", err);
       setError("Không thể xóa Workspace này.");
+    }
+  };
+
+  // Handle Accept Invitation
+  const handleAcceptInvitation = async (wsId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+    try {
+      await workspaceService.acceptInvitation(wsId, user.id);
+      const acceptedWs = classified.pendingWorkspaces.find((w) => w.id === wsId);
+      setClassified((prev) => ({
+        ...prev,
+        pendingWorkspaces: prev.pendingWorkspaces.filter((w) => w.id !== wsId),
+        joinedWorkspaces: acceptedWs ? [acceptedWs, ...prev.joinedWorkspaces] : prev.joinedWorkspaces,
+      }));
+    } catch (err) {
+      alert("Không thể chấp nhận lời mời!");
+    }
+  };
+
+  // Handle Decline Invitation
+  const handleDeclineInvitation = async (wsId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+    try {
+      await workspaceService.declineInvitation(wsId, user.id);
+      setClassified((prev) => ({
+        ...prev,
+        pendingWorkspaces: prev.pendingWorkspaces.filter((w) => w.id !== wsId),
+      }));
+    } catch (err) {
+      alert("Không thể từ chối lời mời!");
     }
   };
 
@@ -119,29 +174,80 @@ export default function WorkspacesPage() {
     setShowDeleteModal(true);
   };
 
+  const currentWorkspaces =
+    activeTab === "owned"
+      ? classified.ownedWorkspaces
+      : activeTab === "joined"
+      ? classified.joinedWorkspaces
+      : classified.pendingWorkspaces;
+
   return (
-    <div className="max-w-6xl space-y-8 animate-in fade-in duration-300">
+    <div className="max-w-6xl space-y-8 animate-in fade-in duration-300 font-sans">
       {/* Header Bar */}
       <div className="flex items-center justify-between">
         <div>
           <span className="text-[10px] uppercase tracking-widest text-[#6B7280] font-mono font-bold">
             Quản Lý Hệ Thống
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#111827] font-sans mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#111827] mt-1">
             Workspaces
           </h1>
         </div>
 
+        {activeTab === "owned" && (
+          <button
+            onClick={() => {
+              setName("");
+              setDescription("");
+              setShowCreateModal(true);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-[#111827] text-white hover:bg-[#1F2937] font-bold text-sm shadow-md transition-all flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tạo Workspace</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs Switcher */}
+      <div className="flex items-center gap-2 border-b border-[#E5E7EB] font-mono text-xs font-bold uppercase tracking-wider text-[#6B7280]">
         <button
-          onClick={() => {
-            setName("");
-            setDescription("");
-            setShowCreateModal(true);
-          }}
-          className="px-4 py-2.5 rounded-xl bg-[#111827] text-white hover:bg-[#1F2937] font-bold text-sm shadow-md transition-all flex items-center gap-1.5"
+          onClick={() => setActiveTab("owned")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
+            activeTab === "owned"
+              ? "border-[#111827] text-[#111827]"
+              : "border-transparent hover:text-[#111827]"
+          }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>Tạo Workspace</span>
+          <ShieldCheck className="w-4 h-4" />
+          Workspace của tôi ({classified.ownedWorkspaces.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("joined")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
+            activeTab === "joined"
+              ? "border-[#111827] text-[#111827]"
+              : "border-transparent hover:text-[#111827]"
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          Đang tham gia ({classified.joinedWorkspaces.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("pending")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all relative ${
+            activeTab === "pending"
+              ? "border-[#111827] text-[#111827]"
+              : "border-transparent hover:text-[#111827]"
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          Lời mời tham gia
+          {classified.pendingWorkspaces.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white font-mono text-[9px] font-extrabold animate-pulse">
+              {classified.pendingWorkspaces.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -159,27 +265,41 @@ export default function WorkspacesPage() {
           <Sparkles className="w-8 h-8 text-[#111827] animate-spin mb-3" />
           <p className="font-mono text-xs uppercase tracking-wider">Đang tải danh sách Workspace...</p>
         </div>
-      ) : workspaces.length === 0 ? (
-        <div className="bg-[#F6F5EF] border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-sm">
+      ) : currentWorkspaces.length === 0 ? (
+        <div className="bg-[#F6F5EF] border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-2xs">
           <Folder className="w-12 h-12 text-[#6B7280] mx-auto" />
-          <h3 className="text-lg font-bold text-[#111827]">Không có Workspace nào</h3>
+          <h3 className="text-lg font-bold text-[#111827]">
+            {activeTab === "owned"
+              ? "Bạn chưa có Workspace nào do chính mình tạo"
+              : activeTab === "joined"
+              ? "Bạn chưa tham gia vào Workspace nào khác"
+              : "Không có lời mời tham gia Workspace nào"}
+          </h3>
           <p className="text-sm text-[#6B7280]">
-            Bắt đầu bằng cách tạo Workspace đầu tiên của bạn để quản lý các Spaces và các nhiệm vụ tích hợp AI Agents.
+            {activeTab === "owned"
+              ? "Bắt đầu bằng cách tạo Workspace đầu tiên của bạn để quản lý các Spaces và nhiệm vụ."
+              : activeTab === "joined"
+              ? "Khi bạn được người khác mời vào Workspace của họ, danh sách sẽ xuất hiện tại đây."
+              : "Tất cả lời mời gia nhập Workspace sẽ được hiển thị tại mục này để bạn duyệt."}
           </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-5 py-2.5 bg-[#111827] text-white font-bold rounded-xl text-sm hover:bg-[#1F2937] transition-colors"
-          >
-            Tạo Workspace đầu tiên
-          </button>
+          {activeTab === "owned" && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-5 py-2.5 bg-[#111827] text-white font-bold rounded-xl text-sm hover:bg-[#1F2937] transition-colors"
+            >
+              Tạo Workspace đầu tiên
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {workspaces.map((w) => (
+          {currentWorkspaces.map((w) => (
             <div
               key={w.id}
-              onClick={() => router.push(`/workspaces/${w.id}`)}
-              className="bg-white p-6 rounded-2xl border border-[#E5E7EB] hover:border-[#111827] cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 group flex flex-col justify-between min-h-[180px] relative"
+              onClick={() => activeTab !== "pending" && router.push(`/workspaces/${w.id}`)}
+              className={`bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xs transition-all duration-200 group flex flex-col justify-between min-h-[180px] relative ${
+                activeTab !== "pending" ? "hover:border-[#111827] cursor-pointer hover:shadow-md" : ""
+              }`}
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -187,23 +307,37 @@ export default function WorkspacesPage() {
                     <Folder className="w-5 h-5" />
                   </div>
 
-                  {/* Actions buttons */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => openEditModal(w, e)}
-                      className="p-1.5 rounded-lg hover:bg-[#F6F5EF] text-[#6B7280] hover:text-[#111827]"
-                      title="Chỉnh sửa"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => openDeleteModal(w, e)}
-                      className="p-1.5 rounded-lg hover:bg-[#FDEDEC] text-[#6B7280] hover:text-[#D93025]"
-                      title="Xóa"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {/* Actions buttons for OWNED workspaces */}
+                  {activeTab === "owned" && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => openEditModal(w, e)}
+                        className="p-1.5 rounded-lg hover:bg-[#F6F5EF] text-[#6B7280] hover:text-[#111827]"
+                        title="Chỉnh sửa"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => openDeleteModal(w, e)}
+                        className="p-1.5 rounded-lg hover:bg-[#FDEDEC] text-[#6B7280] hover:text-[#D93025]"
+                        title="Xóa"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Badge for JOINED or PENDING */}
+                  {activeTab === "joined" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC]">
+                      Thành viên
+                    </span>
+                  )}
+                  {activeTab === "pending" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      Chờ xác nhận
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -216,10 +350,28 @@ export default function WorkspacesPage() {
                 </div>
               </div>
 
-              <div className="pt-4 mt-4 border-t border-[#F6F5EF] text-[10px] text-[#9CA3AF] font-mono flex items-center justify-between">
-                <span>Created: {new Date(w.createdAt).toLocaleDateString("vi-VN")}</span>
-                <span className="font-bold text-[#6B7280] group-hover:text-[#111827]">Vào Workspace →</span>
-              </div>
+              {/* Card Footer: Accept/Decline for Pending OR Open Link */}
+              {activeTab === "pending" ? (
+                <div className="pt-4 mt-4 border-t border-[#E5E7EB] flex items-center justify-end gap-2">
+                  <button
+                    onClick={(e) => handleDeclineInvitation(w.id, e)}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" /> Từ chối
+                  </button>
+                  <button
+                    onClick={(e) => handleAcceptInvitation(w.id, e)}
+                    className="px-3 py-1.5 bg-[#137333] hover:bg-[#0f5c28] text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Chấp nhận
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-4 mt-4 border-t border-[#F6F5EF] text-[10px] text-[#9CA3AF] font-mono flex items-center justify-between">
+                  <span>Tạo ngày: {new Date(w.createdAt).toLocaleDateString("vi-VN")}</span>
+                  <span className="font-bold text-[#6B7280] group-hover:text-[#111827]">Vào Workspace →</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -227,7 +379,7 @@ export default function WorkspacesPage() {
 
       {/* CREATE MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-[#111827]">Tạo Workspace mới</h3>
             <form onSubmit={handleCreate} className="space-y-4">
@@ -275,7 +427,7 @@ export default function WorkspacesPage() {
 
       {/* EDIT MODAL */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-[#111827]">Chỉnh sửa Workspace</h3>
             <form onSubmit={handleEdit} className="space-y-4">
@@ -324,7 +476,7 @@ export default function WorkspacesPage() {
 
       {/* DELETE MODAL */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-sm bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-2xl space-y-4">
             <div className="w-12 h-12 rounded-full bg-[#FDEDEC] text-[#D93025] flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />

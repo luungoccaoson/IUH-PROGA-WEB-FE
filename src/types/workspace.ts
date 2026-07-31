@@ -12,7 +12,22 @@ export interface Space {
   name: string;
   startDate?: string;
   endDate?: string;
+  isPrivate?: boolean;
   createdAt: string;
+}
+
+export interface WorkspaceMember {
+  workspaceId: number;
+  userId: number;
+  roleId: number;
+  status: "ACCEPTED" | "PENDING" | "REJECTED";
+  joinedAt: string;
+}
+
+export interface ClassifiedWorkspaces {
+  ownedWorkspaces: Workspace[];
+  joinedWorkspaces: Workspace[];
+  pendingWorkspaces: Workspace[];
 }
 
 export interface WorkspaceLog {
