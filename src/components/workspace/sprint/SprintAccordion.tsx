@@ -26,12 +26,12 @@ export function SprintAccordion({
   onEdit,
   onDelete,
 }: SprintAccordionProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  // CLOSED sprints default to collapsed (false), ACTIVE/FUTURE default to open (true)
+  const [isOpen, setIsOpen] = useState(sprint.status !== "CLOSED");
 
   const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
-  const todoCount = tasks.filter((t) => t.status === "TODO").length;
-  const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS").length;
-  const doneCount = tasks.filter((t) => t.status === "DONE").length;
+  const isClosed = sprint.status === "CLOSED";
+  const isFuture = sprint.status === "FUTURE";
 
   return (
     <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden transition-all">
@@ -65,28 +65,28 @@ export function SprintAccordion({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md font-bold">{todoCount} Cần làm</span>
-            <span className="px-2 py-0.5 bg-[#E8F0FE] text-[#1A73E8] rounded-md font-bold">{inProgressCount} Đang làm</span>
-            <span className="px-2 py-0.5 bg-[#E6F4EA] text-[#137333] rounded-md font-bold">{doneCount} Đã xong</span>
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Allow edit for ACTIVE and FUTURE sprints, disabled for CLOSED */}
+          {!isClosed && (
+            <button
+              onClick={() => onEdit(sprint)}
+              title="Chỉnh sửa ngày / tên Sprint"
+              className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
 
-          <button
-            onClick={() => onEdit(sprint)}
-            title="Chỉnh sửa ngày / tên Sprint"
-            className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors"
-          >
-            <Edit3 className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => onDelete(sprint.id)}
-            title="Xóa Sprint"
-            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {/* Allow delete ONLY for FUTURE sprints */}
+          {isFuture && (
+            <button
+              onClick={() => onDelete(sprint.id)}
+              title="Xóa Sprint"
+              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

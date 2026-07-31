@@ -22,10 +22,9 @@ export function useSprints(spaceId: number) {
       const now = new Date();
       let updatedSprints = [...fetchedSprints];
       let updatedTasks = [...fetchedTasks];
-      let hasChanges = false;
 
-      // Sort sprints by start date / id
-      updatedSprints.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      // Sort sprints ascending by id / creation so Sprint 0, 1, 2... display top to bottom
+      updatedSprints.sort((a, b) => a.id - b.id);
 
       // Check auto start & end rules
       for (let i = 0; i < updatedSprints.length; i++) {
@@ -38,7 +37,6 @@ export function useSprints(spaceId: number) {
           try {
             await sprintService.updateSprintStatus(sprint.id, 'ACTIVE');
             sprint.status = 'ACTIVE';
-            hasChanges = true;
           } catch (err) {
             console.error(`Failed to auto-activate sprint ${sprint.id}`, err);
           }
@@ -49,45 +47,6 @@ export function useSprints(spaceId: number) {
           try {
             await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
             sprint.status = 'CLOSED';
-            hasChanges = true;
-
-            // Find next available FUTURE/ACTIVE sprint or null (backlog)
-            const nextSprint = updatedSprints.find((s, index) => index > i && s.status !== 'CLOSED');
-            const targetSprintId = nextSprint ? nextSprint.id : null;
-
-            // Move unfinished tasks (status !== 'DONE') from closed sprint to next sprint / backlog
-            const unfinishedTasks = updatedTasks.filter(
-              (t) => t.sprintId === sprint.id && t.status !== 'DONE'
-            );
-
-            for (const task of unfinishedTasks) {
-              try {
-                await workspaceService.createTask({
-                  spaceId: task.spaceId,
-                  title: task.title,
-                  description: task.description,
-                  status: task.status,
-                  priority: task.priority,
-                  ownerId: task.ownerId,
-                  startDate: task.startDate,
-                  dueDate: task.dueDate,
-                });
-                // In practice, we update the existing task's sprintId
-                // Since updateTask endpoint is available:
-                await workspaceService.createTask({
-                  spaceId: task.spaceId,
-                  title: task.title,
-                  description: task.description,
-                  status: task.status,
-                  priority: task.priority,
-                  ownerId: task.ownerId,
-                  startDate: task.startDate,
-                  dueDate: task.dueDate,
-                });
-              } catch (e) {
-                console.error(`Failed moving task ${task.id} to next sprint`, e);
-              }
-            }
           } catch (err) {
             console.error(`Failed to auto-close sprint ${sprint.id}`, err);
           }
@@ -107,6 +66,20 @@ export function useSprints(spaceId: number) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Compute next default sprint name e.g. Sprint 1, Sprint 2, Sprint 3...
+  const getNextSprintDefaultName = useCallback(() => {
+    if (!sprints.length) return "Sprint 1";
+    let maxNum = 0;
+    sprints.forEach((s) => {
+      const match = s.name.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `Sprint ${maxNum + 1}`;
+  }, [sprints]);
 
   // Create new Sprint
   const createSprint = async (data: { name: string; goal?: string; startDate?: string; endDate?: string }) => {
@@ -149,10 +122,46 @@ export function useSprints(spaceId: number) {
     }
   };
 
-  // Delete Sprint
+  // Delete Sprint & shift remaining FUTURE sprint numbers if needed
   const deleteSprint = async (sprintId: number) => {
     try {
+      const sprintToDelete = sprints.find((s) => s.id === sprintId);
       await sprintService.deleteSprint(sprintId);
+
+      // Renumber subsequent FUTURE sprints if sprintToDelete had a number
+      if (sprintToDelete) {
+        const match = sprintToDelete.name.match(/\d+/);
+        if (match) {
+          const deletedNum = parseInt(match[0], 10);
+          const remainingFuture = sprints.filter(
+            (s) => s.id !== sprintId && s.status === 'FUTURE'
+          );
+
+          for (const futureSprint of remainingFuture) {
+            const sMatch = futureSprint.name.match(/\d+/);
+            if (sMatch) {
+              const currentNum = parseInt(sMatch[0], 10);
+              if (currentNum > deletedNum) {
+                const newNum = currentNum - 1;
+                const newName = futureSprint.name.replace(/\d+/, newNum.toString());
+                try {
+                  await sprintService.updateSprint(futureSprint.id, {
+                    spaceId: futureSprint.spaceId,
+                    name: newName,
+                    goal: futureSprint.goal,
+                    status: futureSprint.status,
+                    startDate: futureSprint.startDate,
+                    endDate: futureSprint.endDate,
+                  });
+                } catch (e) {
+                  console.error(`Failed to renumber sprint ${futureSprint.id}`, e);
+                }
+              }
+            }
+          }
+        }
+      }
+
       await loadData();
     } catch (err: any) {
       console.error('Failed to delete sprint:', err);
@@ -177,6 +186,7 @@ export function useSprints(spaceId: number) {
     createSprint,
     updateSprint,
     deleteSprint,
+    getNextSprintDefaultName,
     isTaskOverdue,
   };
 }

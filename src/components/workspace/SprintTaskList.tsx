@@ -22,6 +22,7 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
     createSprint,
     updateSprint,
     deleteSprint,
+    getNextSprintDefaultName,
     isTaskOverdue,
   } = useSprints(spaceId);
 
@@ -108,6 +109,7 @@ export function SprintTaskList({ spaceId }: SprintTaskListProps) {
       {/* Modals */}
       <CreateSprintModal
         isOpen={isCreateModalOpen}
+        defaultName={getNextSprintDefaultName()}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={createSprint}
       />

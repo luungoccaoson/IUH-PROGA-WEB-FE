@@ -1,20 +1,30 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, X } from "lucide-react";
 
 interface CreateSprintModalProps {
   isOpen: boolean;
+  defaultName?: string;
   onClose: () => void;
   onSubmit: (data: { name: string; goal?: string; startDate?: string; endDate?: string }) => Promise<any>;
 }
 
-export function CreateSprintModal({ isOpen, onClose, onSubmit }: CreateSprintModalProps) {
+export function CreateSprintModal({ isOpen, defaultName, onClose, onSubmit }: CreateSprintModalProps) {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(defaultName || "Sprint 1");
+      setGoal("");
+      setStartDate("");
+      setEndDate("");
+    }
+  }, [isOpen, defaultName]);
 
   if (!isOpen) return null;
 
@@ -30,10 +40,6 @@ export function CreateSprintModal({ isOpen, onClose, onSubmit }: CreateSprintMod
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
-      setName("");
-      setGoal("");
-      setStartDate("");
-      setEndDate("");
       onClose();
     } catch (err) {
       alert("Không thể tạo Sprint. Vui lòng thử lại!");
@@ -66,7 +72,7 @@ export function CreateSprintModal({ isOpen, onClose, onSubmit }: CreateSprintMod
             <input
               type="text"
               required
-              placeholder="Ví dụ: PROGA Sprint 1"
+              placeholder="Ví dụ: Sprint 1"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#111827]"
