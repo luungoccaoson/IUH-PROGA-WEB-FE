@@ -7,6 +7,7 @@ interface AuthState {
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string) => void;
   setToken: (accessToken: string) => void;
+  loadAuthFromStorage: () => void;
   logout: () => void;
 }
 
@@ -28,6 +29,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('accessToken', accessToken);
     }
     set({ accessToken });
+  },
+
+  loadAuthFromStorage: () => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('accessToken');
+      const userStr = localStorage.getItem('user');
+      if (token && userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          set({ user, accessToken: token, isAuthenticated: true });
+        } catch (e) {
+          console.error("Failed to parse user from localStorage", e);
+        }
+      }
+    }
   },
 
   logout: () => {

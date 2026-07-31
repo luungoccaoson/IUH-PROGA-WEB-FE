@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Sparkles, User, Mail, Lock, UserPlus } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 
+import { authService } from "@/services/auth.service";
+
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -19,10 +21,19 @@ export default function RegisterPage() {
     setErrorMsg("");
 
     try {
-      setAuth({ id: "user-1", username: username || "Son Luu", email, isAdmin: true, createdAt: "2026-07-21" }, "mock-jwt-token");
+      // Register new user
+      await authService.register(username, email, password);
+      
+      // Auto login after successful registration
+      const data = await authService.login(email, password);
+      setAuth(data.user, data.accessToken);
       window.location.href = "/workspaces";
-    } catch {
-      setErrorMsg("Đăng ký thất bại. Email hoặc Username có thể đã được sử dụng.");
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(
+        err.response?.data?.message || 
+        "Đăng ký thất bại. Email hoặc Username có thể đã được sử dụng."
+      );
     } finally {
       setLoading(false);
     }
