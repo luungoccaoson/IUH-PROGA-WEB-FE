@@ -127,16 +127,14 @@ export default function DashboardLayout({
     try {
       setEditSpaceLoading(true);
       setEditSpaceError("");
-      await workspaceService.updateSpace(activeSpaceId, {
+      const updated = await workspaceService.updateSpace(activeSpaceId, {
         workspaceId: parseInt(activeWorkspaceId!, 10),
         name: editSpaceName.trim(),
         startDate: editSpaceStartDate ? `${editSpaceStartDate}T00:00:00` : undefined,
         endDate: editSpaceEndDate ? `${editSpaceEndDate}T23:59:59` : undefined,
       });
       setIsEditSpaceOpen(false);
-      await loadSpaces();
-      // Reload page to reflect changes
-      window.location.reload();
+      setSpaces((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err: any) {
       console.error("Error editing space:", err);
       setEditSpaceError(err.response?.data?.message || "Không thể cập nhật Space.");
@@ -249,22 +247,24 @@ export default function DashboardLayout({
                     <Compass className="w-3.5 h-3.5" />
                     Spaces
                   </span>
-                  <div className="flex items-center gap-2 text-xs">
-                    <button
-                      onClick={() => setIsCreateSpaceOpen(true)}
-                      className="hover:text-[#111827] font-extrabold text-base px-1 flex items-center justify-center"
-                      title="Tạo Space mới"
-                    >
-                      +
-                    </button>
-                    <button
-                      onClick={handleOpenEditSpace}
-                      className="hover:text-[#111827] text-sm font-bold flex items-center justify-center"
-                      title="Cài đặt Space"
-                    >
-                      ···
-                    </button>
-                  </div>
+                  {user?.id && activeWorkspace?.ownerId === user.id && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        onClick={() => setIsCreateSpaceOpen(true)}
+                        className="hover:text-[#111827] font-extrabold text-base px-1 flex items-center justify-center"
+                        title="Tạo Space mới"
+                      >
+                        +
+                      </button>
+                      <button
+                        onClick={handleOpenEditSpace}
+                        className="hover:text-[#111827] text-sm font-bold flex items-center justify-center"
+                        title="Cài đặt Space"
+                      >
+                        ···
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1 font-sans">
