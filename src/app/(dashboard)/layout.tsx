@@ -230,13 +230,17 @@ export default function DashboardLayout({
                   </Link>
 
                   {/* Phân tích AI */}
-                  <a
-                    href={`/workspaces/${activeWorkspaceId}#ai-analysis`}
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors"
+                  <Link
+                    href={`/workspaces/${activeWorkspaceId}/ai-analysis`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                      pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
+                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
                   >
                     <Sparkles className="w-5 h-5 text-[#137333]" />
                     <span>Phân tích AI</span>
-                  </a>
+                  </Link>
                 </nav>
               </div>
 
