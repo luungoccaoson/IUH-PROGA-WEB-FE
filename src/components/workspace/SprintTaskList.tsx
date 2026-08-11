@@ -17,7 +17,10 @@ interface SprintTaskListProps {
   onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
-export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListProps) {
+export function SprintTaskList({
+  spaceId,
+  onDrawerStateChange,
+}: SprintTaskListProps) {
   const {
     sprints,
     tasks,
@@ -60,7 +63,10 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
     }
   };
 
-  const handleUpdatePriority = async (taskId: number, priority: TaskPriority) => {
+  const handleUpdatePriority = async (
+    taskId: number,
+    priority: TaskPriority,
+  ) => {
     try {
       await updateTask(taskId, { priority });
     } catch (err) {
@@ -76,7 +82,10 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
     }
   };
 
-  const handleMoveTask = async (taskId: number, targetSprintId: number | null) => {
+  const handleMoveTask = async (
+    taskId: number,
+    targetSprintId: number | null,
+  ) => {
     if (targetSprintId !== null) {
       const targetSprint = sprints.find((s) => s.id === targetSprintId);
       if (targetSprint?.status === "CLOSED") {
@@ -96,19 +105,25 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#6B7280]">
         <Sparkles className="w-7 h-7 text-[#111827] animate-spin mb-2" />
-        <p className="font-mono text-xs uppercase tracking-wider">Đang tải danh sách Sprints & Backlog...</p>
+        <p className="font-mono text-xs uppercase tracking-wider">
+          Đang tải danh sách Sprints & Backlog...
+        </p>
       </div>
     );
   }
 
   const sprintIds = new Set(sprints.map((s) => s.id));
-  const backlogTasks = tasks.filter((t) => !t.sprintId || !sprintIds.has(t.sprintId));
+  const backlogTasks = tasks.filter(
+    (t) => !t.sprintId || !sprintIds.has(t.sprintId),
+  );
 
   const isDrawerOpen = Boolean(selectedTask);
 
   return (
     <div className="relative font-sans">
-      <div className={`space-y-6 transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[320px]" : "mr-0"}`}>
+      <div
+        className={`space-y-6 transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[30px]" : "mr-0"}`}
+      >
         {/* Top Header Bar */}
         <div className="flex items-center justify-between bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
@@ -207,12 +222,11 @@ export function SprintTaskList({ spaceId, onDrawerStateChange }: SprintTaskListP
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
-        isClosedSprint={
-          Boolean(
-            selectedTask?.sprintId &&
-              sprints.find((s) => s.id === selectedTask.sprintId)?.status === "CLOSED"
-          )
-        }
+        isClosedSprint={Boolean(
+          selectedTask?.sprintId &&
+          sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
+            "CLOSED",
+        )}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
