@@ -68,6 +68,12 @@ export default function DashboardLayout({
       setActiveWorkspace(null);
       setSpaces([]);
     }
+
+    const handleSpaceCreated = () => {
+      loadSpaces();
+    };
+    window.addEventListener("space-created", handleSpaceCreated);
+    return () => window.removeEventListener("space-created", handleSpaceCreated);
   }, [activeWorkspaceId, isNumberId]);
 
   const handleCreateSpace = async (e: React.FormEvent) => {

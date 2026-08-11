@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { Send, RefreshCw, AlertCircle } from "lucide-react";
 
 interface AiRequirementInputProps {
@@ -20,17 +20,28 @@ export function AiRequirementInput({
   disabled,
   error,
 }: AiRequirementInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize chiều cao linh hoạt giữa min (130px) và max (300px), tự động hiện scrollbar nếu vượt quá 300px
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      const calculatedHeight = Math.min(Math.max(130, textareaRef.current.scrollHeight), 300);
+      textareaRef.current.style.height = `${calculatedHeight}px`;
+    }
+  }, [requirementText]);
+
   return (
     <div className="bg-white border border-[#E5E7EB] p-5 rounded-2xl shadow-2xs space-y-4 font-sans">
       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-[#374151]">
         Mô tả bài toán / Yêu cầu tính năng cần phân rã:
       </label>
       <textarea
-        rows={4}
+        ref={textareaRef}
         value={requirementText}
         onChange={(e) => setRequirementText(e.target.value)}
         placeholder="Nhập chi tiết yêu cầu bài toán hoặc chọn các mẫu gợi ý phía trên..."
-        className="w-full p-3.5 border border-[#E5E7EB] rounded-xl text-sm text-[#111827] focus:outline-hidden focus:ring-2 focus:ring-[#111827] focus:border-transparent placeholder-[#9CA3AF]"
+        className="w-full p-4 border border-[#E5E7EB] rounded-xl text-sm leading-relaxed text-[#111827] focus:outline-hidden focus:ring-2 focus:ring-[#111827] focus:border-transparent placeholder-[#9CA3AF] resize-y min-h-[130px] max-h-[300px] overflow-y-auto transition-all"
       />
 
       {error && (
