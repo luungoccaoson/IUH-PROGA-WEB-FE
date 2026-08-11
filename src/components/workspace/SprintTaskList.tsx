@@ -165,6 +165,7 @@ export function SprintTaskList({
                 key={sprint.id}
                 sprint={sprint}
                 tasks={sprintTasks}
+                allSpaceTasks={tasks}
                 isTaskOverdue={isTaskOverdue}
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
@@ -182,6 +183,7 @@ export function SprintTaskList({
           {/* Backlog Accordion */}
           <BacklogAccordion
             tasks={backlogTasks}
+            allSpaceTasks={tasks}
             isTaskOverdue={isTaskOverdue}
             onCreateTask={createTask}
             onSelectTask={setSelectedTask}

@@ -7,7 +7,8 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface TaskRowItemProps {
   task: Task;
-  isOverdue: boolean;
+  taskIndex?: number;
+  isOverdue?: boolean;
   isClosedSprint?: boolean;
   onSelect?: (task: Task) => void;
   onUpdateStatus?: (taskId: number, status: TaskStatus) => void;
@@ -30,7 +31,8 @@ const PROJECT_MEMBERS = [
 
 export function TaskRowItem({
   task,
-  isOverdue,
+  taskIndex,
+  isOverdue = false,
   isClosedSprint = false,
   onSelect,
   onUpdateStatus,
@@ -121,7 +123,7 @@ export function TaskRowItem({
           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
         >
           <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0 group-hover:border-[#111827] transition-colors">
-            Task-{task.id}
+            Task-{taskIndex !== undefined ? taskIndex + 1 : task.id}
           </span>
           <span className={`font-semibold truncate ${task.status === "DONE" ? "line-through text-gray-500" : "text-[#111827] hover:underline"}`}>
             {task.title}

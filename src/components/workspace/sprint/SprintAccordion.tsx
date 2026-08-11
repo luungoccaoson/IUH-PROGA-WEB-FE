@@ -9,6 +9,7 @@ import { InlineCreateTask } from "./InlineCreateTask";
 interface SprintAccordionProps {
   sprint: Sprint;
   tasks: Task[];
+  allSpaceTasks?: Task[];
   isTaskOverdue: (task: Task) => boolean;
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
@@ -30,6 +31,7 @@ const statusBadges: Record<Sprint['status'], { label: string; bg: string; text: 
 export function SprintAccordion({
   sprint,
   tasks,
+  allSpaceTasks,
   isTaskOverdue,
   onEdit,
   onDelete,
@@ -129,19 +131,25 @@ export function SprintAccordion({
 
           {tasks.length > 0 && (
             <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl">
-              {tasks.map((task) => (
-                <TaskRowItem
-                  key={task.id}
-                  task={task}
-                  isOverdue={isTaskOverdue(task)}
-                  isClosedSprint={isClosed}
-                  onSelect={onSelectTask}
-                  onUpdateStatus={onUpdateStatus}
-                  onUpdatePriority={onUpdatePriority}
-                  onUpdateOwner={onUpdateOwner}
-                  onDelete={onDeleteTask}
-                />
-              ))}
+              {tasks.map((task, taskIdx) => {
+                const globalIdx = allSpaceTasks && allSpaceTasks.length > 0
+                  ? allSpaceTasks.findIndex((t) => t.id === task.id)
+                  : taskIdx;
+                return (
+                  <TaskRowItem
+                    key={task.id}
+                    task={task}
+                    taskIndex={globalIdx !== -1 ? globalIdx : taskIdx}
+                    isOverdue={isTaskOverdue(task)}
+                    isClosedSprint={isClosed}
+                    onSelect={onSelectTask}
+                    onUpdateStatus={onUpdateStatus}
+                    onUpdatePriority={onUpdatePriority}
+                    onUpdateOwner={onUpdateOwner}
+                    onDelete={onDeleteTask}
+                  />
+                );
+              })}
             </div>
           )}
 
