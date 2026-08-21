@@ -201,7 +201,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
                 {/* Task Cards Container */}
                 <div className="space-y-3 flex-1 overflow-y-auto pr-0.5">
-                  {columnTasks.map((task) => {
+                  {columnTasks.map((task, tIdx) => {
                     const overdue = isTaskOverdue(task);
                     const isReadOnly = isClosedSprint;
 
@@ -222,7 +222,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] group-hover:border-[#111827] transition-colors">
-                            Task-{task.id}
+                            Task-{tasks.findIndex((t) => t.id === task.id) !== -1 ? tasks.findIndex((t) => t.id === task.id) + 1 : tIdx + 1}
                           </span>
 
                           <div className="flex items-center gap-1.5">

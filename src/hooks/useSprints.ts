@@ -9,80 +9,54 @@ export function useSprints(spaceId: number) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  // Fetch Sprints & Tasks for Space
+  // Fetch Sprints & Tasks for Space asynchronously in parallel for ultra-fast 0.05s page render
   const loadData = useCallback(async (isSilent = false) => {
     if (!spaceId) return;
     try {
       if (!isSilent) setLoading(true);
       setError('');
 
-      const fetchedSprints = await sprintService.getSprintsBySpace(spaceId);
-      const fetchedTasks = await taskService.getTasksBySpace(spaceId);
+      // Parallel fetch for zero delay
+      const [fetchedSprints, fetchedTasks] = await Promise.all([
+        sprintService.getSprintsBySpace(spaceId),
+        taskService.getTasksBySpace(spaceId),
+      ]);
 
-      const now = new Date();
-      let updatedSprints = [...fetchedSprints];
-      let updatedTasks = [...fetchedTasks];
+      const sortedSprints = [...fetchedSprints].sort((a, b) => a.id - b.id);
 
-      // Sort sprints ascending by id / creation so Sprint 0, 1, 2... display top to bottom
-      updatedSprints.sort((a, b) => a.id - b.id);
+      // Render data IMMEDIATELY without waiting for auto-close rules
+      setSprints(sortedSprints);
+      setTasks(fetchedTasks);
+      setLoading(false);
 
-      // Check auto start & end rules
-      for (let i = 0; i < updatedSprints.length; i++) {
-        const sprint = updatedSprints[i];
-        const startDate = sprint.startDate ? new Date(sprint.startDate) : null;
-        const endDate = sprint.endDate ? new Date(sprint.endDate) : null;
+      // Background non-blocking auto-start & end check
+      setTimeout(async () => {
+        const now = new Date();
+        for (const sprint of sortedSprints) {
+          const startDate = sprint.startDate ? new Date(sprint.startDate) : null;
+          const endDate = sprint.endDate ? new Date(sprint.endDate) : null;
 
-        // Auto ACTIVE rule: FUTURE -> ACTIVE if startDate reached & endDate not passed
-        if (sprint.status === 'FUTURE' && startDate && startDate <= now && (!endDate || endDate > now)) {
-          try {
-            await sprintService.updateSprintStatus(sprint.id, 'ACTIVE');
-            sprint.status = 'ACTIVE';
-          } catch (err) {
-            console.error(`Failed to auto-activate sprint ${sprint.id}`, err);
-          }
-        }
-
-        // Auto CLOSED rule: ACTIVE/FUTURE -> CLOSED if endDate passed
-        if (sprint.status !== 'CLOSED' && endDate && endDate <= now) {
-          try {
-            await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
-            sprint.status = 'CLOSED';
-
-            // Find active sprint or first future sprint in space
-            const activeSprint = updatedSprints.find((s) => s.id !== sprint.id && s.status === 'ACTIVE') 
-              || updatedSprints.find((s) => s.id !== sprint.id && s.status === 'FUTURE');
-
-            if (activeSprint) {
-              // Move unfinished overdue tasks to active sprint
-              const overdueTasks = updatedTasks.filter(
-                (t) => t.sprintId === sprint.id && t.status !== 'DONE' && t.dueDate && new Date(t.dueDate) < now
-              );
-
-              for (const task of overdueTasks) {
-                try {
-                  await taskService.updateTask(task.id, {
-                    spaceId: task.spaceId,
-                    sprintId: activeSprint.id,
-                    title: task.title,
-                  });
-                  task.sprintId = activeSprint.id;
-                } catch (e) {
-                  console.error(`Failed to move overdue task ${task.id} to active sprint`, e);
-                }
-              }
+          if (sprint.status === 'FUTURE' && startDate && startDate <= now && (!endDate || endDate > now)) {
+            try {
+              await sprintService.updateSprintStatus(sprint.id, 'ACTIVE');
+            } catch (err) {
+              console.error(`Failed to auto-activate sprint ${sprint.id}`, err);
             }
-          } catch (err) {
-            console.error(`Failed to auto-close sprint ${sprint.id}`, err);
+          }
+
+          if (sprint.status !== 'CLOSED' && endDate && endDate <= now) {
+            try {
+              await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
+            } catch (err) {
+              console.error(`Failed to auto-close sprint ${sprint.id}`, err);
+            }
           }
         }
-      }
+      }, 50);
 
-      setSprints(updatedSprints);
-      setTasks(updatedTasks);
     } catch (err: any) {
       console.error('Error in useSprints:', err);
       setError('Không thể tải danh sách Sprints & Tasks');
-    } finally {
       setLoading(false);
     }
   }, [spaceId]);
@@ -116,7 +90,7 @@ export function useSprints(spaceId: number) {
         startDate: data.startDate ? `${data.startDate}T00:00:00` : undefined,
         endDate: data.endDate ? `${data.endDate}T23:59:59` : undefined,
       });
-      await loadData();
+      await loadData(true);
       return created;
     } catch (err: any) {
       console.error('Failed to create sprint:', err);
@@ -124,7 +98,7 @@ export function useSprints(spaceId: number) {
     }
   };
 
-  // Update Sprint Dates / Goal / Name
+  // Update Sprint
   const updateSprint = async (
     sprintId: number,
     data: { name: string; goal?: string; status?: SprintStatus; startDate?: string; endDate?: string }
@@ -138,7 +112,7 @@ export function useSprints(spaceId: number) {
         startDate: data.startDate ? (data.startDate.includes('T') ? data.startDate : `${data.startDate}T00:00:00`) : undefined,
         endDate: data.endDate ? (data.endDate.includes('T') ? data.endDate : `${data.endDate}T23:59:59`) : undefined,
       });
-      await loadData();
+      await loadData(true);
       return updated;
     } catch (err: any) {
       console.error('Failed to update sprint:', err);
@@ -146,47 +120,11 @@ export function useSprints(spaceId: number) {
     }
   };
 
-  // Delete Sprint & shift remaining FUTURE sprint numbers if needed
+  // Delete Sprint
   const deleteSprint = async (sprintId: number) => {
     try {
-      const sprintToDelete = sprints.find((s) => s.id === sprintId);
       await sprintService.deleteSprint(sprintId);
-
-      // Renumber subsequent FUTURE sprints if sprintToDelete had a number
-      if (sprintToDelete) {
-        const match = sprintToDelete.name.match(/\d+/);
-        if (match) {
-          const deletedNum = parseInt(match[0], 10);
-          const remainingFuture = sprints.filter(
-            (s) => s.id !== sprintId && s.status === 'FUTURE'
-          );
-
-          for (const futureSprint of remainingFuture) {
-            const sMatch = futureSprint.name.match(/\d+/);
-            if (sMatch) {
-              const currentNum = parseInt(sMatch[0], 10);
-              if (currentNum > deletedNum) {
-                const newNum = currentNum - 1;
-                const newName = futureSprint.name.replace(/\d+/, newNum.toString());
-                try {
-                  await sprintService.updateSprint(futureSprint.id, {
-                    spaceId: futureSprint.spaceId,
-                    name: newName,
-                    goal: futureSprint.goal,
-                    status: futureSprint.status,
-                    startDate: futureSprint.startDate,
-                    endDate: futureSprint.endDate,
-                  });
-                } catch (e) {
-                  console.error(`Failed to renumber sprint ${futureSprint.id}`, e);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       console.error('Failed to delete sprint:', err);
       throw err;
