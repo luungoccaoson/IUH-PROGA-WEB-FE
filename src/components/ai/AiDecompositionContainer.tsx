@@ -1,16 +1,14 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Bot } from "lucide-react";
-import { aiService, TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
+import { aiService, TaskDecompositionResponse, DecomposedTaskItem, AiThreadResponse, AiChatMessageResponse } from "@/services/ai.service";
 import { taskService } from "@/services/task.service";
 import { sprintService } from "@/services/sprint.service";
 import { workspaceService } from "@/services/workspace.service";
 import { Space, Sprint } from "@/types";
 import { AiHeaderBanner, TargetMode } from "./AiHeaderBanner";
-import { AiRequirementInput } from "./AiRequirementInput";
 import { AiDecomposedResults } from "./AiDecomposedResults";
-import { AiClarificationModal, ClarificationAnswers } from "./AiClarificationModal";
+import { AiChatSidebarSessions, ChatSessionItem } from "./AiChatSidebarSessions";
+import { AiChatWindow } from "./AiChatWindow";
 
 interface AiDecompositionContainerProps {
   workspaceId: number;
@@ -33,45 +31,102 @@ export function AiDecompositionContainer({
   const [error, setError] = useState("");
   const [result, setResult] = useState<TaskDecompositionResponse | null>(null);
 
-  // Modal Clarification Board Meeting State
-  const [isClarificationOpen, setIsClarificationOpen] = useState(false);
+  // ChatGPT-style Chat Sessions & Messages State
+  const [sessions, setSessions] = useState<ChatSessionItem[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
+  const [isImported, setIsImported] = useState(false);
+  const [membersList, setMembersList] = useState<string[]>([]);
 
   // Import State
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
 
-  // F5 Proof Persistence: Restore latest thread conversation & decomposition payload on mount/space change
+  // Load workspace members for Task Assignment Dropdown
   useEffect(() => {
-    async function restoreLatestDecomposition() {
-      if (!selectedSpaceId) return;
+    async function fetchMembers() {
       try {
-        const threads = await aiService.getThreadsBySpace(selectedSpaceId);
-        const reqThread = threads.find((t) => t.agentType === "REQUIREMENT") || threads[0];
-
-        if (reqThread) {
-          const messages = await aiService.getThreadMessages(reqThread.id);
-          const assistantMsgsWithPayload = messages.filter(
-            (m) => m.senderType === "ASSISTANT" && m.jsonPayload && m.jsonPayload.trim().startsWith("[")
-          );
-
-          if (assistantMsgsWithPayload.length > 0) {
-            const latestMsg = assistantMsgsWithPayload[assistantMsgsWithPayload.length - 1];
-            const parsedTasks = JSON.parse(latestMsg.jsonPayload!) as DecomposedTaskItem[];
-            setResult({
-              threadId: reqThread.id,
-              summary: latestMsg.messageContent,
-              sourceReference: "Tri thức RAG đã khôi phục từ Lịch Sử Hội Thoại",
-              tasks: parsedTasks,
-            });
-          }
-        }
+        const members = await workspaceService.getWorkspaceMembers(workspaceId);
+        const names = members.map((m: any) => m.fullName || m.email?.split("@")[0] || "Member");
+        setMembersList(names);
       } catch (err) {
-        console.warn("Could not restore thread history on mount:", err);
+        console.warn("Could not load workspace members, fallback to default roles:", err);
       }
     }
+    fetchMembers();
+  }, [workspaceId]);
 
-    restoreLatestDecomposition();
+  // Load Chat Thread Sessions from Backend for selected Space
+  const loadSpaceThreads = async () => {
+    if (!selectedSpaceId) return;
+    try {
+      const threads = await aiService.getThreadsBySpace(selectedSpaceId);
+      const requirementThreads = threads.filter((t) => t.agentType === "REQUIREMENT");
+
+      const sessionItems: ChatSessionItem[] = [];
+
+      for (const th of requirementThreads) {
+        const threadMsgs = await aiService.getThreadMessages(th.id);
+        const userMsg = threadMsgs.find((m) => m.senderType === "USER");
+        const assistantMsgWithPayload = [...threadMsgs].reverse().find(
+          (m) => m.senderType === "ASSISTANT" && m.jsonPayload && m.jsonPayload.trim().startsWith("[")
+        );
+
+        let taskCount = 0;
+        if (assistantMsgWithPayload?.jsonPayload) {
+          try {
+            const tasks = JSON.parse(assistantMsgWithPayload.jsonPayload);
+            taskCount = tasks.length;
+          } catch (e) {}
+        }
+
+        const rawTitle = userMsg ? userMsg.messageContent.replace("Phân rã yêu cầu bài toán:\n", "") : `Phiên chat #${th.id}`;
+        sessionItems.push({
+          thread: th,
+          title: rawTitle.length > 35 ? rawTitle.substring(0, 35) + "..." : rawTitle,
+          taskCount,
+          isImported: false,
+        });
+      }
+
+      setSessions(sessionItems);
+    } catch (err) {
+      console.warn("Could not load space threads:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadSpaceThreads();
   }, [selectedSpaceId]);
+
+  // Load thread session details by thread ID
+  const loadThreadSessionDetails = async (threadId: number) => {
+    try {
+      setActiveThreadId(threadId);
+      setIsImported(false);
+      setImportSuccess(false);
+      const threadMsgs = await aiService.getThreadMessages(threadId);
+      setMessages(threadMsgs);
+
+      const assistantMsg = [...threadMsgs].reverse().find(
+        (m) => m.senderType === "ASSISTANT" && m.jsonPayload && m.jsonPayload.trim().startsWith("[")
+      );
+
+      if (assistantMsg?.jsonPayload) {
+        const parsedTasks = JSON.parse(assistantMsg.jsonPayload) as DecomposedTaskItem[];
+        setResult({
+          threadId: threadId,
+          summary: assistantMsg.messageContent,
+          sourceReference: "Kho tri thức RAG (Phục hồi từ phiên chat)",
+          tasks: parsedTasks,
+        });
+      } else {
+        setResult(null);
+      }
+    } catch (err) {
+      console.error("Error loading thread details:", err);
+    }
+  };
 
   const handleDecompose = async (textToSubmit?: string) => {
     const text = textToSubmit || requirementText;
@@ -83,6 +138,16 @@ export function AiDecompositionContainer({
     }
 
     const contextSpaceId = selectedSpaceId || (spaces.length > 0 ? spaces[0].id : 1);
+
+    // Optimistic UI: Append user message bubble immediately into chat feed!
+    const userMsgOptimistic: AiChatMessageResponse = {
+      id: Date.now(),
+      threadId: activeThreadId || 0,
+      senderType: "USER",
+      messageContent: text.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsgOptimistic]);
 
     try {
       setLoading(true);
@@ -123,19 +188,27 @@ ${text.trim()}`;
         }
       }
 
-      const data = await aiService.decomposeRequirements(contextSpaceId, finalPromptText);
-      setResult(data);
+      const data = await aiService.decomposeRequirements(contextSpaceId, finalPromptText, activeThreadId);
+      setResult(data.tasks && data.tasks.length > 0 ? data : null);
+      setActiveThreadId(data.threadId);
+
+      // Append Assistant Response bubble with JSON payload
+      const assistantMsgObj: AiChatMessageResponse = {
+        id: Date.now() + 1,
+        threadId: data.threadId,
+        senderType: "ASSISTANT",
+        messageContent: data.summary,
+        jsonPayload: JSON.stringify(data.tasks),
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMsgObj]);
+      loadSpaceThreads(); // Refresh sidebar sessions
     } catch (err: any) {
       console.error("Error decomposing requirements:", err);
       setError("Không thể phân rã bài toán. Vui lòng kiểm tra kết nối AI-Service.");
     } finally {
       setLoading(false);
     }
-  };
-
-  // Update tasks in state (CRUD / Move)
-  const handleUpdateTasks = (updatedTasks: DecomposedTaskItem[]) => {
-    setResult((prev) => (prev ? { ...prev, tasks: updatedTasks } : null));
   };
 
   // Handle auto-importing tasks (Existing Space or Brand New Space)
@@ -186,10 +259,8 @@ ${text.trim()}`;
           const rawSprint = item.sprint || uniqueSprintNames[0];
           const targetSprint = dynamicSprintMap[rawSprint] || dynamicSprintMap[uniqueSprintNames[0]];
 
-          const richDescription = `[AI Decomposed - Role: ${item.recommendedRole || "Developer"}] (Story Points: ${item.storyPoints || 3} SP)
-${item.description}
-💡 Lý do đánh giá: ${item.reasoning || "Dựa trên tiêu chuẩn WBS"}
-⚠️ Phương án dự phòng rủi ro: ${item.contingencyPlan || "Sử dụng tài liệu chuẩn"}`;
+          const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: newSpace.id,
@@ -240,10 +311,8 @@ ${item.description}
             }
           }
 
-          const richDescription = `[AI Decomposed - Role: ${item.recommendedRole || "Developer"}] (Story Points: ${item.storyPoints || 3} SP)
-${item.description}
-💡 Lý do đánh giá: ${item.reasoning || "Dựa trên tiêu chuẩn WBS"}
-⚠️ Phương án dự phòng rủi ro: ${item.contingencyPlan || "Sử dụng tài liệu chuẩn"}`;
+          const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: selectedSpaceId,
@@ -257,6 +326,7 @@ ${item.description}
       }
 
       setImportSuccess(true);
+      setIsImported(true);
     } catch (err: any) {
       console.error("Error importing tasks:", err);
       alert("Không thể tự động nạp Task vào Space. Vui lòng thử lại.");
@@ -265,22 +335,21 @@ ${item.description}
     }
   };
 
-  const handleClarificationSubmit = (answers: ClarificationAnswers) => {
-    setIsClarificationOpen(false);
-    const scopePrompt = `
-[THỐNG NHẤT QUY MÔ & PHẠM VI HỌP BAN QUẢN LÝ (BOARD MEETING SPECIFICATION)]
-- Quy mô Nhân sự & Team: ${answers.teamScope}
-- Yêu cầu Bảo mật & Tiêu chuẩn: ${answers.securityScope}
-- Hạ tầng System & Deployment: ${answers.infraScope}
-- Phương án Dự phòng Rủi ro: ${answers.contingencyScope}
-- Ghi chú bổ sung của Ban Giám Đốc: ${answers.customNotes || "Không có"}
+  // Update tasks in state (CRUD / Move / Edit)
+  const handleUpdateTasks = (updatedTasks: DecomposedTaskItem[]) => {
+    if (!result) return;
+    setResult({ ...result, tasks: updatedTasks });
+    setIsImported(false); // Enable Import button again when tasks are edited!
+  };
 
-[YÊU CẦU BÓC TÁCH WBS TASK CHI TIẾT]
-Nhiệm vụ: Dựa trên thống nhất phạm vi trên, hãy bóc tách các Task cụ thể kèm Story Points Fibonacci (1, 2, 3, 5, 8, 13) và Phân vai Role phù hợp cho bài toán:
-${requirementText.trim()}
-`;
-
-    handleDecompose(scopePrompt);
+  // Handle New Session
+  const handleNewSession = () => {
+    setActiveThreadId(null);
+    setResult(null);
+    setMessages([]);
+    setRequirementText("");
+    setIsImported(false);
+    setImportSuccess(false);
   };
 
   const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
@@ -302,53 +371,43 @@ ${requirementText.trim()}
         }}
       />
 
-      {/* 2. Requirement Input Form */}
-      <AiRequirementInput
-        requirementText={requirementText}
-        setRequirementText={setRequirementText}
-        onSubmit={() => handleDecompose()}
-        onOpenClarificationModal={() => setIsClarificationOpen(true)}
-        loading={loading}
-        disabled={targetMode === "EXISTING_SPACE" && !selectedSpaceId}
-        error={error}
-      />
-
-      {/* 3. Board Meeting Scope Clarification Modal */}
-      <AiClarificationModal
-        isOpen={isClarificationOpen}
-        onClose={() => setIsClarificationOpen(false)}
-        onSubmitAnswers={handleClarificationSubmit}
-        loading={loading}
-      />
-
-      {/* 4. Loading Skeleton */}
-      {loading && (
-        <div className="bg-[#F9FAFB] border border-[#E5E7EB] p-8 rounded-2xl text-center space-y-4 animate-pulse">
-          <Bot className="w-10 h-10 text-[#1A73E8] mx-auto animate-bounce" />
-          <div className="space-y-2">
-            <h3 className="font-extrabold text-sm text-[#111827]">Đang truy vấn Kho tri thức Vector RAG & Phân tích hiện trạng dự án...</h3>
-            <p className="text-xs text-[#6B7280] font-mono">
-              Requirement Agent đang đọc ngữ cảnh bài toán và bóc tách danh sách task tiếp theo...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* 5. Decomposed Results View */}
-      {result && !loading && (
-        <AiDecomposedResults
-          result={result}
-          targetMode={targetMode}
-          selectedSpace={selectedSpace}
-          newSpaceName={newSpaceName}
-          workspaceId={workspaceId}
-          selectedSpaceId={selectedSpaceId}
-          createdSpaceId={createdSpaceId}
-          onImportTasks={handleImportTasks}
-          importing={importing}
-          importSuccess={importSuccess}
-          onUpdateTasks={handleUpdateTasks}
+      {/* 2. Interactive Text Chat Window */}
+      <div className="w-full space-y-6">
+        <AiChatWindow
+          messages={messages}
+          onSendMessage={(text: string) => handleDecompose(text)}
+          loading={loading}
         />
+      </div>
+
+      {/* 3. SEPARATE TASK BREAKDOWN CANVAS SECTION */}
+      {result && (
+        <div className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+              <span>📋 Bảng Kết Quả Phân Rã WBS Tasks Theo Sprint</span>
+            </h3>
+            <span className="text-xs text-[#6B7280]">
+              Tự động cập nhật từ đàm thoại Chat AI (Kéo thả / Gán người làm / Nạp vào Space)
+            </span>
+          </div>
+
+          <AiDecomposedResults
+            result={result}
+            targetMode={targetMode}
+            selectedSpace={selectedSpace}
+            newSpaceName={newSpaceName}
+            workspaceId={workspaceId}
+            selectedSpaceId={selectedSpaceId}
+            createdSpaceId={createdSpaceId}
+            onImportTasks={handleImportTasks}
+            importing={importing}
+            importSuccess={importSuccess}
+            isImported={isImported}
+            members={membersList}
+            onUpdateTasks={handleUpdateTasks}
+          />
+        </div>
       )}
     </div>
   );

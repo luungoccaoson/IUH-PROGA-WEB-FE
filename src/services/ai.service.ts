@@ -7,10 +7,10 @@ export interface DecomposedTaskItem {
   description: string;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   estimatedDays: number;
-  storyPoints?: number;
-  reasoning?: string;
-  recommendedRole?: string;
-  contingencyPlan?: string;
+  bufferDays?: number;
+  assignedRole?: string;
+  suggestedMemberName?: string;
+  riskWarning?: string;
 }
 
 export interface TaskDecompositionResponse {
@@ -39,10 +39,15 @@ export interface AiChatMessageResponse {
 }
 
 export const aiService = {
-  // Requirement Agent: Phân rã bài toán tự động với RAG Tri thức
-  decomposeRequirements: async (spaceId: number, requirementText: string): Promise<TaskDecompositionResponse> => {
+  // Requirement Agent: Phân rã bài toán tự động với RAG Tri thức & Đàm thoại 2 Lượt
+  decomposeRequirements: async (
+    spaceId: number,
+    requirementText: string,
+    threadId?: number | null
+  ): Promise<TaskDecompositionResponse> => {
     const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>("/ai/agents/decompose", {
       spaceId,
+      threadId: threadId || undefined,
       requirementText,
     });
     return response.data.data;

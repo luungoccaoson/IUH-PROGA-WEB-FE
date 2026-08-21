@@ -39,6 +39,8 @@ interface AiDecomposedResultsProps {
   onImportTasks: () => void;
   importing: boolean;
   importSuccess: boolean;
+  isImported?: boolean;
+  members?: string[];
   onUpdateTasks: (updatedTasks: DecomposedTaskItem[]) => void;
 }
 
@@ -55,6 +57,8 @@ export function AiDecomposedResults({
   onImportTasks,
   importing,
   importSuccess,
+  isImported = false,
+  members = [],
   onUpdateTasks,
 }: AiDecomposedResultsProps) {
   const router = useRouter();
@@ -84,8 +88,8 @@ export function AiDecomposedResults({
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("HIGH");
   const [editEstimatedDays, setEditEstimatedDays] = useState<number>(2);
-  const [editStoryPoints, setEditStoryPoints] = useState<number>(3);
-  const [editRecommendedRole, setEditRecommendedRole] = useState<string>("Backend Developer");
+  const [editBufferDays, setEditBufferDays] = useState<number>(0);
+  const [editAssignedRole, setEditAssignedRole] = useState<string>("Backend Developer");
   const [editSprint, setEditSprint] = useState<string>("Sprint 1");
 
   // Modal Add State
@@ -136,8 +140,8 @@ export function AiDecomposedResults({
     setEditDescription(item.description);
     setEditPriority(item.priority);
     setEditEstimatedDays(item.estimatedDays || 2);
-    setEditStoryPoints(item.storyPoints || 3);
-    setEditRecommendedRole(item.recommendedRole || "Backend Developer");
+    setEditBufferDays(item.bufferDays || 0);
+    setEditAssignedRole(item.assignedRole || "Backend Developer");
     setEditSprint(item.sprint || "Sprint 1");
   };
 
@@ -152,8 +156,8 @@ export function AiDecomposedResults({
       description: editDescription.trim(),
       priority: editPriority,
       estimatedDays: editEstimatedDays,
-      storyPoints: editStoryPoints,
-      recommendedRole: editRecommendedRole,
+      bufferDays: editBufferDays,
+      assignedRole: editAssignedRole,
       sprint: editSprint,
     };
 
@@ -230,9 +234,11 @@ export function AiDecomposedResults({
         <div className="space-y-2 text-left md:text-right shrink-0">
           <button
             onClick={onImportTasks}
-            disabled={importing || importSuccess || result.tasks.length === 0}
+            disabled={importing || (isImported && !importSuccess) || result.tasks.length === 0}
             className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-60 text-white ${
-              targetMode === "NEW_SPACE"
+              isImported && !importSuccess
+                ? "bg-[#6B7280]"
+                : targetMode === "NEW_SPACE"
                 ? "bg-[#10B981] hover:bg-[#059669]"
                 : "bg-[#137333] hover:bg-[#0D652D]"
             }`}
@@ -246,6 +252,11 @@ export function AiDecomposedResults({
               <>
                 <CheckCircle2 className="w-4 h-4 text-[#A8DAB5]" />
                 {targetMode === "NEW_SPACE" ? "Đã Khởi Tạo & Nạp Thành Công!" : "Đã nạp thành công!"}
+              </>
+            ) : isImported ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-[#A8DAB5]" />
+                Đã Nạp Vào Space (Chưa có thay đổi mới)
               </>
             ) : targetMode === "NEW_SPACE" ? (
               <>
@@ -375,38 +386,67 @@ export function AiDecomposedResults({
                         {task.description}
                       </p>
 
-                      {/* Agile Badges: Role & Story Points */}
+                      {/* Role & Time Estimates */}
                       <div className="flex flex-wrap items-center gap-1.5 pl-6 font-mono text-[10px]">
-                        {task.recommendedRole && (
+                        {task.assignedRole && (
                           <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E8F0FE] text-[#1A73E8] font-bold border border-[#D2E3FC]">
                             <UserCheck className="w-3 h-3" />
-                            {task.recommendedRole}
+                            {task.assignedRole}
                           </span>
                         )}
 
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF7E0] text-[#B06000] font-bold border border-[#FEEFC3]">
-                          <Zap className="w-3 h-3 text-[#B06000]" />
-                          {task.storyPoints || 3} SP (Story Points)
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F3F4F6] text-[#374151] font-bold border border-[#E5E7EB]">
+                          <Clock className="w-3 h-3 text-[#6B7280]" />
+                          Ước tính: {task.estimatedDays || 2} ngày
                         </span>
+
+                        {task.bufferDays ? (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF7E0] text-[#B06000] font-bold border border-[#FEEFC3]">
+                            🛡️ +{task.bufferDays} ngày dự phòng
+                          </span>
+                        ) : null}
                       </div>
 
-                      {/* Chain-of-Thought Reasoning Explanation */}
-                      {task.reasoning && (
-                        <div className="ml-6 p-2 rounded-lg bg-[#F3F4F6] border border-[#E5E7EB] text-[11px] text-[#4B5563] space-y-0.5">
-                          <span className="font-bold font-mono text-[#111827] flex items-center gap-1">
-                            <HelpCircle className="w-3 h-3 text-[#1A73E8]" /> Lý do đánh giá & Độ phức tạp:
-                          </span>
-                          <p className="leading-snug italic">{task.reasoning}</p>
-                        </div>
-                      )}
+                      {/* Member Assignee Selector */}
+                      <div className="ml-6 flex items-center gap-1.5 text-xs text-[#374151] bg-[#F9FAFB] p-2 rounded-xl border border-[#E5E7EB]">
+                        <span className="font-bold font-mono text-[11px] text-[#6B7280] shrink-0">Phân công cho:</span>
+                        <select
+                          value={task.suggestedMemberName || ""}
+                          onChange={(e) => {
+                            const updated = [...result.tasks];
+                            updated[originalIndex] = {
+                              ...updated[originalIndex],
+                              suggestedMemberName: e.target.value,
+                            };
+                            onUpdateTasks(updated);
+                          }}
+                          className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2 py-1 text-xs font-bold text-[#111827] focus:outline-none cursor-pointer"
+                        >
+                          <option value="">-- Chưa gán người làm --</option>
+                          {members && members.length > 0 ? (
+                            Array.from(new Set(members)).map((m, idx) => (
+                              <option key={`${m}-${idx}`} value={m}>
+                                👤 {m}
+                              </option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="Nam">👤 Nam (Backend)</option>
+                              <option value="Linh">👤 Linh (Frontend)</option>
+                              <option value="Tuấn">👤 Tuấn (QA / QC)</option>
+                              <option value="Hùng">👤 Hùng (DevOps)</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
 
-                      {/* Risk Contingency Plan Box */}
-                      {task.contingencyPlan && (
+                      {/* Risk Warning Box (ONLY for URGENT/HIGH or explicit risk) */}
+                      {(task.priority === "URGENT" || task.riskWarning) && (
                         <div className="ml-6 p-2 rounded-lg bg-[#FFF0F0] border border-[#FADBD8] text-[11px] text-[#D93025] space-y-0.5">
                           <span className="font-bold font-mono flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-[#D93025]" /> Phương án dự phòng rủi ro:
+                            <AlertTriangle className="w-3 h-3 text-[#D93025]" /> Cảnh báo rủi ro thực tế:
                           </span>
-                          <p className="leading-snug">{task.contingencyPlan}</p>
+                          <p className="leading-snug">{task.riskWarning || "Task có tính chất phức tạp cao, cần chú ý kiểm thử kỹ."}</p>
                         </div>
                       )}
 
@@ -545,26 +585,23 @@ export function AiDecomposedResults({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Story Points (Fibonacci):</label>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Ngày dự phòng rủi ro:</label>
                   <select
-                    value={editStoryPoints}
-                    onChange={(e) => setEditStoryPoints(parseInt(e.target.value, 10) || 3)}
+                    value={editBufferDays}
+                    onChange={(e) => setEditBufferDays(parseInt(e.target.value, 10) || 0)}
                     className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
                   >
-                    <option value={1}>1 SP (Cực Kỳ Đơn Giản)</option>
-                    <option value={2}>2 SP (Đơn Giản)</option>
-                    <option value={3}>3 SP (Trung Bình)</option>
-                    <option value={5}>5 SP (Phức Tạp)</option>
-                    <option value={8}>8 SP (Rất Phức Tạp)</option>
-                    <option value={13}>13 SP (Nghiêm Trọng / Rủi Ro)</option>
+                    <option value={0}>0 ngày (Không có rủi ro)</option>
+                    <option value={1}>+1 ngày dự phòng</option>
+                    <option value={2}>+2 ngày dự phòng (Rủi ro cao)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Gợi Ý Vai Trò (Role):</label>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Vai trò đảm nhiệm (Role):</label>
                   <select
-                    value={editRecommendedRole}
-                    onChange={(e) => setEditRecommendedRole(e.target.value)}
+                    value={editAssignedRole}
+                    onChange={(e) => setEditAssignedRole(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
                   >
                     <option value="Tech Lead / System Architect">Tech Lead / System Architect</option>
