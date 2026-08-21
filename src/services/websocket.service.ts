@@ -31,7 +31,7 @@ class TaskWebSocketService {
 
     try {
       // Connect through API Gateway or directly to workspace service ws endpoint
-      const wsUrl = "ws://localhost:8082/ws-proga/websocket";
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8082/ws-proga/websocket";
       const socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
