@@ -16,6 +16,13 @@ import {
   X,
   Save,
   GripVertical,
+  BookmarkCheck,
+  ExternalLink,
+  UserCheck,
+  Zap,
+  AlertTriangle,
+  HelpCircle,
+  Layers,
 } from "lucide-react";
 import { TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
 import { Space } from "@/types";
@@ -77,6 +84,8 @@ export function AiDecomposedResults({
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("HIGH");
   const [editEstimatedDays, setEditEstimatedDays] = useState<number>(2);
+  const [editStoryPoints, setEditStoryPoints] = useState<number>(3);
+  const [editRecommendedRole, setEditRecommendedRole] = useState<string>("Backend Developer");
   const [editSprint, setEditSprint] = useState<string>("Sprint 1");
 
   // Modal Add State
@@ -127,6 +136,8 @@ export function AiDecomposedResults({
     setEditDescription(item.description);
     setEditPriority(item.priority);
     setEditEstimatedDays(item.estimatedDays || 2);
+    setEditStoryPoints(item.storyPoints || 3);
+    setEditRecommendedRole(item.recommendedRole || "Backend Developer");
     setEditSprint(item.sprint || "Sprint 1");
   };
 
@@ -141,6 +152,8 @@ export function AiDecomposedResults({
       description: editDescription.trim(),
       priority: editPriority,
       estimatedDays: editEstimatedDays,
+      storyPoints: editStoryPoints,
+      recommendedRole: editRecommendedRole,
       sprint: editSprint,
     };
 
@@ -190,8 +203,26 @@ export function AiDecomposedResults({
             Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
+          
+          {result.sourceReference && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
+              <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
+              <span>Nguồn RAG Tri Thức Chuẩn: <strong>{result.sourceReference}</strong></span>
+              {result.sourceUrl && (
+                <a
+                  href={result.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-[#0B57D0] hover:text-[#0040A8] flex items-center gap-0.5 ml-1"
+                >
+                  [Xem Nguồn Xác Thực <ExternalLink className="w-3 h-3 inline" />]
+                </a>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-[#4B5563]">
-            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Bạn có thể Kéo thả / Chỉnh sửa / Xóa / Thêm Task giữa các Sprint trước khi nạp).
+            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Hỗ trợ Story Points Fibonacci, Phân Vai Role & Đánh giá Rủi ro).
           </p>
         </div>
 
@@ -344,11 +375,46 @@ export function AiDecomposedResults({
                         {task.description}
                       </p>
 
+                      {/* Agile Badges: Role & Story Points */}
+                      <div className="flex flex-wrap items-center gap-1.5 pl-6 font-mono text-[10px]">
+                        {task.recommendedRole && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E8F0FE] text-[#1A73E8] font-bold border border-[#D2E3FC]">
+                            <UserCheck className="w-3 h-3" />
+                            {task.recommendedRole}
+                          </span>
+                        )}
+
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF7E0] text-[#B06000] font-bold border border-[#FEEFC3]">
+                          <Zap className="w-3 h-3 text-[#B06000]" />
+                          {task.storyPoints || 3} SP (Story Points)
+                        </span>
+                      </div>
+
+                      {/* Chain-of-Thought Reasoning Explanation */}
+                      {task.reasoning && (
+                        <div className="ml-6 p-2 rounded-lg bg-[#F3F4F6] border border-[#E5E7EB] text-[11px] text-[#4B5563] space-y-0.5">
+                          <span className="font-bold font-mono text-[#111827] flex items-center gap-1">
+                            <HelpCircle className="w-3 h-3 text-[#1A73E8]" /> Lý do đánh giá & Độ phức tạp:
+                          </span>
+                          <p className="leading-snug italic">{task.reasoning}</p>
+                        </div>
+                      )}
+
+                      {/* Risk Contingency Plan Box */}
+                      {task.contingencyPlan && (
+                        <div className="ml-6 p-2 rounded-lg bg-[#FFF0F0] border border-[#FADBD8] text-[11px] text-[#D93025] space-y-0.5">
+                          <span className="font-bold font-mono flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-[#D93025]" /> Phương án dự phòng rủi ro:
+                          </span>
+                          <p className="leading-snug">{task.contingencyPlan}</p>
+                        </div>
+                      )}
+
                       {/* Card Footer Controls (Move Sprint, Edit, Delete) */}
                       <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">
                         <span className="flex items-center gap-1 pl-6">
                           <Clock className="w-3 h-3 text-[#111827]" />
-                          {task.estimatedDays || 2} ngày
+                          {task.estimatedDays || 2} ngày ước tính
                         </span>
 
                         <div className="flex items-center gap-2">
@@ -474,6 +540,41 @@ export function AiDecomposedResults({
                     onChange={(e) => setEditEstimatedDays(parseInt(e.target.value, 10) || 1)}
                     className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Story Points (Fibonacci):</label>
+                  <select
+                    value={editStoryPoints}
+                    onChange={(e) => setEditStoryPoints(parseInt(e.target.value, 10) || 3)}
+                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
+                  >
+                    <option value={1}>1 SP (Cực Kỳ Đơn Giản)</option>
+                    <option value={2}>2 SP (Đơn Giản)</option>
+                    <option value={3}>3 SP (Trung Bình)</option>
+                    <option value={5}>5 SP (Phức Tạp)</option>
+                    <option value={8}>8 SP (Rất Phức Tạp)</option>
+                    <option value={13}>13 SP (Nghiêm Trọng / Rủi Ro)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Gợi Ý Vai Trò (Role):</label>
+                  <select
+                    value={editRecommendedRole}
+                    onChange={(e) => setEditRecommendedRole(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
+                  >
+                    <option value="Tech Lead / System Architect">Tech Lead / System Architect</option>
+                    <option value="Senior Backend Developer">Senior Backend Developer</option>
+                    <option value="Backend Developer">Backend Developer</option>
+                    <option value="Frontend Developer">Frontend Developer</option>
+                    <option value="DevOps / SRE Engineer">DevOps / SRE Engineer</option>
+                    <option value="QA / QC Lead">QA / QC Lead</option>
+                    <option value="Business Analyst (BA)">Business Analyst (BA)</option>
+                  </select>
                 </div>
               </div>
             </div>

@@ -7,12 +7,26 @@ export interface DecomposedTaskItem {
   description: string;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   estimatedDays: number;
+  storyPoints?: number;
+  reasoning?: string;
+  recommendedRole?: string;
+  contingencyPlan?: string;
 }
 
 export interface TaskDecompositionResponse {
   threadId: number;
   summary: string;
+  sourceReference?: string;
+  sourceUrl?: string;
   tasks: DecomposedTaskItem[];
+}
+
+export interface AiThreadResponse {
+  id: number;
+  openaiThreadId?: string;
+  spaceId: number;
+  agentType: "REQUIREMENT" | "PM_PROGRESS" | "TECH_ADVISOR";
+  createdAt: string;
 }
 
 export interface AiChatMessageResponse {
@@ -31,6 +45,18 @@ export const aiService = {
       spaceId,
       requirementText,
     });
+    return response.data.data;
+  },
+
+  // Fetch threads by spaceId
+  getThreadsBySpace: async (spaceId: number): Promise<AiThreadResponse[]> => {
+    const response = await apiClient.get<ApiResponse<AiThreadResponse[]>>(`/ai/threads/space/${spaceId}`);
+    return response.data.data;
+  },
+
+  // Fetch thread messages by threadId
+  getThreadMessages: async (threadId: number): Promise<AiChatMessageResponse[]> => {
+    const response = await apiClient.get<ApiResponse<AiChatMessageResponse[]>>(`/ai/messages/thread/${threadId}`);
     return response.data.data;
   },
 

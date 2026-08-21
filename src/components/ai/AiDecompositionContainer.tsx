@@ -69,7 +69,7 @@ export function AiDecompositionContainer({
           const sprintSummary =
             existingSprints.length > 0
               ? existingSprints.map((s) => `- ${s.name} [Trạng thái: ${s.status}]`).join("\n")
-              : "Sprint 1: ACTIVE";
+              : "Sprint 0: Kickoff & Setup";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
 - Dự án đang thực hiện: ${selectedSpaceObj?.name || "Space"}
@@ -79,7 +79,7 @@ ${sprintSummary}
 ${taskSummary}
 
 [YÊU CẦU BÓC TÁCH VÀ MỞ RỘNG CÁC HẠNG MỤC CÔNG VIỆC TIẾP THEO]
-Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách từ 10 - 25 Task tiếp theo cho bài toán sau:
+Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách các Task mở rộng tiếp theo cho bài toán sau:
 ${text.trim()}`;
         } catch (ctxErr) {
           console.warn("Could not load existing space context for AI, proceeding with text only:", ctxErr);
@@ -115,7 +115,7 @@ ${text.trim()}`;
           return;
         }
 
-        // 1. Create a brand new Space in Workspace
+        // 1. Create a brand new Space in Workspace (creates default Sprint 0: Kickoff & Setup)
         const newSpace = await workspaceService.createSpace({
           workspaceId,
           name: newSpaceName.trim(),
@@ -127,40 +127,31 @@ ${text.trim()}`;
           window.dispatchEvent(new Event("space-created"));
         }
 
-        // 2. Automatically create 5 Sprints for the new Space
-        const createdSprints: Sprint[] = [];
-        const sprintTitles = [
-          "Sprint 1: Architecture Baseline & Core APIs",
-          "Sprint 2: Core Business Modules Implementation",
-          "Sprint 3: Integration & Advanced Services",
-          "Sprint 4: AI & Vector Database Features",
-          "Sprint 5: Testing, QA & Final Delivery",
-        ];
+        // 2. Extract dynamic unique Sprint names from AI result (e.g. Sprint 1, Sprint 2...)
+        const dynamicSprintMap: Record<string, Sprint> = {};
+        const uniqueSprintNames = Array.from(
+          new Set(result.tasks.map((t) => t.sprint || "Sprint 1"))
+        ).sort();
 
-        for (let i = 0; i < 5; i++) {
-          const sp = await sprintService.createSprint({
+        for (let i = 0; i < uniqueSprintNames.length; i++) {
+          const rawName = uniqueSprintNames[i];
+          const createdSprint = await sprintService.createSprint({
             spaceId: newSpace.id,
-            name: sprintTitles[i],
-            goal: `Mục tiêu cho ${sprintTitles[i]}`,
+            name: rawName.includes(":") ? rawName : `${rawName}: Phân Rã AI`,
+            goal: `Mục tiêu phát triển cho ${rawName}`,
             status: i === 0 ? "ACTIVE" : "FUTURE",
           });
-          createdSprints.push(sp);
+          dynamicSprintMap[rawName] = createdSprint;
         }
 
-        // 3. Populate tasks into new Space Sprints
+        // 3. Populate tasks into their matching AI Created Sprints
         for (const item of result.tasks) {
-          let sprintIndex = 0;
-          if (item.sprint) {
-            const match = item.sprint.match(/Sprint\s+(\d+)/i);
-            if (match) {
-              sprintIndex = Math.min(Math.max(parseInt(match[1], 10) - 1, 0), 4);
-            }
-          }
-          const targetSprint = createdSprints[sprintIndex] || createdSprints[0];
+          const rawSprint = item.sprint || uniqueSprintNames[0];
+          const targetSprint = dynamicSprintMap[rawSprint] || dynamicSprintMap[uniqueSprintNames[0]];
 
           await taskService.createTask({
             spaceId: newSpace.id,
-            sprintId: targetSprint.id,
+            sprintId: targetSprint ? targetSprint.id : undefined,
             title: item.title,
             description: `[AI Decomposed] ${item.description}\nThứ tự Sprint gợi ý: ${item.sprint}`,
             priority: item.priority,
@@ -177,9 +168,14 @@ ${text.trim()}`;
         const existingSprints = await sprintService.getSprintsBySpace(selectedSpaceId);
         const sprintMap: Record<string, Sprint> = {};
 
-        // Map existing sprints (e.g., "Sprint 1", "Sprint 2")
-        existingSprints.forEach((sp, idx) => {
-          sprintMap[`Sprint ${idx + 1}`] = sp;
+        // Map existing sprints
+        existingSprints.forEach((sp) => {
+          const match = sp.name.match(/Sprint\s+\d+/i);
+          if (match) {
+            sprintMap[match[0]] = sp;
+          } else {
+            sprintMap[sp.name] = sp;
+          }
         });
 
         // For each decomposed task, put into matching existing Sprint or create new Sprint if needed
@@ -187,7 +183,7 @@ ${text.trim()}`;
           const rawSprintName = item.sprint || "Sprint 1";
           let targetSprint = sprintMap[rawSprintName];
 
-          // If matching sprint doesn't exist, create it for the space
+          // If matching sprint doesn't exist, create it for the space dynamically
           if (!targetSprint) {
             try {
               targetSprint = await sprintService.createSprint({
