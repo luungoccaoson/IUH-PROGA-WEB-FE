@@ -66,11 +66,18 @@ export function SpaceHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push(`/workspaces/${workspaceId}/ai-analysis`)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#F0F7FF] hover:bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC] rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer"
+          >
+            <span>✨ AI Project Co-Pilot</span>
+          </button>
+
           {isOwner && (
             <button
               onClick={onOpenSettings}
-              className="p-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-[#4B5563] transition-colors shadow-2xs"
+              className="p-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-[#4B5563] transition-colors shadow-2xs cursor-pointer"
               title="Cài đặt Space"
             >
               <Settings className="w-4 h-4" />

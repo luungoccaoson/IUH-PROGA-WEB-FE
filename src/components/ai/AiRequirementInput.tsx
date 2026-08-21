@@ -7,6 +7,7 @@ interface AiRequirementInputProps {
   requirementText: string;
   setRequirementText: (text: string) => void;
   onSubmit: () => void;
+  onOpenClarificationModal?: () => void;
   loading: boolean;
   disabled: boolean;
   error?: string;
@@ -16,13 +17,14 @@ export function AiRequirementInput({
   requirementText,
   setRequirementText,
   onSubmit,
+  onOpenClarificationModal,
   loading,
   disabled,
   error,
 }: AiRequirementInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize chiều cao linh hoạt giữa min (130px) và max (300px), tự động hiện scrollbar nếu vượt quá 300px
+  // Auto-resize chiều cao linh hoạt giữa min (130px) và max (300px)
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -51,27 +53,40 @@ export function AiRequirementInput({
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <p className="text-xs text-[#6B7280]">
           💡 AI sẽ tự động phân tích ngữ nghĩa, truy xuất kho tri thức Vector RAG và phân chia Task theo Sprint.
         </p>
-        <button
-          onClick={onSubmit}
-          disabled={disabled || loading || !requirementText.trim()}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#111827] text-white hover:bg-[#1F2937] active:scale-95 disabled:opacity-50 disabled:scale-100 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin text-[#FBBF24]" />
-              Đang truy vấn AI RAG...
-            </>
-          ) : (
-            <>
-              <Send className="w-4 h-4" />
-              Phân Rã Bài Toán
-            </>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenClarificationModal && (
+            <button
+              onClick={onOpenClarificationModal}
+              disabled={disabled || loading}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#F0F7FF] text-[#1A73E8] border border-[#D2E3FC] hover:bg-[#E8F0FE] font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              <span>🤝 Họp Ban Quản Lý (Clarify Scope)</span>
+            </button>
           )}
-        </button>
+
+          <button
+            onClick={onSubmit}
+            disabled={disabled || loading || !requirementText.trim()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#111827] text-white hover:bg-[#1F2937] active:scale-95 disabled:opacity-50 disabled:scale-100 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-[#FBBF24]" />
+                Đang truy vấn AI RAG...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Phân Rã Bài Toán
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
