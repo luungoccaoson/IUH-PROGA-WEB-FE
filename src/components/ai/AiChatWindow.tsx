@@ -46,9 +46,10 @@ export function AiChatWindow({
   };
 
   const quickChips = [
-    "Ưu tiên bảo mật JWT & Thanh toán VNPay Sandbox",
-    "Phân rã bài toán thành 3 Sprint chuẩn Agile",
-    "Tự động chốt Bảng Task WBS cho dự án",
+    "Gợi ý phân rã WBS cho ứng dụng Y tế Telehealth & Bệnh án điện tử",
+    "Phân rã hệ thống Quản lý Nhà hàng QR Code & Màn hình Bếp WebSocket",
+    "Ước tính số Sprint và phân bổ vai trò Backend, Frontend, QA cho team 4 người",
+    "Chốt Bảng Task WBS cho dự án",
   ];
 
   return (
@@ -104,37 +105,40 @@ export function AiChatWindow({
             const msgId = msg.id || `msg-${index}`;
             const isExpanded = !!expandedMessages[msgId];
             const content = msg.messageContent || "";
-            const isLong = content.length > 250;
+            // ONLY user messages get Expand/Collapse toggle if > 250 chars! AI messages show 100% full text!
+            const isLong = isUser && content.length > 250;
             const displayContent = isLong && !isExpanded ? content.slice(0, 250) + "..." : content;
 
             return (
               <div key={msgId} className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
                 {/* Avatar */}
                 <div
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${isUser
-                    ? "bg-[#111827] text-white border-[#111827]"
-                    : "bg-[#F0F7FF] text-[#1A73E8] border-[#D2E3FC]"
-                    }`}
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${
+                    isUser
+                      ? "bg-[#4F46E5] text-white border-[#4338CA]"
+                      : "bg-[#F0F7FF] text-[#1A73E8] border-[#D2E3FC]"
+                  }`}
                 >
                   {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                 </div>
 
                 {/* Bubble Container */}
-                <div className={`group relative space-y-1 max-w-2xl ${isUser ? "items-end text-right" : "items-start text-left"}`}>
+                <div className={`group relative space-y-1 max-w-2xl ${isUser ? "items-end text-left" : "items-start text-left"}`}>
                   <div
-                    className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs relative ${isUser
-                      ? "bg-[#111827] text-white rounded-tr-none font-medium"
-                      : "bg-white text-[#111827] border border-[#E5E7EB] rounded-tl-none font-sans"
-                      }`}
+                    className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs relative select-text ${
+                      isUser
+                        ? "bg-[#EEF2FF] text-[#1E1B4B] border border-[#C7D2FE] rounded-tr-none font-medium"
+                        : "bg-white text-[#111827] border border-[#E5E7EB] rounded-tl-none font-sans"
+                    }`}
                   >
-                    <p className="whitespace-pre-wrap">{displayContent}</p>
+                    <p className="whitespace-pre-wrap select-text text-justify">{displayContent}</p>
 
                     {/* Expand / Collapse Button for Long Messages */}
                     {isLong && (
                       <button
                         onClick={() => toggleExpand(msgId)}
                         className={`mt-2 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
-                          isUser ? "text-[#9CA3AF] hover:text-white" : "text-[#1A73E8] hover:text-[#1557B0]"
+                          isUser ? "text-[#4338CA] hover:text-[#312E81]" : "text-[#1A73E8] hover:text-[#1557B0]"
                         }`}
                       >
                         {isExpanded ? (

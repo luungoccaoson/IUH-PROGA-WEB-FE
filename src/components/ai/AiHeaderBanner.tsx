@@ -34,6 +34,7 @@ interface AiHeaderBannerProps {
   newSpaceName: string;
   setNewSpaceName: (name: string) => void;
   onSelectSamplePrompt: (text: string) => void;
+  onNewChatSession?: () => void;
 }
 
 export function AiHeaderBanner({
@@ -45,38 +46,52 @@ export function AiHeaderBanner({
   newSpaceName,
   setNewSpaceName,
   onSelectSamplePrompt,
+  onNewChatSession,
 }: AiHeaderBannerProps) {
   return (
     <div className="bg-gradient-to-r from-[#111827] to-[#1F2937] text-white p-6 rounded-2xl shadow-sm space-y-5 font-sans">
       {/* Mode Selector Tabs */}
-      <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-        <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#9CA3AF] mr-2 hidden sm:inline">
-          Mục tiêu phân rã:
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#9CA3AF] mr-2 hidden sm:inline">
+            Mục tiêu phân rã:
+          </span>
 
-        <button
-          onClick={() => setTargetMode("EXISTING_SPACE")}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            targetMode === "EXISTING_SPACE"
-              ? "bg-white text-[#111827] shadow-sm"
-              : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-          }`}
-        >
-          <Compass className="w-4 h-4" />
-          1. Chọn Space Có Sẵn
-        </button>
+          <button
+            onClick={() => setTargetMode("EXISTING_SPACE")}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              targetMode === "EXISTING_SPACE"
+                ? "bg-white text-[#111827] shadow-sm"
+                : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            1. Chọn Space Có Sẵn
+          </button>
 
-        <button
-          onClick={() => setTargetMode("NEW_SPACE")}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            targetMode === "NEW_SPACE"
-              ? "bg-[#10B981] text-white shadow-sm"
-              : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-          }`}
-        >
-          <FolderPlus className="w-4 h-4" />
-          2. ➕ Tạo Dự Án (Space) Mới Tự Động
-        </button>
+          <button
+            onClick={() => setTargetMode("NEW_SPACE")}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              targetMode === "NEW_SPACE"
+                ? "bg-[#10B981] text-white shadow-sm"
+                : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+            }`}
+          >
+            <FolderPlus className="w-4 h-4" />
+            2. ➕ Tạo Dự Án (Space) Mới Tự Động
+          </button>
+        </div>
+
+        {onNewChatSession && (
+          <button
+            onClick={onNewChatSession}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+            title="Xóa đàm thoại hiện tại và bắt đầu phân rã dự án mới"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-[#FBBF24]" />
+            <span>➕ Tạo Phiên Đàm Thoại Mới</span>
+          </button>
+        )}
       </div>
 
       {/* Target Mode Inputs */}

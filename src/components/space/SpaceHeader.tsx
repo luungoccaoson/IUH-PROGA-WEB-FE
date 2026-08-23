@@ -14,6 +14,7 @@ interface SpaceHeaderProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   onOpenSettings: () => void;
+  onOpenCopilot?: () => void;
   isOwner?: boolean;
 }
 
@@ -24,6 +25,7 @@ export function SpaceHeader({
   activeTab,
   setActiveTab,
   onOpenSettings,
+  onOpenCopilot,
   isOwner = true,
 }: SpaceHeaderProps) {
   const router = useRouter();
@@ -67,11 +69,15 @@ export function SpaceHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* AI Project Co-Pilot Button Next to Gear Settings */}
           <button
-            onClick={() => router.push(`/workspaces/${workspaceId}/ai-analysis`)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#F0F7FF] hover:bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC] rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer"
+            onClick={() => {
+              if (onOpenCopilot) onOpenCopilot();
+              else router.push(`/workspaces/${workspaceId}/ai-analysis`);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white border border-gray-700 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer"
           >
-            <span>✨ AI Project Co-Pilot</span>
+            <span>🤖 AI Project Co-Pilot</span>
           </button>
 
           {isOwner && (
