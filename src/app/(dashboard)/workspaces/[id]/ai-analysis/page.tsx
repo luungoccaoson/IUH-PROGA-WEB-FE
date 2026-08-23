@@ -48,7 +48,7 @@ export default function AiAnalysisPage() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6 font-sans animate-in fade-in duration-300">
+    <div className="w-full space-y-6 font-sans animate-in fade-in duration-300">
       {/* Path Breadcrumbs */}
       <div className="flex items-center gap-1.5 text-xs text-[#6B7280] font-mono">
         <span className="hover:underline cursor-pointer" onClick={() => router.push("/workspaces")}>

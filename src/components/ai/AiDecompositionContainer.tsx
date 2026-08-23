@@ -19,7 +19,7 @@ export function AiDecompositionContainer({
   workspaceId,
   spaces,
 }: AiDecompositionContainerProps) {
-  const [targetMode, setTargetMode] = useState<TargetMode>("EXISTING_SPACE");
+  const [targetMode, setTargetMode] = useState<TargetMode>("NEW_SPACE");
   const [selectedSpaceId, setSelectedSpaceId] = useState<number | null>(
     spaces.length > 0 ? spaces[0].id : null
   );
@@ -41,6 +41,53 @@ export function AiDecompositionContainer({
   // Import State
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [restoredSessionBanner, setRestoredSessionBanner] = useState(false);
+
+  const STORAGE_KEY = `proga_ai_session_${workspaceId}`;
+
+  // Restore session & results from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+        if (parsed.result) {
+          setResult(parsed.result);
+        }
+        if (parsed.activeThreadId) {
+          setActiveThreadId(parsed.activeThreadId);
+        }
+        if (parsed.newSpaceName) {
+          setNewSpaceName(parsed.newSpaceName);
+        }
+        setRestoredSessionBanner(true);
+      }
+    } catch (e) {
+      console.warn("Could not restore AI session from localStorage:", e);
+    }
+  }, [workspaceId]);
+
+  // Persist session to localStorage on change
+  useEffect(() => {
+    try {
+      if (messages.length > 0 || result) {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            messages,
+            result,
+            activeThreadId,
+            newSpaceName,
+          })
+        );
+      }
+    } catch (e) {
+      console.warn("Could not save AI session to localStorage:", e);
+    }
+  }, [messages, result, activeThreadId, newSpaceName, workspaceId]);
 
   // Load workspace members for Task Assignment Dropdown
   useEffect(() => {
@@ -132,11 +179,6 @@ export function AiDecompositionContainer({
     const text = textToSubmit || requirementText;
     if (!text.trim()) return;
 
-    if (targetMode === "NEW_SPACE" && !newSpaceName.trim()) {
-      setError("Vui lòng nhập tên Dự Án (Space) Mới cần khởi tạo.");
-      return;
-    }
-
     const contextSpaceId = selectedSpaceId || (spaces.length > 0 ? spaces[0].id : 1);
 
     // Optimistic UI: Append user message bubble immediately into chat feed!
@@ -192,6 +234,11 @@ ${text.trim()}`;
       setResult(data.tasks && data.tasks.length > 0 ? data : null);
       setActiveThreadId(data.threadId);
 
+      // Auto-suggest space name if user hasn't typed one
+      if (data.suggestedSpaceName && !newSpaceName.trim()) {
+        setNewSpaceName(data.suggestedSpaceName);
+      }
+
       // Append Assistant Response bubble with JSON payload
       const assistantMsgObj: AiChatMessageResponse = {
         id: Date.now() + 1,
@@ -220,15 +267,12 @@ ${text.trim()}`;
       setImportSuccess(false);
 
       if (targetMode === "NEW_SPACE") {
-        if (!newSpaceName.trim()) {
-          alert("Vui lòng nhập tên Dự Án (Space) Mới.");
-          return;
-        }
+        const spaceNameToUse = newSpaceName.trim() || result.suggestedSpaceName || "Dự Án Mới AI";
 
         // 1. Create a brand new Space in Workspace (creates default Sprint 0: Kickoff & Setup)
         const newSpace = await workspaceService.createSpace({
           workspaceId,
-          name: newSpaceName.trim(),
+          name: spaceNameToUse,
         });
         setCreatedSpaceId(newSpace.id);
 
@@ -297,19 +341,23 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           let targetSprint = sprintMap[rawSprintName];
 
           // If matching sprint doesn't exist, create it for the space dynamically
-          if (!targetSprint) {
             try {
+              const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
+              const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
+              const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
+
               targetSprint = await sprintService.createSprint({
                 spaceId: selectedSpaceId,
-                name: `${rawSprintName}: Advanced Scope Extension`,
-                goal: `Sprint mở rộng phát triển từ phân tích AI Agent`,
+                name: cleanName,
+                goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
+                startDate: todayIso,
+                endDate: futureIso,
                 status: "FUTURE",
               });
               sprintMap[rawSprintName] = targetSprint;
             } catch (spErr) {
-              targetSprint = existingSprints[0];
+              console.error("Could not create sprint in AiDecompositionContainer:", spErr);
             }
-          }
 
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
@@ -348,14 +396,42 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     setResult(null);
     setMessages([]);
     setRequirementText("");
+    setNewSpaceName("");
     setIsImported(false);
     setImportSuccess(false);
+    setRestoredSessionBanner(false);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
   };
 
   const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
 
   return (
     <div className="space-y-6">
+      {/* Restored Session Notification Banner */}
+      {restoredSessionBanner && (messages.length > 0 || result) && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900 animate-in fade-in duration-300">
+          <span className="font-semibold flex items-center gap-2">
+            <span>💾 Đã tự động khôi phục phiên đàm thoại & Bảng Task WBS từ bộ nhớ tạm.</span>
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleNewSession}
+              className="text-blue-800 hover:text-blue-950 font-bold underline cursor-pointer"
+            >
+              Tạo phiên mới
+            </button>
+            <button
+              onClick={() => setRestoredSessionBanner(false)}
+              className="text-blue-500 hover:text-blue-700 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header Banner & Target Mode Selection */}
       <AiHeaderBanner
         spaces={spaces}
@@ -369,6 +445,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           setRequirementText(text);
           handleDecompose(text);
         }}
+        onNewChatSession={handleNewSession}
       />
 
       {/* 2. Interactive Text Chat Window */}

@@ -182,7 +182,7 @@ export default function WorkspacesPage() {
       : classified.pendingWorkspaces;
 
   return (
-    <div className="max-w-6xl space-y-8 animate-in fade-in duration-300 font-sans">
+    <div className="w-full space-y-8 animate-in fade-in duration-300 font-sans">
       {/* Header Bar */}
       <div className="flex items-center justify-between">
         <div>

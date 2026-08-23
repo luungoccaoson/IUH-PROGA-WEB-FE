@@ -10,6 +10,7 @@ import { SprintKanbanBoard } from "@/components/workspace/SprintKanbanBoard";
 import { SpaceHeader, TabType } from "@/components/space/SpaceHeader";
 import { SpaceOverviewTab } from "@/components/space/SpaceOverviewTab";
 import { EditSpaceModal } from "@/components/space/EditSpaceModal";
+import { SpaceAiCopilotDrawer } from "@/components/workspace/SpaceAiCopilotDrawer";
 import { Space, Task, Workspace } from "@/types";
 
 export default function SpaceDetailPage() {
@@ -22,6 +23,7 @@ export default function SpaceDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   // Data States
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -68,6 +70,21 @@ export default function SpaceDetailPage() {
     if (workspaceId && spaceId) {
       fetchData();
     }
+
+    const handleTasksUpdated = () => {
+      fetchData();
+    };
+
+    const handleSwitchKanban = () => {
+      setActiveTab("kanban");
+    };
+
+    window.addEventListener("space_tasks_updated", handleTasksUpdated);
+    window.addEventListener("switch_to_kanban_tab", handleSwitchKanban);
+    return () => {
+      window.removeEventListener("space_tasks_updated", handleTasksUpdated);
+      window.removeEventListener("switch_to_kanban_tab", handleSwitchKanban);
+    };
   }, [workspaceId, spaceId]);
 
   // Handle Edit Space
@@ -118,7 +135,7 @@ export default function SpaceDetailPage() {
     <>
       {/* Outer Page Container: Pushes left when task detail drawer is open! */}
       <div
-        className={`max-w-6xl space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
+        className={`w-full space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
           isDrawerOpen ? "mr-0 lg:mr-[360px]" : "mr-0"
         }`}
       >
@@ -130,6 +147,7 @@ export default function SpaceDetailPage() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onOpenSettings={() => setIsEditOpen(true)}
+          onOpenCopilot={() => setIsCopilotOpen(true)}
           isOwner={isOwner}
         />
 
@@ -164,6 +182,15 @@ export default function SpaceDetailPage() {
           )}
         </div>
       </div>
+
+      {/* AI Co-Pilot Drawer for Space */}
+      <SpaceAiCopilotDrawer
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        space={space}
+        workspaceId={workspaceId}
+        existingTasks={tasks}
+      />
 
       {/* Settings Modal (Edit/Delete Space) */}
       <EditSpaceModal
