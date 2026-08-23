@@ -192,6 +192,11 @@ ${text.trim()}`;
       setResult(data.tasks && data.tasks.length > 0 ? data : null);
       setActiveThreadId(data.threadId);
 
+      // Auto-suggest space name if user hasn't typed one
+      if (data.suggestedSpaceName && !newSpaceName.trim()) {
+        setNewSpaceName(data.suggestedSpaceName);
+      }
+
       // Append Assistant Response bubble with JSON payload
       const assistantMsgObj: AiChatMessageResponse = {
         id: Date.now() + 1,

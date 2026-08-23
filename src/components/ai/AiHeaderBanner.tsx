@@ -120,7 +120,7 @@ export function AiHeaderBanner({
             type="text"
             value={newSpaceName}
             onChange={(e) => setNewSpaceName(e.target.value)}
-            placeholder="Ví dụ: Dự Án Hệ Thống Quản Lý Bán Hàng SmartMart..."
+            placeholder="Nhập tên Space hoặc để trống (AI sẽ tự động gợi ý tên phù hợp)..."
             className="w-full px-3.5 py-2.5 bg-white/10 border border-white/20 rounded-xl text-sm font-semibold text-white placeholder:text-white/40 focus:outline-hidden focus:ring-2 focus:ring-[#10B981]"
           />
         </div>

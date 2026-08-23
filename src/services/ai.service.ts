@@ -15,6 +15,7 @@ export interface DecomposedTaskItem {
 
 export interface TaskDecompositionResponse {
   threadId: number;
+  suggestedSpaceName?: string;
   summary: string;
   sourceReference?: string;
   sourceUrl?: string;
@@ -45,11 +46,15 @@ export const aiService = {
     requirementText: string,
     threadId?: number | null
   ): Promise<TaskDecompositionResponse> => {
-    const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>("/ai/agents/decompose", {
-      spaceId,
-      threadId: threadId || undefined,
-      requirementText,
-    });
+    const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>(
+      "/ai/agents/decompose",
+      {
+        spaceId,
+        threadId: threadId || undefined,
+        requirementText,
+      },
+      { timeout: 120000 } // Extended 2-minute timeout for AI LLM reasoning
+    );
     return response.data.data;
   },
 
@@ -67,15 +72,24 @@ export const aiService = {
 
   // PM Agent: Báo cáo tiến độ & Dự báo rủi ro trễ deadline
   getPmSummary: async (spaceId: number): Promise<AiChatMessageResponse> => {
-    const response = await apiClient.post<ApiResponse<AiChatMessageResponse>>(`/ai/agents/pm-summary/${spaceId}`);
+    const response = await apiClient.post<ApiResponse<AiChatMessageResponse>>(
+      `/ai/agents/pm-summary/${spaceId}`,
+      null,
+      { timeout: 120000 }
+    );
     return response.data.data;
   },
 
   // Tech Lead Agent: Tư vấn giải pháp kỹ thuật & Fix bug
   getTechAdvice: async (taskId: number, problemDescription: string): Promise<AiChatMessageResponse> => {
-    const response = await apiClient.post<ApiResponse<AiChatMessageResponse>>("/ai/agents/tech-advisor", null, {
-      params: { taskId, problemDescription },
-    });
+    const response = await apiClient.post<ApiResponse<AiChatMessageResponse>>(
+      "/ai/agents/tech-advisor",
+      null,
+      {
+        params: { taskId, problemDescription },
+        timeout: 120000,
+      }
+    );
     return response.data.data;
   },
 };
