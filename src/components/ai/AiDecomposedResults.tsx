@@ -194,18 +194,30 @@ export function AiDecomposedResults({
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
           
           {result.sourceReference && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
-              <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
-              <span>Nguồn RAG Tri Thức Chuẩn: <strong>{result.sourceReference}</strong></span>
-              {result.sourceUrl && (
-                <a
-                  href={result.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline text-[#0B57D0] hover:text-[#0040A8] flex items-center gap-0.5 ml-1"
-                >
-                  [Xem Nguồn Xác Thực <ExternalLink className="w-3 h-3 inline" />]
-                </a>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
+                <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
+                <span>Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong></span>
+              </div>
+
+              {/* Render ALL Tri-Anchor Benchmark Citation Links */}
+              {((result.sourceUrls && result.sourceUrls.length > 0) || result.sourceUrl) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-[11px] font-mono font-bold text-[#4B5563] uppercase">🔗 Link Chứng Thực Thực Tế:</span>
+                  {(result.sourceUrls && result.sourceUrls.length > 0 ? result.sourceUrls : [result.sourceUrl!]).map((url, idx) => (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-white hover:bg-[#F3F4F6] border border-[#D1D5DB] hover:border-[#1A73E8] rounded-lg text-[11px] font-mono font-semibold text-[#1A73E8] transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
+                      title={url}
+                    >
+                      <span>Link #{idx + 1}: {url.replace(/^https?:\/\/(www\.)?/, "").substring(0, 32)}...</span>
+                      <ExternalLink className="w-3 h-3 text-[#1A73E8]" />
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
           )}

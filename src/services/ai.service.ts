@@ -19,6 +19,7 @@ export interface TaskDecompositionResponse {
   summary: string;
   sourceReference?: string;
   sourceUrl?: string;
+  sourceUrls?: string[];
   tasks: DecomposedTaskItem[];
 }
 
@@ -40,6 +41,23 @@ export interface AiChatMessageResponse {
 }
 
 export const aiService = {
+  // Upload & parse PDF/Docx document into PgVector Store
+  uploadAndParseDocument: async (file: File): Promise<{ fileName: string; fileSize: number; extractedText: string; chunkCount: number }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post<ApiResponse<{ fileName: string; fileSize: number; extractedText: string; chunkCount: number }>>(
+      "/ai/parse-document",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 60000,
+      }
+    );
+    return response.data.data;
+  },
+
   // Requirement Agent: Phân rã bài toán tự động với RAG Tri thức & Đàm thoại 2 Lượt
   decomposeRequirements: async (
     spaceId: number,
