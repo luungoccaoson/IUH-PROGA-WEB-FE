@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, RefreshCw, Sparkles, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
-import { AiChatMessageResponse } from "@/services/ai.service";
+import { Send, Bot, User, RefreshCw, Sparkles, Copy, Check, ChevronDown, ChevronUp, Paperclip, FileText, Loader2 } from "lucide-react";
+import { AiChatMessageResponse, aiService } from "@/services/ai.service";
 
 interface AiChatWindowProps {
   messages: AiChatMessageResponse[];
@@ -16,20 +16,46 @@ export function AiChatWindow({
   loading,
 }: AiChatWindowProps) {
   const [inputText, setInputText] = useState("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; text: string } | null>(null);
   const [expandedMessages, setExpandedMessages] = useState<Record<number | string, boolean>>({});
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      const result = await aiService.uploadAndParseDocument(file);
+      setAttachedFile({
+        name: result.fileName,
+        text: result.extractedText,
+      });
+      // Append file text to prompt
+      const documentPrompt = `[NẠP TÀI LIỆU KẾ HOẠCH FILE ${result.fileName} (${result.chunkCount} chunks)]:\n${result.extractedText}`;
+      setInputText((prev) => (prev ? `${prev}\n\n${documentPrompt}` : documentPrompt));
+    } catch (err: any) {
+      alert("Lỗi khi đọc file tài liệu: " + (err.message || "Không thể bóc tách file."));
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSend = () => {
-    if (!inputText.trim() || loading) return;
+    if ((!inputText.trim() && !attachedFile) || loading || uploadingFile) return;
     onSendMessage(inputText.trim());
     setInputText("");
+    setAttachedFile(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -46,10 +72,10 @@ export function AiChatWindow({
   };
 
   const quickChips = [
-    "Gợi ý phân rã WBS cho ứng dụng Y tế Telehealth & Bệnh án điện tử",
-    "Phân rã hệ thống Quản lý Nhà hàng QR Code & Màn hình Bếp WebSocket",
-    "Ước tính số Sprint và phân bổ vai trò Backend, Frontend, QA cho team 4 người",
-    "Chốt Bảng Task WBS cho dự án",
+    "✅ Chốt Task & Đồng ý Kế hoạch Demo",
+    "💬 Gợi ý phân rã WBS cho ứng dụng Y tế Telehealth & Bệnh án điện tử",
+    "💬 Phân rã hệ thống Quản lý Nhà hàng QR Code & Màn hình Bếp WebSocket",
+    "⚙️ Điều chỉnh: Thêm module Thanh toán VNPAY IPN & Xuất hóa đơn",
   ];
 
   return (
@@ -200,7 +226,44 @@ export function AiChatWindow({
 
       {/* Sticky Bottom Chat Input Bar */}
       <div className="p-3.5 bg-white border-t border-[#E5E7EB] space-y-2">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".pdf,.docx,.doc,.txt,.md"
+          className="hidden"
+        />
+
+        {attachedFile && (
+          <div className="flex items-center justify-between bg-[#F0F7FF] border border-[#D2E3FC] px-3 py-1.5 rounded-xl text-xs text-[#1A73E8]">
+            <span className="flex items-center gap-1.5 font-medium truncate">
+              <FileText className="w-3.5 h-3.5 text-[#1A73E8]" />
+              <span>Đã đính kèm: <strong>{attachedFile.name}</strong></span>
+            </span>
+            <button
+              onClick={() => setAttachedFile(null)}
+              className="text-[#6B7280] hover:text-[#111827] text-xs font-bold px-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingFile || loading}
+            className="p-2.5 bg-[#F3F4F6] hover:bg-[#E5E7EB] border border-[#E5E7EB] rounded-xl text-[#374151] transition-all cursor-pointer h-[40px] shrink-0 flex items-center justify-center"
+            title="Đính kèm file tài liệu kế hoạch (PDF, DOCX, TXT, MD)"
+          >
+            {uploadingFile ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[#1A73E8]" />
+            ) : (
+              <Paperclip className="w-4 h-4 text-[#4B5563]" />
+            )}
+          </button>
+
           <textarea
             ref={textareaRef}
             value={inputText}
@@ -217,12 +280,13 @@ export function AiChatWindow({
               }
             }}
             rows={1}
-            placeholder="Nhập câu hỏi, mô tả bài toán (Shift+Enter để xuống dòng, Enter để gửi)..."
+            placeholder="Nhập câu hỏi, mô tả bài toán hoặc bấm 📎 để nạp file PDF/Docx kế hoạch..."
             className="flex-1 px-3.5 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] focus:bg-white focus:border-[#111827] rounded-xl text-xs text-[#111827] outline-none transition-all placeholder-[#9CA3AF] resize-none min-h-[40px] max-h-[140px] overflow-y-auto leading-relaxed"
           />
+
           <button
             onClick={handleSend}
-            disabled={!inputText.trim() || loading}
+            disabled={(!inputText.trim() && !attachedFile) || loading || uploadingFile}
             className="px-4 py-2.5 bg-[#111827] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer h-[40px] shrink-0"
           >
             <span>Gửi</span>

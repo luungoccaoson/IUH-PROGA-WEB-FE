@@ -124,7 +124,7 @@ export function AiDecompositionContainer({
           try {
             const tasks = JSON.parse(assistantMsgWithPayload.jsonPayload);
             taskCount = tasks.length;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         const rawTitle = userMsg ? userMsg.messageContent.replace("Phân rã yêu cầu bài toán:\n", "") : `Phiên chat #${th.id}`;
@@ -341,23 +341,23 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           let targetSprint = sprintMap[rawSprintName];
 
           // If matching sprint doesn't exist, create it for the space dynamically
-            try {
-              const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
-              const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
-              const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
+          try {
+            const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
+            const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
+            const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
 
-              targetSprint = await sprintService.createSprint({
-                spaceId: selectedSpaceId,
-                name: cleanName,
-                goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
-                startDate: todayIso,
-                endDate: futureIso,
-                status: "FUTURE",
-              });
-              sprintMap[rawSprintName] = targetSprint;
-            } catch (spErr) {
-              console.error("Could not create sprint in AiDecompositionContainer:", spErr);
-            }
+            targetSprint = await sprintService.createSprint({
+              spaceId: selectedSpaceId,
+              name: cleanName,
+              goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
+              startDate: todayIso,
+              endDate: futureIso,
+              status: "FUTURE",
+            });
+            sprintMap[rawSprintName] = targetSprint;
+          } catch (spErr) {
+            console.error("Could not create sprint in AiDecompositionContainer:", spErr);
+          }
 
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
@@ -402,7 +402,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     setRestoredSessionBanner(false);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
