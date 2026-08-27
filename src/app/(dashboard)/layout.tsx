@@ -17,7 +17,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   // Active workspace state
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -192,9 +192,8 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
       {/* Left Sidebar - Warm Beige #F6F5EF */}
-      <aside className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${
-        isSidebarCollapsed ? "hidden" : "w-64 p-5 flex flex-col justify-between hidden md:flex"
-      }`}>
+      <aside className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${isSidebarCollapsed ? "hidden" : "w-64 p-5 flex flex-col justify-between hidden md:flex"
+        }`}>
         <div className="space-y-6">
           {/* Logo & Brand & Toggle Button */}
           <div className="flex items-center justify-between px-1">
@@ -231,34 +230,32 @@ export default function DashboardLayout({
               {/* 1. Navigation */}
               <div className="space-y-2">
                 <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280] truncate">
-                  🎯 WS: {activeWorkspace.name}
+                  WS: {activeWorkspace.name}
                 </p>
 
                 <nav className="space-y-1 font-sans">
                   {/* Dashboard */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                      pathname === `/workspaces/${activeWorkspaceId}`
-                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}`
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                      }`}
                   >
                     <LayoutGrid className="w-5 h-5 text-[#111827]" />
                     <span>Dashboard</span>
                   </Link>
 
-                  {/* AI Co-Pilot Khởi Tạo Space */}
+                  {/* AI Khởi Tạo Space */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}/ai-analysis`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                      pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
-                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                      }`}
                   >
                     <Sparkles className="w-5 h-5 text-[#137333]" />
-                    <span>🤖 AI Co-Pilot Khởi Tạo Space</span>
+                    <span>AI Khởi Tạo Space</span>
                   </Link>
                 </nav>
               </div>
@@ -306,11 +303,10 @@ export default function DashboardLayout({
                       <Link
                         key={space.id}
                         href={`/workspaces/${activeWorkspaceId}/spaces/${space.id}`}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-                          isActive
-                            ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
-                            : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                        }`}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${isActive
+                          ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
+                          : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                          }`}
                       >
                         <div className={`w-5 h-5 rounded-lg ${color.bg} flex items-center justify-center ${color.text} font-mono font-bold text-[10px]`}>
                           {initials}
@@ -347,11 +343,10 @@ export default function DashboardLayout({
               <nav className="space-y-1 font-sans">
                 <Link
                   href="/workspaces"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                    pathname === "/workspaces"
-                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === "/workspaces"
+                    ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                    : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
                 >
                   <LayoutGrid className="w-5 h-5 text-[#111827]" />
                   <span>Danh sách Workspaces</span>

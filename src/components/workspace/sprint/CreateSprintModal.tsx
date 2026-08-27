@@ -19,10 +19,12 @@ export function CreateSprintModal({ isOpen, defaultName, onClose, onSubmit }: Cr
 
   useEffect(() => {
     if (isOpen) {
-      setName(defaultName || "Sprint 1");
+      setName(defaultName || "Sprint 1: CSDL Schema & Setup");
       setGoal("");
-      setStartDate("");
-      setEndDate("");
+      const today = new Date().toISOString().split("T")[0];
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      setStartDate(today);
+      setEndDate(nextWeek);
     }
   }, [isOpen, defaultName]);
 

@@ -177,9 +177,9 @@ export function SpaceAiCopilotDrawer({
       // Build detailed context of current space's tasks for ongoing space
       const taskSummary = existingTasks.length > 0
         ? existingTasks.map((t, idx) => {
-            const spName = spaceSprints.find((sp) => sp.id === t.sprintId)?.name || "Sprint 1";
-            return `- Task-${idx + 1} [Sprint: ${spName}] [Trạng thái: ${t.status}] ${t.title}`;
-          }).join("\n")
+          const spName = spaceSprints.find((sp) => sp.id === t.sprintId)?.name || "Sprint 1";
+          return `- Task-${idx + 1} [Sprint: ${spName}] [Trạng thái: ${t.status}] ${t.title}`;
+        }).join("\n")
         : "Chưa có công việc nào trong Space.";
 
       const promptWithContext = `[NGỮ CẢNH DỰ ÁN ĐANG DIỄN RA: ${space.name} (Space ID: ${space.id})]
@@ -330,7 +330,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           className="flex items-center gap-2.5 px-4 py-3 bg-[#111827] text-white hover:bg-black rounded-2xl shadow-2xl border border-gray-700 text-xs font-extrabold transition-all cursor-pointer animate-in zoom-in-95"
         >
           <Bot className="w-4 h-4 text-[#10B981]" />
-          <span>🤖 AI Co-Pilot ({space.name})</span>
+          <span>🤖 AI Phân Rã ({space.name})</span>
           <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
         </button>
       </div>
@@ -355,7 +355,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           </div>
           <div>
             <h3 className="text-xs font-extrabold flex items-center gap-2">
-              <span>🤖 AI Co-Pilot Phân Rã & Đánh Giá Rủi Ro</span>
+              <span>🤖 AI Phân Rã Task</span>
             </h3>
             <p className="text-[10px] text-gray-300">
               Dự án: <span className="font-bold text-[#A7F3D0]">{space.name}</span>

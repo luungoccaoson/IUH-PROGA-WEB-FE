@@ -136,13 +136,13 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
           <div className="flex items-center gap-3">
             {/* AI Co-Pilot Drawer Button */}
-            <button
+            {/* <button
               onClick={() => setIsCopilotOpen(true)}
               className="px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer border border-gray-700"
             >
               <Sparkles className="w-4 h-4 text-[#A7F3D0] animate-pulse" />
               <span>🤖 AI Co-Pilot Phân Rã & Đánh Giá Rủi Ro</span>
-            </button>
+            </button> */}
 
             {/* Sprint Filter Dropdown */}
             <div className="flex items-center gap-2 bg-[#F9FAFB] border border-[#E5E7EB] p-1.5 rounded-xl">
@@ -227,9 +227,8 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                           e.dataTransfer.setData("sourceStatus", task.status);
                         }}
                         onClick={() => setSelectedTask(task)}
-                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
-                          isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
-                        }`}
+                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
+                          }`}
                       >
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">

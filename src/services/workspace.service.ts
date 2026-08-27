@@ -69,6 +69,15 @@ export const workspaceService = {
     await apiClient.delete<ApiResponse<void>>(`/spaces/${id}`);
   },
 
+  addMemberToSpace: async (spaceId: number, userId: number, roleId = 3): Promise<void> => {
+    await apiClient.post(`/spaces/${spaceId}/members?userId=${userId}&roleId=${roleId}`);
+  },
+
+  getSpaceMembers: async (spaceId: number): Promise<any[]> => {
+    const response = await apiClient.get<ApiResponse<any[]>>(`/spaces/${spaceId}/members`);
+    return response.data.data;
+  },
+
   // Tasks & Kanban
   getTasksBySpace: async (spaceId: number): Promise<Task[]> => {
     const response = await apiClient.get<ApiResponse<Task[]>>(`/tasks/space/${spaceId}`);

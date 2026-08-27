@@ -9,9 +9,13 @@ import { SprintTaskList } from "@/components/workspace/SprintTaskList";
 import { SprintKanbanBoard } from "@/components/workspace/SprintKanbanBoard";
 import { SpaceHeader, TabType } from "@/components/space/SpaceHeader";
 import { SpaceOverviewTab } from "@/components/space/SpaceOverviewTab";
+import { SpaceTimelineTab } from "@/components/space/SpaceTimelineTab";
 import { EditSpaceModal } from "@/components/space/EditSpaceModal";
+import { AddSpaceMemberModal } from "@/components/space/AddSpaceMemberModal";
 import { SpaceAiCopilotDrawer } from "@/components/workspace/SpaceAiCopilotDrawer";
-import { Space, Task, Workspace } from "@/types";
+import { TaskDetailDrawer } from "@/components/workspace/sprint/TaskDetailDrawer";
+import { sprintService } from "@/services/sprint.service";
+import { Space, Task, Sprint, Workspace } from "@/types";
 
 export default function SpaceDetailPage() {
   const params = useParams();
@@ -29,13 +33,17 @@ export default function SpaceDetailPage() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
 
-  // Edit Space Modal State
+  // Modal States
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
   // Fetch all details
   const fetchData = async () => {
@@ -43,10 +51,15 @@ export default function SpaceDetailPage() {
       setLoading(true);
       setError("");
 
-      const wsData = await workspaceService.getWorkspaceById(workspaceId);
-      setWorkspace(wsData);
+      const [wsData, spacesList, taskList, sprintList, memberList] = await Promise.all([
+        workspaceService.getWorkspaceById(workspaceId),
+        workspaceService.getSpacesByWorkspace(workspaceId),
+        workspaceService.getTasksBySpace(spaceId),
+        sprintService.getSprintsBySpace(spaceId).catch(() => []),
+        workspaceService.getSpaceMembers(spaceId).catch(() => []),
+      ]);
 
-      const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId);
+      setWorkspace(wsData);
       const activeSpace = spacesList.find((s) => s.id === spaceId);
 
       if (!activeSpace) {
@@ -54,10 +67,9 @@ export default function SpaceDetailPage() {
         return;
       }
       setSpace(activeSpace);
-
-      // Load tasks
-      const taskList = await workspaceService.getTasksBySpace(spaceId);
-      setTasks(taskList);
+      setTasks(taskList || []);
+      setSprints(sprintList || []);
+      setMembers(memberList || []);
     } catch (err: any) {
       console.error("Error loading space page details:", err);
       setError("Không thể tải thông tin Space. Vui lòng thử lại.");
@@ -148,6 +160,7 @@ export default function SpaceDetailPage() {
           setActiveTab={setActiveTab}
           onOpenSettings={() => setIsEditOpen(true)}
           onOpenCopilot={() => setIsCopilotOpen(true)}
+          onOpenAddMember={() => setIsAddMemberOpen(true)}
           isOwner={isOwner}
         />
 
@@ -180,6 +193,19 @@ export default function SpaceDetailPage() {
               />
             </div>
           )}
+
+          {/* TAB 4: TIMELINE ROADMAP GANTT */}
+          {activeTab === "timeline" && (
+            <div className="animate-in fade-in duration-200">
+              <SpaceTimelineTab
+                sprints={sprints}
+                tasks={tasks}
+                members={members}
+                spaceName={space?.name}
+                onSelectTask={(t) => setSelectedTask(t)}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -191,6 +217,32 @@ export default function SpaceDetailPage() {
         workspaceId={workspaceId}
         existingTasks={tasks}
       />
+
+      {/* Add Space Member Modal */}
+      <AddSpaceMemberModal
+        isOpen={isAddMemberOpen}
+        workspaceId={workspaceId}
+        spaceId={spaceId}
+        onClose={() => setIsAddMemberOpen(false)}
+        onMemberAdded={fetchData}
+      />
+
+      {/* Task Detail Drawer when selecting task from Timeline */}
+      {selectedTask && (
+        <TaskDetailDrawer
+          task={selectedTask}
+          members={members}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={async (tId, data) => {
+            await workspaceService.createTask({ spaceId, title: "", ...data } as any);
+            fetchData();
+          }}
+          onDelete={async (tId) => {
+            await workspaceService.deleteTask(tId);
+            fetchData();
+          }}
+        />
+      )}
 
       {/* Settings Modal (Edit/Delete Space) */}
       <EditSpaceModal
