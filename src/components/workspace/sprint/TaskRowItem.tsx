@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 interface TaskRowItemProps {
   task: Task;
   taskIndex?: number;
+  members?: any[];
   isOverdue?: boolean;
   isClosedSprint?: boolean;
   onSelect?: (task: Task) => void;
@@ -23,15 +24,10 @@ const taskStatusMap: Record<TaskStatus, { label: string; bg: string; text: strin
   DONE: { label: "Đã xong", bg: "bg-[#E6F4EA]", text: "text-[#137333]" },
 };
 
-const PROJECT_MEMBERS = [
-  { id: 2, name: "Son Luu" },
-  { id: 4, name: "Duy Dev" },
-  { id: 5, name: "Hoa Tester" },
-];
-
 export function TaskRowItem({
   task,
   taskIndex,
+  members = [],
   isOverdue = false,
   isClosedSprint = false,
   onSelect,
@@ -236,75 +232,109 @@ export function TaskRowItem({
 
           {/* ASSIGNEE POPOVER SELECTOR */}
           <div className="relative" ref={assigneeRef}>
-            <button
-              disabled={isReadOnly}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isReadOnly) setShowAssigneePopover(!showAssigneePopover);
-              }}
-              className={`p-0.5 rounded-full transition-transform hover:scale-105 ${
-                isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
-              }`}
-              title={task.ownerName ? `Người thực hiện: ${task.ownerName}` : "Chưa gán người thực hiện"}
-            >
-              {task.ownerId && task.ownerName ? (
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold font-mono shrink-0 border border-white shadow-xs ${
-                    task.ownerId % 2 === 0
-                      ? "bg-purple-600 text-white"
-                      : "bg-amber-500 text-white"
-                  }`}
-                >
-                  {task.ownerName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .substring(0, 2)
-                    .toUpperCase()}
-                </div>
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-[#E5E7EB] hover:bg-[#D1D5DB] flex items-center justify-center text-[#6B7280] shrink-0 border border-white shadow-2xs">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </button>
+            {(() => {
+              const isAssignDisabled = isReadOnly || task.status === "DONE";
+              const assignedMember = members.find((m) => {
+                const mId = m.id?.userId || m.userId || m.id;
+                return mId === task.ownerId || mId === task.assignee?.id;
+              });
 
-            {showAssigneePopover && (
-              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-44 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onUpdateOwner) onUpdateOwner(task.id, undefined);
-                    setShowAssigneePopover(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
-                    !task.ownerId ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#6B7280]"
-                  }`}
-                >
-                  <span>Chưa gán</span>
-                  {!task.ownerId && <Check className="w-3.5 h-3.5" />}
-                </button>
-                {PROJECT_MEMBERS.map((m) => {
-                  const isSelected = task.ownerId === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onUpdateOwner) onUpdateOwner(task.id, m.id);
-                        setShowAssigneePopover(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
-                        isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
-                      }`}
-                    >
-                      <span>{m.name}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#111827]" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+              const assignedName = assignedMember
+                ? (assignedMember.user?.fullName || assignedMember.user?.email || assignedMember.fullName || assignedMember.email)
+                : task.ownerName || task.assignee?.fullName || task.suggestedMemberName;
+
+              const assignedAvatar = assignedMember?.avatarUrl || assignedMember?.user?.avatarUrl;
+
+              const getInitials = (text?: string) => {
+                if (!text) return "U";
+                return text.trim().substring(0, 2).toUpperCase();
+              };
+
+              return (
+                <>
+                  <button
+                    disabled={isAssignDisabled}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isAssignDisabled) setShowAssigneePopover(!showAssigneePopover);
+                    }}
+                    className={`p-0.5 rounded-full transition-transform ${
+                      isAssignDisabled ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:scale-105"
+                    }`}
+                    title={
+                      task.status === "DONE"
+                        ? "Công việc đã hoàn thành, không thể thay đổi người phụ trách"
+                        : assignedName
+                        ? `Người thực hiện: ${assignedName}`
+                        : "Chưa gán người thực hiện"
+                    }
+                  >
+                    {assignedName ? (
+                      <div className="w-6 h-6 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 border border-[#D2E3FC] shadow-2xs">
+                        {getInitials(assignedName)}
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-[#E5E7EB] hover:bg-[#D1D5DB] flex items-center justify-center text-[#6B7280] shrink-0 border border-white shadow-2xs">
+                        <User className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                  </button>
+
+                  {showAssigneePopover && !isAssignDisabled && (
+                    <div className="absolute right-0 bottom-full mb-1.5 z-50 w-52 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+                      {/* Unassigned Choice */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onUpdateOwner) onUpdateOwner(task.id, undefined);
+                          setShowAssigneePopover(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
+                          !task.ownerId && !task.assignee?.id ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#6B7280]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <div className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0 border border-gray-200">
+                            <User className="w-3 h-3" />
+                          </div>
+                          <span className="truncate">Chưa gán</span>
+                        </div>
+                        {!task.ownerId && !task.assignee?.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      </button>
+
+                      {/* Member List Choices */}
+                      {members.map((m) => {
+                        const mId = m.id?.userId || m.userId || m.id;
+                        const mName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${mId}`;
+                        const isSelected = task.ownerId === mId || task.assignee?.id === mId;
+
+                        return (
+                          <button
+                            key={mId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onUpdateOwner) onUpdateOwner(task.id, mId);
+                              setShowAssigneePopover(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
+                              isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate pr-2">
+                              <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
+                                {getInitials(mName)}
+                              </div>
+                              <span className="truncate">{mName}</span>
+                            </div>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[#111827] shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Quick Delete icon */}

@@ -2,10 +2,10 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare } from "lucide-react";
+import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare, UserPlus, Users } from "lucide-react";
 import { Space, Workspace } from "@/types";
 
-export type TabType = "overview" | "tasks" | "kanban";
+export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members";
 
 interface SpaceHeaderProps {
   workspaceId: number;
@@ -15,6 +15,7 @@ interface SpaceHeaderProps {
   setActiveTab: (tab: TabType) => void;
   onOpenSettings: () => void;
   onOpenCopilot?: () => void;
+  onOpenAddMember?: () => void;
   isOwner?: boolean;
 }
 
@@ -26,6 +27,7 @@ export function SpaceHeader({
   setActiveTab,
   onOpenSettings,
   onOpenCopilot,
+  onOpenAddMember,
   isOwner = true,
 }: SpaceHeaderProps) {
   const router = useRouter();
@@ -69,7 +71,19 @@ export function SpaceHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* AI Project Co-Pilot Button Next to Gear Settings */}
+
+          {/* Add Space Member Button */}
+          {onOpenAddMember && (
+            <button
+              onClick={onOpenAddMember}
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#111827] transition-colors shadow-2xs cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4 text-[#1A73E8]" />
+              <span>Thêm thành viên</span>
+            </button>
+          )}
+
+          {/* AI Project Co-Pilot Button */}
           <button
             onClick={() => {
               if (onOpenCopilot) onOpenCopilot();
@@ -77,7 +91,7 @@ export function SpaceHeader({
             }}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white border border-gray-700 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer"
           >
-            <span>🤖 AI Project Co-Pilot</span>
+            <span>🤖 AI phân rã task</span>
           </button>
 
           {isOwner && (
@@ -96,36 +110,53 @@ export function SpaceHeader({
       <div className="flex items-center gap-1 border-b border-[#E5E7EB] font-mono text-xs font-bold uppercase tracking-wider text-[#6B7280]">
         <button
           onClick={() => setActiveTab("overview")}
-          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
-            activeTab === "overview"
-              ? "border-[#111827] text-[#111827]"
-              : "border-transparent hover:text-[#111827]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "overview"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
         >
           <History className="w-4 h-4" />
           Tổng quan
         </button>
         <button
           onClick={() => setActiveTab("tasks")}
-          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
-            activeTab === "tasks"
-              ? "border-[#111827] text-[#111827]"
-              : "border-transparent hover:text-[#111827]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "tasks"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
         >
           <ListTodo className="w-4 h-4" />
           Danh sách task
         </button>
         <button
           onClick={() => setActiveTab("kanban")}
-          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
-            activeTab === "kanban"
-              ? "border-[#111827] text-[#111827]"
-              : "border-transparent hover:text-[#111827]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "kanban"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
         >
           <KanbanSquare className="w-4 h-4" />
           Bảng kanban
+        </button>
+        <button
+          onClick={() => setActiveTab("timeline")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "timeline"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Lộ trình thời gian
+        </button>
+        <button
+          onClick={() => setActiveTab("members")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "members"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
+        >
+          <Users className="w-4 h-4" />
+          Thành viên Space
         </button>
       </div>
     </div>

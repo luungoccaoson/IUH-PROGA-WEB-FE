@@ -38,6 +38,11 @@ export function AiDecompositionContainer({
   const [isImported, setIsImported] = useState(false);
   const [membersList, setMembersList] = useState<string[]>([]);
 
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [targetDurationWeeks, setTargetDurationWeeks] = useState<number>(4);
+  const [selectedMemberRoles, setSelectedMemberRoles] = useState<any[]>([]);
+
   // Import State
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
@@ -94,6 +99,7 @@ export function AiDecompositionContainer({
     async function fetchMembers() {
       try {
         const members = await workspaceService.getWorkspaceMembers(workspaceId);
+        setWorkspaceMembers(members);
         const names = members.map((m: any) => m.fullName || m.email?.split("@")[0] || "Member");
         setMembersList(names);
       } catch (err) {
@@ -230,7 +236,12 @@ ${text.trim()}`;
         }
       }
 
-      const data = await aiService.decomposeRequirements(contextSpaceId, finalPromptText, activeThreadId);
+
+      const data = await aiService.decomposeRequirements(
+        contextSpaceId,
+        finalPromptText,
+        activeThreadId
+      );
       setResult(data.tasks && data.tasks.length > 0 ? data : null);
       setActiveThreadId(data.threadId);
 
@@ -275,6 +286,7 @@ ${text.trim()}`;
           name: spaceNameToUse,
         });
         setCreatedSpaceId(newSpace.id);
+        setSelectedSpaceId(newSpace.id);
 
         // Dispatch real-time event for sidebar update (no page reload!)
         if (typeof window !== "undefined") {
@@ -375,6 +387,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
 
       setImportSuccess(true);
       setIsImported(true);
+      setTargetMode("EXISTING_SPACE");
+      setNewSpaceName(""); // Xóa trạng thái của tab "Tạo dự án mới" để tab đó sạch sẽ cho lần khởi tạo sau
+      if (selectedSpaceId) {
+        loadSpaceThreads(); // Tải lại danh sách phiên chat thuộc về Space vừa tạo ở tab "Chọn dự án space có sẵn"
+      }
     } catch (err: any) {
       console.error("Error importing tasks:", err);
       alert("Không thể tự động nạp Task vào Space. Vui lòng thử lại.");
@@ -387,7 +404,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   const handleUpdateTasks = (updatedTasks: DecomposedTaskItem[]) => {
     if (!result) return;
     setResult({ ...result, tasks: updatedTasks });
-    setIsImported(false); // Enable Import button again when tasks are edited!
+    if (!importSuccess) {
+      setIsImported(false);
+    }
   };
 
   // Handle New Session

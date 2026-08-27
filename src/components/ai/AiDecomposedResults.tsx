@@ -192,7 +192,7 @@ export function AiDecomposedResults({
             Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
-          
+
           {result.sourceReference && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
@@ -232,13 +232,12 @@ export function AiDecomposedResults({
           <button
             onClick={onImportTasks}
             disabled={importing || importSuccess || isImported || result.tasks.length === 0}
-            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${
-              importSuccess || isImported
+            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
                 ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
                 : targetMode === "NEW_SPACE"
-                ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
-                : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
-            }`}
+                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+              }`}
           >
             {importing ? (
               <>
@@ -310,8 +309,8 @@ export function AiDecomposedResults({
               const badgeStyle = isActive
                 ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
                 : isClosed
-                ? "bg-gray-800/80 text-gray-400 border-gray-700"
-                : "bg-blue-500/20 text-blue-300 border-blue-500/40";
+                  ? "bg-gray-800/80 text-gray-400 border-gray-700"
+                  : "bg-blue-500/20 text-blue-300 border-blue-500/40";
 
               const statusText = isActive ? "Đang chạy" : isClosed ? "Đã hoàn thành" : "Sắp tới";
 
@@ -359,11 +358,10 @@ export function AiDecomposedResults({
                   handleMoveSprint(taskIdx, sprintName);
                 }
               }}
-              className={`bg-white border rounded-2xl p-4 space-y-3 shadow-2xs transition-all ${
-                isDragOver
+              className={`bg-white border rounded-2xl p-4 space-y-3 shadow-2xs transition-all ${isDragOver
                   ? "border-[#1A73E8] bg-[#F0F7FF] ring-2 ring-[#1A73E8]/30"
                   : "border-[#E5E7EB]"
-              }`}
+                }`}
             >
               {/* Sprint Group Title Header */}
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
@@ -454,7 +452,7 @@ export function AiDecomposedResults({
                         </div>
 
                         {/* Member Assignee Selector */}
-                        <div className="ml-6 flex items-center gap-1.5 text-xs text-[#374151] bg-[#F9FAFB] p-1.5 rounded-xl border border-[#E5E7EB]">
+                        {/* <div className="ml-6 flex items-center gap-1.5 text-xs text-[#374151] bg-[#F9FAFB] p-1.5 rounded-xl border border-[#E5E7EB]">
                           <span className="font-bold font-mono text-[10px] text-[#6B7280] shrink-0">Phân công:</span>
                           <select
                             value={task.suggestedMemberName || ""}
@@ -484,7 +482,7 @@ export function AiDecomposedResults({
                               </>
                             )}
                           </select>
-                        </div>
+                        </div> */}
 
                         {/* Risk Warning Box (ONLY for URGENT/HIGH or explicit risk) */}
                         {(task.priority === "URGENT" || task.riskWarning) && (

@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 interface TaskDetailDrawerProps {
   task: Task | null;
   isClosedSprint?: boolean;
+  members?: any[];
   onClose: () => void;
   onUpdate: (
     taskId: number,
@@ -24,13 +25,13 @@ interface TaskDetailDrawerProps {
   onDelete: (taskId: number) => Promise<any>;
 }
 
-const PROJECT_MEMBERS = [
-  { id: 2, name: "Son Luu (PM)", role: "PM" },
-  { id: 4, name: "Duy Dev (Developer)", role: "Developer" },
-  { id: 5, name: "Hoa Tester (QA)", role: "QA" },
+const DEFAULT_MEMBERS = [
+  { id: 2, name: "Son Luu" },
+  { id: 4, name: "Duy Dev" },
+  { id: 5, name: "Hoa Tester" },
 ];
 
-export function TaskDetailDrawer({ task, isClosedSprint = false, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -95,8 +96,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, onClose, onUpda
 
   return (
     <>
-      {/* Non-blocking Side-by-side Layout Panel (No dark overlay backdrop!) */}
-      <div className="fixed right-0 top-0 bottom-0 z-40 w-[350px] max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
+      <div className="fixed right-0 top-0 bottom-0 z-40 w-[400px] max-w-full bg-white shadow-xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
         {/* Header bar */}
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2">
@@ -197,11 +197,21 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, onClose, onUpda
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="">-- Chưa gán người thực hiện --</option>
-                {PROJECT_MEMBERS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
+                {members && members.length > 0
+                  ? members.map((m) => {
+                    const uId = m.id?.userId || m.userId || m.id;
+                    const uName = m.user?.fullName || m.user?.email || m.fullName || m.name || `Thành viên #${uId}`;
+                    return (
+                      <option key={uId} value={uId}>
+                        {uName}
+                      </option>
+                    );
+                  })
+                  : DEFAULT_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
