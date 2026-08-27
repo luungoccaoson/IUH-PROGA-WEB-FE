@@ -167,22 +167,39 @@ export function SpaceTimelineTab({
 
   // Position calculation for 52 Real Calendar Weeks (Monday -> Sunday)
   const calculateRealWeekPosition = (task: Task, sprintObj?: Sprint) => {
-    let dateStr = task.startDate || task.createdAt || sprintObj?.startDate;
+    let dateStr = task.startDate || sprintObj?.startDate || task.createdAt;
     if (!dateStr) return null;
 
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return null;
+
+    let endDateObj: Date;
+    let durationDays: number;
+
+    if (task.dueDate) {
+      const dueD = new Date(task.dueDate);
+      if (!isNaN(dueD.getTime()) && dueD >= d) {
+        endDateObj = dueD;
+        const diffMs = dueD.getTime() - d.getTime();
+        durationDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+        if (durationDays === 0) durationDays = 1;
+      } else {
+        durationDays = task.estimatedDays || 3;
+        endDateObj = new Date(d.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      durationDays = task.estimatedDays || 3;
+      endDateObj = new Date(d.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+    }
 
     const diffMs = d.getTime() - yearStartMonday.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     const dayColWidth = 30; // 30px per day, 210px per 7-day week
     const leftPx = Math.max(0, diffDays * dayColWidth);
-    const durationDays = task.estimatedDays || 7;
-    const barWidthPx = Math.max(70, durationDays * dayColWidth);
+    const barWidthPx = Math.max(35, durationDays * dayColWidth);
 
     const startDateFormatted = d.toLocaleDateString("vi-VN");
-    const endDateObj = new Date(d.getTime() + durationDays * 24 * 60 * 60 * 1000);
     const endDateFormatted = endDateObj.toLocaleDateString("vi-VN");
 
     return { leftPx, barWidthPx, startDateFormatted, endDateFormatted, durationDays };
@@ -205,22 +222,39 @@ export function SpaceTimelineTab({
   ];
 
   const calculateMonthPosition = (task: Task, sprintObj?: Sprint) => {
-    let dateStr = task.startDate || task.createdAt || sprintObj?.startDate;
+    let dateStr = task.startDate || sprintObj?.startDate || task.createdAt;
     if (!dateStr) return null;
 
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return null;
+
+    let endDateObj: Date;
+    let durationDays: number;
+
+    if (task.dueDate) {
+      const dueD = new Date(task.dueDate);
+      if (!isNaN(dueD.getTime()) && dueD >= d) {
+        endDateObj = dueD;
+        const diffMs = dueD.getTime() - d.getTime();
+        durationDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+        if (durationDays === 0) durationDays = 1;
+      } else {
+        durationDays = task.estimatedDays || 3;
+        endDateObj = new Date(d.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      durationDays = task.estimatedDays || 3;
+      endDateObj = new Date(d.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+    }
 
     const monthIndex = d.getMonth();
     const day = d.getDate();
 
     const colWidth = 200;
     const leftPx = monthIndex * colWidth + Math.round(((day - 1) / 31) * colWidth);
-    const durationDays = task.estimatedDays || 7;
-    const barWidthPx = Math.max(100, Math.min(300, durationDays * 14));
+    const barWidthPx = Math.max(40, Math.min(300, durationDays * 14));
 
     const startDateFormatted = d.toLocaleDateString("vi-VN");
-    const endDateObj = new Date(d.getTime() + durationDays * 24 * 60 * 60 * 1000);
     const endDateFormatted = endDateObj.toLocaleDateString("vi-VN");
 
     return { leftPx, barWidthPx, startDateFormatted, endDateFormatted, durationDays };
