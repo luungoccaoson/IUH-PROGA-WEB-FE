@@ -6,10 +6,11 @@ import { Task } from "@/types";
 
 interface SpaceOverviewTabProps {
   tasks: Task[];
+  members?: any[];
   onViewTasks: () => void;
 }
 
-export function SpaceOverviewTab({ tasks, onViewTasks }: SpaceOverviewTabProps) {
+export function SpaceOverviewTab({ tasks, members = [], onViewTasks }: SpaceOverviewTabProps) {
   // Counts by status
   const todoCount = tasks.filter((t) => t.status === "TODO").length;
   const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS").length;
@@ -26,18 +27,33 @@ export function SpaceOverviewTab({ tasks, onViewTasks }: SpaceOverviewTabProps) 
   const mediumCount = tasks.filter((t) => t.priority === "MEDIUM").length;
   const lowCount = tasks.filter((t) => t.priority === "LOW").length;
 
-  // Calculate Member Workload Distribution
+  // Calculate Member Workload Distribution dynamically based on real members and tasks
   const memberWorkloadMap: Record<string, number> = {};
   tasks.forEach((t) => {
     const memberName = t.assignee?.fullName || t.assignee?.email || t.suggestedMemberName || "Chưa phân công";
     memberWorkloadMap[memberName] = (memberWorkloadMap[memberName] || 0) + 1;
   });
 
-  const memberWorkloadList = Object.entries(memberWorkloadMap).map(([name, count]) => ({
-    name,
-    count,
-    percent: Math.round((count / totalCount) * 100),
-  }));
+  const memberWorkloadList = (members && members.length > 0)
+    ? members.map((m) => {
+        const uId = m.id?.userId || m.userId || m.id;
+        const uName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${uId}`;
+        const count = tasks.filter((t) => t.ownerId === uId || t.assignee?.id === uId || t.ownerName === uName).length;
+        return {
+          id: uId,
+          name: uName,
+          avatarUrl: m.avatarUrl || m.user?.avatarUrl,
+          count,
+          percent: Math.round((count / totalCount) * 100),
+        };
+      })
+    : Object.entries(memberWorkloadMap).map(([name, count]) => ({
+        id: name,
+        name,
+        avatarUrl: undefined,
+        count,
+        percent: Math.round((count / totalCount) * 100),
+      }));
 
   // Types of work (Task, Subtask, AI Generated)
   const taskTypeCount = Math.round(totalCount * 0.7);
@@ -339,27 +355,43 @@ export function SpaceOverviewTab({ tasks, onViewTasks }: SpaceOverviewTabProps) 
         </div>
 
         <div className="space-y-4 pt-1">
-          {memberWorkloadList.map((item) => (
-            <div key={item.name} className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-[#111827] flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[10px] flex items-center justify-center">
-                    {item.name.substring(0, 2).toUpperCase()}
-                  </div>
-                  {item.name}
-                </span>
-                <span className="font-mono text-[#6B7280]">
-                  {item.count} tasks ({item.percent}%)
-                </span>
+          {memberWorkloadList.map((item, idx) => {
+            const colorClass = [
+              "bg-[#1A73E8]",
+              "bg-[#10B981]",
+              "bg-[#F59E0B]",
+              "bg-[#8B5CF6]",
+              "bg-[#06B6D4]",
+              "bg-[#EC4899]",
+            ][idx % 6];
+
+            const getInitials = (text?: string) => {
+              if (!text) return "U";
+              return text.trim().substring(0, 2).toUpperCase();
+            };
+
+            return (
+              <div key={item.name} className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-[#111827] flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[10px] flex items-center justify-center border border-[#D2E3FC]">
+                      {getInitials(item.name)}
+                    </div>
+                    {item.name}
+                  </span>
+                  <span className="font-mono text-[#6B7280]">
+                    {item.count} tasks ({item.percent}%)
+                  </span>
+                </div>
+                <div className="w-full bg-[#E5E7EB] h-3 rounded-full overflow-hidden">
+                  <div
+                    className={`${colorClass} h-full transition-all duration-500 rounded-full`}
+                    style={{ width: `${item.percent}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-[#E5E7EB] h-3 rounded-full overflow-hidden">
-                <div
-                  className="bg-[#6B7280] h-full transition-all duration-500"
-                  style={{ width: `${item.percent}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

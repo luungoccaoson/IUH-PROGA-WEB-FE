@@ -12,7 +12,7 @@ export interface Task {
   priority: TaskPriority;
   ownerId?: number;
   ownerName?: string;
-  assignee?: { fullName?: string; email?: string };
+  assignee?: { id?: number; fullName?: string; email?: string };
   assignedRole?: string;
   suggestedMemberName?: string;
   riskWarning?: string;

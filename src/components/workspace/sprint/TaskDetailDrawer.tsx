@@ -96,8 +96,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
 
   return (
     <>
-      {/* Non-blocking Side-by-side Layout Panel (No dark overlay backdrop!) */}
-      <div className="fixed right-0 top-0 bottom-0 z-40 w-[350px] max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
+      <div className="fixed right-0 top-0 bottom-0 z-40 w-[400px] max-w-full bg-white shadow-xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
         {/* Header bar */}
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2">
@@ -200,19 +199,19 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
                 <option value="">-- Chưa gán người thực hiện --</option>
                 {members && members.length > 0
                   ? members.map((m) => {
-                      const uId = m.id?.userId || m.userId || m.id;
-                      const uName = m.user?.fullName || m.user?.email || m.fullName || m.name || `Thành viên #${uId}`;
-                      return (
-                        <option key={uId} value={uId}>
-                          {uName}
-                        </option>
-                      );
-                    })
-                  : DEFAULT_MEMBERS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
+                    const uId = m.id?.userId || m.userId || m.id;
+                    const uName = m.user?.fullName || m.user?.email || m.fullName || m.name || `Thành viên #${uId}`;
+                    return (
+                      <option key={uId} value={uId}>
+                        {uName}
                       </option>
-                    ))}
+                    );
+                  })
+                  : DEFAULT_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

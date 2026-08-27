@@ -117,7 +117,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
   return (
     <>
-      <div className={`space-y-6 font-sans transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[315px]" : "mr-0"}`}>
+      <div className="space-y-6 font-sans">
         {/* Top Controls & Sprint Selector Bar */}
         <div className="bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -226,7 +226,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                           e.dataTransfer.setData("taskId", task.id.toString());
                           e.dataTransfer.setData("sourceStatus", task.status);
                         }}
-                        onClick={() => setSelectedTask(task)}
+                        onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)}
                         className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
                           }`}
                       >

@@ -2,10 +2,10 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare, UserPlus } from "lucide-react";
+import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare, UserPlus, Users } from "lucide-react";
 import { Space, Workspace } from "@/types";
 
-export type TabType = "overview" | "tasks" | "kanban" | "timeline";
+export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members";
 
 interface SpaceHeaderProps {
   workspaceId: number;
@@ -71,11 +71,12 @@ export function SpaceHeader({
         </div>
 
         <div className="flex items-center gap-2">
+
           {/* Add Space Member Button */}
           {onOpenAddMember && (
             <button
               onClick={onOpenAddMember}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#111827] transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-[#111827] transition-colors shadow-2xs cursor-pointer"
             >
               <UserPlus className="w-4 h-4 text-[#1A73E8]" />
               <span>Thêm thành viên</span>
@@ -146,6 +147,16 @@ export function SpaceHeader({
         >
           <Calendar className="w-4 h-4" />
           Lộ trình thời gian
+        </button>
+        <button
+          onClick={() => setActiveTab("members")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${activeTab === "members"
+            ? "border-[#111827] text-[#111827]"
+            : "border-transparent hover:text-[#111827]"
+            }`}
+        >
+          <Users className="w-4 h-4" />
+          Thành viên Space
         </button>
       </div>
     </div>

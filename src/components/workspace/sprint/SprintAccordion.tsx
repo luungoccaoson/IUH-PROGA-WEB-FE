@@ -10,6 +10,7 @@ interface SprintAccordionProps {
   sprint: Sprint;
   tasks: Task[];
   allSpaceTasks?: Task[];
+  members?: any[];
   isTaskOverdue: (task: Task) => boolean;
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
@@ -32,6 +33,7 @@ export function SprintAccordion({
   sprint,
   tasks,
   allSpaceTasks,
+  members = [],
   isTaskOverdue,
   onEdit,
   onDelete,
@@ -140,6 +142,7 @@ export function SprintAccordion({
                     key={task.id}
                     task={task}
                     taskIndex={globalIdx !== -1 ? globalIdx : taskIdx}
+                    members={members}
                     isOverdue={isTaskOverdue(task)}
                     isClosedSprint={isClosed}
                     onSelect={onSelectTask}

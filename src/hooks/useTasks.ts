@@ -13,6 +13,10 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  const handleSelectTask = useCallback((task: Task) => {
+    setSelectedTask((prev) => (prev?.id === task.id ? null : task));
+  }, []);
+
   useEffect(() => {
     if (!spaceId) return;
     const unsubscribe = taskWebSocketService.connect(spaceId, () => {
@@ -146,6 +150,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
   return {
     selectedTask,
     setSelectedTask,
+    handleSelectTask,
     loading,
     createTask,
     updateTask,

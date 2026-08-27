@@ -336,7 +336,17 @@ export function SpaceTimelineTab({
                       {/* Tasks under this Sprint (Hidden until expanded) */}
                       {isExpanded &&
                         sTasks.map((t, idx) => {
-                          const assigneeName = t.assignee?.fullName || t.assignee?.email || t.suggestedMemberName || "Chưa gán";
+                          const assignedMember = members.find((m) => {
+                            const mId = m.id?.userId || m.userId || m.id;
+                            return mId === t.ownerId || mId === t.assignee?.id;
+                          });
+
+                          const assigneeName = assignedMember
+                            ? (assignedMember.user?.fullName || assignedMember.user?.email || assignedMember.fullName || assignedMember.email)
+                            : t.ownerName || t.assignee?.fullName || t.suggestedMemberName || "Chưa gán";
+
+                          const assigneeAvatar = assignedMember?.avatarUrl || assignedMember?.user?.avatarUrl;
+                          const initials = assigneeName.trim().substring(0, 2).toUpperCase();
                           const seqNum = (t.id ? taskSeqMap.get(t.id) : null) || idx + 1;
                           const taskKey = `Task-${seqNum}`;
                           const isDone = t.status === "DONE";
@@ -365,10 +375,16 @@ export function SpaceTimelineTab({
                               <div className="flex items-center gap-3 shrink-0">
                                 {renderStatusBadge(t.status)}
 
-                                <div className="w-24 flex items-center gap-1.5 text-[11px] text-[#374151] truncate">
-                                  <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
-                                    {assigneeName.substring(0, 2).toUpperCase()}
-                                  </div>
+                                <div className="w-28 flex items-center gap-1.5 text-[11px] text-[#374151] truncate">
+                                  {assigneeName !== "Chưa gán" ? (
+                                    <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
+                                      {initials}
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-gray-100 text-gray-400 font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-gray-200">
+                                      ?
+                                    </div>
+                                  )}
                                   <span className="truncate font-medium">{assigneeName}</span>
                                 </div>
                               </div>
