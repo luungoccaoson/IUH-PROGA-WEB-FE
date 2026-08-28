@@ -50,7 +50,7 @@ export default function WorkspaceDashboardPage() {
       const wsData = await workspaceService.getWorkspaceById(workspaceId);
       setWorkspace(wsData);
 
-      const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId);
+      const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId, currentUser?.id);
       setSpaces(spacesList);
 
       try {
