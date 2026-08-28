@@ -53,22 +53,24 @@ export default function SpaceDetailPage() {
       setLoading(true);
       setError("");
 
-      const [wsData, spacesList, taskList, sprintList, memberList] = await Promise.all([
+      const [wsData, spaceData, taskList, sprintList, memberList] = await Promise.all([
         workspaceService.getWorkspaceById(workspaceId),
-        workspaceService.getSpacesByWorkspace(workspaceId),
-        workspaceService.getTasksBySpace(spaceId),
+        workspaceService.getSpaceById(spaceId).catch(async () => {
+          const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId, currentUser?.id);
+          return spacesList.find((s) => s.id === spaceId) || null;
+        }),
+        workspaceService.getTasksBySpace(spaceId).catch(() => []),
         sprintService.getSprintsBySpace(spaceId).catch(() => []),
         workspaceService.getSpaceMembers(spaceId).catch(() => []),
       ]);
 
       setWorkspace(wsData);
-      const activeSpace = spacesList.find((s) => s.id === spaceId);
 
-      if (!activeSpace) {
+      if (!spaceData) {
         setError("Không tìm thấy thông tin Space.");
         return;
       }
-      setSpace(activeSpace);
+      setSpace(spaceData);
       setTasks(taskList || []);
       setSprints(sprintList || []);
 

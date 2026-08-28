@@ -39,7 +39,7 @@ export default function DashboardLayout({
   const loadSpaces = async () => {
     if (isNumberId && activeWorkspaceId) {
       try {
-        const data = await workspaceService.getSpacesByWorkspace(parseInt(activeWorkspaceId, 10));
+        const data = await workspaceService.getSpacesByWorkspace(parseInt(activeWorkspaceId, 10), user?.id);
         setSpaces(data);
       } catch (err) {
         console.error("Error loading spaces for sidebar:", err);

@@ -50,8 +50,14 @@ export const workspaceService = {
   },
 
   // Spaces
-  getSpacesByWorkspace: async (workspaceId: number): Promise<Space[]> => {
-    const response = await apiClient.get<ApiResponse<Space[]>>(`/spaces/workspace/${workspaceId}`);
+  getSpaceById: async (id: number): Promise<Space> => {
+    const response = await apiClient.get<ApiResponse<Space>>(`/spaces/${id}`);
+    return response.data.data;
+  },
+
+  getSpacesByWorkspace: async (workspaceId: number, userId?: number): Promise<Space[]> => {
+    const url = userId ? `/spaces/workspace/${workspaceId}?userId=${userId}` : `/spaces/workspace/${workspaceId}`;
+    const response = await apiClient.get<ApiResponse<Space[]>>(url);
     return response.data.data;
   },
 
