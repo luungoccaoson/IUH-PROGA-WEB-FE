@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { LayoutGrid, Sparkles, LogOut, Folder, Compass, HelpCircle } from "lucide-react";
+import { LayoutGrid, Sparkles, LogOut, Folder, Compass, HelpCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { usePathname } from "next/navigation";
 import { workspaceService } from "@/services/workspace.service";
@@ -16,7 +16,8 @@ export default function DashboardLayout({
   const { user, logout, loadAuthFromStorage } = useAuthStore();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   // Active workspace state
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -38,7 +39,7 @@ export default function DashboardLayout({
   const loadSpaces = async () => {
     if (isNumberId && activeWorkspaceId) {
       try {
-        const data = await workspaceService.getSpacesByWorkspace(parseInt(activeWorkspaceId, 10));
+        const data = await workspaceService.getSpacesByWorkspace(parseInt(activeWorkspaceId, 10), user?.id);
         setSpaces(data);
       } catch (err) {
         console.error("Error loading spaces for sidebar:", err);
@@ -191,17 +192,28 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
       {/* Left Sidebar - Warm Beige #F6F5EF */}
-      <aside className="w-64 border-r border-[#E5E7EB] bg-[#F6F5EF] flex flex-col justify-between p-5 hidden md:flex shrink-0">
+      <aside className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${isSidebarCollapsed ? "hidden" : "w-64 p-5 flex flex-col justify-between hidden md:flex"
+        }`}>
         <div className="space-y-6">
-          {/* Logo & Brand */}
-          <Link href="/" className="flex items-center gap-2.5 px-2">
-            <div className="w-9 h-9 rounded-xl bg-white border border-[#E5E7EB] flex items-center justify-center shadow-sm">
-              <Sparkles className="w-5 h-5 text-[#111827]" />
-            </div>
-            <span className="font-extrabold text-xl tracking-wider text-[#111827] font-sans">
-              PROGA
-            </span>
-          </Link>
+          {/* Logo & Brand & Toggle Button */}
+          <div className="flex items-center justify-between px-1">
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-[#E5E7EB] flex items-center justify-center shadow-sm shrink-0">
+                <Sparkles className="w-5 h-5 text-[#111827]" />
+              </div>
+              <span className="font-extrabold text-xl tracking-wider text-[#111827] font-sans">
+                PROGA
+              </span>
+            </Link>
+
+            <button
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="p-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-gray-100 text-[#4B5563] transition-all shadow-2xs cursor-pointer"
+              title="Ẩn Sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4 text-[#111827]" />
+            </button>
+          </div>
 
           {/* SIDEBAR NAVIGATION STRUCTURE */}
           {isNumberId && activeWorkspace ? (
@@ -218,34 +230,32 @@ export default function DashboardLayout({
               {/* 1. Navigation */}
               <div className="space-y-2">
                 <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-[#6B7280] truncate">
-                  🎯 WS: {activeWorkspace.name}
+                  WS: {activeWorkspace.name}
                 </p>
 
                 <nav className="space-y-1 font-sans">
                   {/* Dashboard */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                      pathname === `/workspaces/${activeWorkspaceId}`
-                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}`
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                      }`}
                   >
                     <LayoutGrid className="w-5 h-5 text-[#111827]" />
                     <span>Dashboard</span>
                   </Link>
 
-                  {/* Phân tích AI */}
+                  {/* AI Khởi Tạo Space */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}/ai-analysis`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                      pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
-                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                      }`}
                   >
                     <Sparkles className="w-5 h-5 text-[#137333]" />
-                    <span>Phân tích AI</span>
+                    <span>AI Khởi Tạo Space</span>
                   </Link>
                 </nav>
               </div>
@@ -293,11 +303,10 @@ export default function DashboardLayout({
                       <Link
                         key={space.id}
                         href={`/workspaces/${activeWorkspaceId}/spaces/${space.id}`}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-                          isActive
-                            ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
-                            : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                        }`}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${isActive
+                          ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
+                          : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                          }`}
                       >
                         <div className={`w-5 h-5 rounded-lg ${color.bg} flex items-center justify-center ${color.text} font-mono font-bold text-[10px]`}>
                           {initials}
@@ -334,11 +343,10 @@ export default function DashboardLayout({
               <nav className="space-y-1 font-sans">
                 <Link
                   href="/workspaces"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                    pathname === "/workspaces"
-                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === "/workspaces"
+                    ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                    : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
                 >
                   <LayoutGrid className="w-5 h-5 text-[#111827]" />
                   <span>Danh sách Workspaces</span>
@@ -380,7 +388,18 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main Dashboard Workspace Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Floating Sidebar Restore Button when Collapsed */}
+        {isSidebarCollapsed && (
+          <button
+            onClick={() => setIsSidebarCollapsed(false)}
+            className="fixed top-4 left-4 z-40 flex items-center gap-2 px-3.5 py-2 bg-[#111827] text-white hover:bg-black rounded-xl shadow-lg border border-gray-700 text-xs font-bold transition-all cursor-pointer animate-in zoom-in-95"
+            title="Mở thanh Sidebar Menu"
+          >
+            <PanelLeftOpen className="w-4 h-4 text-[#10B981]" />
+            <span>Mở Menu Sidebar</span>
+          </button>
+        )}
         <main className="flex-1 p-6 md:p-10 overflow-y-auto">{children}</main>
       </div>
       {/* Create Space Modal */}

@@ -63,6 +63,15 @@ export function useSprints(spaceId: number) {
 
   useEffect(() => {
     loadData();
+
+    const handleReload = () => {
+      loadData(true);
+    };
+
+    window.addEventListener("space_tasks_updated", handleReload);
+    return () => {
+      window.removeEventListener("space_tasks_updated", handleReload);
+    };
   }, [loadData]);
 
   // Compute next default sprint name e.g. Sprint 1, Sprint 2, Sprint 3...

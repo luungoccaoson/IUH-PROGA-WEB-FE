@@ -1,15 +1,14 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Bot } from "lucide-react";
-import { aiService, TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
+import { aiService, TaskDecompositionResponse, DecomposedTaskItem, AiThreadResponse, AiChatMessageResponse } from "@/services/ai.service";
 import { taskService } from "@/services/task.service";
 import { sprintService } from "@/services/sprint.service";
 import { workspaceService } from "@/services/workspace.service";
 import { Space, Sprint } from "@/types";
 import { AiHeaderBanner, TargetMode } from "./AiHeaderBanner";
-import { AiRequirementInput } from "./AiRequirementInput";
 import { AiDecomposedResults } from "./AiDecomposedResults";
+import { AiChatSidebarSessions, ChatSessionItem } from "./AiChatSidebarSessions";
+import { AiChatWindow } from "./AiChatWindow";
 
 interface AiDecompositionContainerProps {
   workspaceId: number;
@@ -20,7 +19,7 @@ export function AiDecompositionContainer({
   workspaceId,
   spaces,
 }: AiDecompositionContainerProps) {
-  const [targetMode, setTargetMode] = useState<TargetMode>("EXISTING_SPACE");
+  const [targetMode, setTargetMode] = useState<TargetMode>("NEW_SPACE");
   const [selectedSpaceId, setSelectedSpaceId] = useState<number | null>(
     spaces.length > 0 ? spaces[0].id : null
   );
@@ -32,20 +31,171 @@ export function AiDecompositionContainer({
   const [error, setError] = useState("");
   const [result, setResult] = useState<TaskDecompositionResponse | null>(null);
 
+  // ChatGPT-style Chat Sessions & Messages State
+  const [sessions, setSessions] = useState<ChatSessionItem[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
+  const [isImported, setIsImported] = useState(false);
+  const [membersList, setMembersList] = useState<string[]>([]);
+
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [targetDurationWeeks, setTargetDurationWeeks] = useState<number>(4);
+  const [selectedMemberRoles, setSelectedMemberRoles] = useState<any[]>([]);
+
   // Import State
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [restoredSessionBanner, setRestoredSessionBanner] = useState(false);
+
+  const STORAGE_KEY = `proga_ai_session_${workspaceId}`;
+
+  // Restore session & results from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+        if (parsed.result) {
+          setResult(parsed.result);
+        }
+        if (parsed.activeThreadId) {
+          setActiveThreadId(parsed.activeThreadId);
+        }
+        if (parsed.newSpaceName) {
+          setNewSpaceName(parsed.newSpaceName);
+        }
+        setRestoredSessionBanner(true);
+      }
+    } catch (e) {
+      console.warn("Could not restore AI session from localStorage:", e);
+    }
+  }, [workspaceId]);
+
+  // Persist session to localStorage on change
+  useEffect(() => {
+    try {
+      if (messages.length > 0 || result) {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            messages,
+            result,
+            activeThreadId,
+            newSpaceName,
+          })
+        );
+      }
+    } catch (e) {
+      console.warn("Could not save AI session to localStorage:", e);
+    }
+  }, [messages, result, activeThreadId, newSpaceName, workspaceId]);
+
+  // Load workspace members for Task Assignment Dropdown
+  useEffect(() => {
+    async function fetchMembers() {
+      try {
+        const members = await workspaceService.getWorkspaceMembers(workspaceId);
+        setWorkspaceMembers(members);
+        const names = members.map((m: any) => m.fullName || m.email?.split("@")[0] || "Member");
+        setMembersList(names);
+      } catch (err) {
+        console.warn("Could not load workspace members, fallback to default roles:", err);
+      }
+    }
+    fetchMembers();
+  }, [workspaceId]);
+
+  // Load Chat Thread Sessions from Backend for selected Space
+  const loadSpaceThreads = async () => {
+    if (!selectedSpaceId) return;
+    try {
+      const threads = await aiService.getThreadsBySpace(selectedSpaceId);
+      const requirementThreads = threads.filter((t) => t.agentType === "REQUIREMENT");
+
+      const sessionItems: ChatSessionItem[] = [];
+
+      for (const th of requirementThreads) {
+        const threadMsgs = await aiService.getThreadMessages(th.id);
+        const userMsg = threadMsgs.find((m) => m.senderType === "USER");
+        const assistantMsgWithPayload = [...threadMsgs].reverse().find(
+          (m) => m.senderType === "ASSISTANT" && m.jsonPayload && m.jsonPayload.trim().startsWith("[")
+        );
+
+        let taskCount = 0;
+        if (assistantMsgWithPayload?.jsonPayload) {
+          try {
+            const tasks = JSON.parse(assistantMsgWithPayload.jsonPayload);
+            taskCount = tasks.length;
+          } catch (e) { }
+        }
+
+        const rawTitle = userMsg ? userMsg.messageContent.replace("Phân rã yêu cầu bài toán:\n", "") : `Phiên chat #${th.id}`;
+        sessionItems.push({
+          thread: th,
+          title: rawTitle.length > 35 ? rawTitle.substring(0, 35) + "..." : rawTitle,
+          taskCount,
+          isImported: false,
+        });
+      }
+
+      setSessions(sessionItems);
+    } catch (err) {
+      console.warn("Could not load space threads:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadSpaceThreads();
+  }, [selectedSpaceId]);
+
+  // Load thread session details by thread ID
+  const loadThreadSessionDetails = async (threadId: number) => {
+    try {
+      setActiveThreadId(threadId);
+      setIsImported(false);
+      setImportSuccess(false);
+      const threadMsgs = await aiService.getThreadMessages(threadId);
+      setMessages(threadMsgs);
+
+      const assistantMsg = [...threadMsgs].reverse().find(
+        (m) => m.senderType === "ASSISTANT" && m.jsonPayload && m.jsonPayload.trim().startsWith("[")
+      );
+
+      if (assistantMsg?.jsonPayload) {
+        const parsedTasks = JSON.parse(assistantMsg.jsonPayload) as DecomposedTaskItem[];
+        setResult({
+          threadId: threadId,
+          summary: assistantMsg.messageContent,
+          sourceReference: "Kho tri thức RAG (Phục hồi từ phiên chat)",
+          tasks: parsedTasks,
+        });
+      } else {
+        setResult(null);
+      }
+    } catch (err) {
+      console.error("Error loading thread details:", err);
+    }
+  };
 
   const handleDecompose = async (textToSubmit?: string) => {
     const text = textToSubmit || requirementText;
     if (!text.trim()) return;
 
-    if (targetMode === "NEW_SPACE" && !newSpaceName.trim()) {
-      setError("Vui lòng nhập tên Dự Án (Space) Mới cần khởi tạo.");
-      return;
-    }
-
     const contextSpaceId = selectedSpaceId || (spaces.length > 0 ? spaces[0].id : 1);
+
+    // Optimistic UI: Append user message bubble immediately into chat feed!
+    const userMsgOptimistic: AiChatMessageResponse = {
+      id: Date.now(),
+      threadId: activeThreadId || 0,
+      senderType: "USER",
+      messageContent: text.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsgOptimistic]);
 
     try {
       setLoading(true);
@@ -69,7 +219,7 @@ export function AiDecompositionContainer({
           const sprintSummary =
             existingSprints.length > 0
               ? existingSprints.map((s) => `- ${s.name} [Trạng thái: ${s.status}]`).join("\n")
-              : "Sprint 1: ACTIVE";
+              : "Sprint 0: Kickoff & Setup";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
 - Dự án đang thực hiện: ${selectedSpaceObj?.name || "Space"}
@@ -79,26 +229,44 @@ ${sprintSummary}
 ${taskSummary}
 
 [YÊU CẦU BÓC TÁCH VÀ MỞ RỘNG CÁC HẠNG MỤC CÔNG VIỆC TIẾP THEO]
-Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách từ 10 - 25 Task tiếp theo cho bài toán sau:
+Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách các Task mở rộng tiếp theo cho bài toán sau:
 ${text.trim()}`;
         } catch (ctxErr) {
           console.warn("Could not load existing space context for AI, proceeding with text only:", ctxErr);
         }
       }
 
-      const data = await aiService.decomposeRequirements(contextSpaceId, finalPromptText);
-      setResult(data);
+
+      const data = await aiService.decomposeRequirements(
+        contextSpaceId,
+        finalPromptText,
+        activeThreadId
+      );
+      setResult(data.tasks && data.tasks.length > 0 ? data : null);
+      setActiveThreadId(data.threadId);
+
+      // Auto-suggest space name if user hasn't typed one
+      if (data.suggestedSpaceName && !newSpaceName.trim()) {
+        setNewSpaceName(data.suggestedSpaceName);
+      }
+
+      // Append Assistant Response bubble with JSON payload
+      const assistantMsgObj: AiChatMessageResponse = {
+        id: Date.now() + 1,
+        threadId: data.threadId,
+        senderType: "ASSISTANT",
+        messageContent: data.summary,
+        jsonPayload: JSON.stringify(data.tasks),
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMsgObj]);
+      loadSpaceThreads(); // Refresh sidebar sessions
     } catch (err: any) {
       console.error("Error decomposing requirements:", err);
       setError("Không thể phân rã bài toán. Vui lòng kiểm tra kết nối AI-Service.");
     } finally {
       setLoading(false);
     }
-  };
-
-  // Update tasks in state (CRUD / Move)
-  const handleUpdateTasks = (updatedTasks: DecomposedTaskItem[]) => {
-    setResult((prev) => (prev ? { ...prev, tasks: updatedTasks } : null));
   };
 
   // Handle auto-importing tasks (Existing Space or Brand New Space)
@@ -110,59 +278,51 @@ ${text.trim()}`;
       setImportSuccess(false);
 
       if (targetMode === "NEW_SPACE") {
-        if (!newSpaceName.trim()) {
-          alert("Vui lòng nhập tên Dự Án (Space) Mới.");
-          return;
-        }
+        const spaceNameToUse = newSpaceName.trim() || result.suggestedSpaceName || "Dự Án Mới AI";
 
-        // 1. Create a brand new Space in Workspace
+        // 1. Create a brand new Space in Workspace (creates default Sprint 0: Kickoff & Setup)
         const newSpace = await workspaceService.createSpace({
           workspaceId,
-          name: newSpaceName.trim(),
+          name: spaceNameToUse,
         });
         setCreatedSpaceId(newSpace.id);
+        setSelectedSpaceId(newSpace.id);
 
         // Dispatch real-time event for sidebar update (no page reload!)
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("space-created"));
         }
 
-        // 2. Automatically create 5 Sprints for the new Space
-        const createdSprints: Sprint[] = [];
-        const sprintTitles = [
-          "Sprint 1: Architecture Baseline & Core APIs",
-          "Sprint 2: Core Business Modules Implementation",
-          "Sprint 3: Integration & Advanced Services",
-          "Sprint 4: AI & Vector Database Features",
-          "Sprint 5: Testing, QA & Final Delivery",
-        ];
+        // 2. Extract dynamic unique Sprint names from AI result (e.g. Sprint 1, Sprint 2...)
+        const dynamicSprintMap: Record<string, Sprint> = {};
+        const uniqueSprintNames = Array.from(
+          new Set(result.tasks.map((t) => t.sprint || "Sprint 1"))
+        ).sort();
 
-        for (let i = 0; i < 5; i++) {
-          const sp = await sprintService.createSprint({
+        for (let i = 0; i < uniqueSprintNames.length; i++) {
+          const rawName = uniqueSprintNames[i];
+          const createdSprint = await sprintService.createSprint({
             spaceId: newSpace.id,
-            name: sprintTitles[i],
-            goal: `Mục tiêu cho ${sprintTitles[i]}`,
+            name: rawName.includes(":") ? rawName : `${rawName}: Phân Rã AI`,
+            goal: `Mục tiêu phát triển cho ${rawName}`,
             status: i === 0 ? "ACTIVE" : "FUTURE",
           });
-          createdSprints.push(sp);
+          dynamicSprintMap[rawName] = createdSprint;
         }
 
-        // 3. Populate tasks into new Space Sprints
+        // 3. Populate tasks into their matching AI Created Sprints
         for (const item of result.tasks) {
-          let sprintIndex = 0;
-          if (item.sprint) {
-            const match = item.sprint.match(/Sprint\s+(\d+)/i);
-            if (match) {
-              sprintIndex = Math.min(Math.max(parseInt(match[1], 10) - 1, 0), 4);
-            }
-          }
-          const targetSprint = createdSprints[sprintIndex] || createdSprints[0];
+          const rawSprint = item.sprint || uniqueSprintNames[0];
+          const targetSprint = dynamicSprintMap[rawSprint] || dynamicSprintMap[uniqueSprintNames[0]];
+
+          const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: newSpace.id,
-            sprintId: targetSprint.id,
+            sprintId: targetSprint ? targetSprint.id : undefined,
             title: item.title,
-            description: `[AI Decomposed] ${item.description}\nThứ tự Sprint gợi ý: ${item.sprint}`,
+            description: richDescription,
             priority: item.priority,
             status: "TODO",
           });
@@ -177,9 +337,14 @@ ${text.trim()}`;
         const existingSprints = await sprintService.getSprintsBySpace(selectedSpaceId);
         const sprintMap: Record<string, Sprint> = {};
 
-        // Map existing sprints (e.g., "Sprint 1", "Sprint 2")
-        existingSprints.forEach((sp, idx) => {
-          sprintMap[`Sprint ${idx + 1}`] = sp;
+        // Map existing sprints
+        existingSprints.forEach((sp) => {
+          const match = sp.name.match(/Sprint\s+\d+/i);
+          if (match) {
+            sprintMap[match[0]] = sp;
+          } else {
+            sprintMap[sp.name] = sp;
+          }
         });
 
         // For each decomposed task, put into matching existing Sprint or create new Sprint if needed
@@ -187,26 +352,33 @@ ${text.trim()}`;
           const rawSprintName = item.sprint || "Sprint 1";
           let targetSprint = sprintMap[rawSprintName];
 
-          // If matching sprint doesn't exist, create it for the space
-          if (!targetSprint) {
-            try {
-              targetSprint = await sprintService.createSprint({
-                spaceId: selectedSpaceId,
-                name: `${rawSprintName}: Advanced Scope Extension`,
-                goal: `Sprint mở rộng phát triển từ phân tích AI Agent`,
-                status: "FUTURE",
-              });
-              sprintMap[rawSprintName] = targetSprint;
-            } catch (spErr) {
-              targetSprint = existingSprints[0];
-            }
+          // If matching sprint doesn't exist, create it for the space dynamically
+          try {
+            const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
+            const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
+            const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
+
+            targetSprint = await sprintService.createSprint({
+              spaceId: selectedSpaceId,
+              name: cleanName,
+              goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
+              startDate: todayIso,
+              endDate: futureIso,
+              status: "FUTURE",
+            });
+            sprintMap[rawSprintName] = targetSprint;
+          } catch (spErr) {
+            console.error("Could not create sprint in AiDecompositionContainer:", spErr);
           }
+
+          const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: selectedSpaceId,
             sprintId: targetSprint ? targetSprint.id : undefined,
             title: item.title,
-            description: `[AI Decomposed] ${item.description}\nThứ tự Sprint gợi ý: ${item.sprint}`,
+            description: richDescription,
             priority: item.priority,
             status: "TODO",
           });
@@ -214,6 +386,12 @@ ${text.trim()}`;
       }
 
       setImportSuccess(true);
+      setIsImported(true);
+      setTargetMode("EXISTING_SPACE");
+      setNewSpaceName(""); // Xóa trạng thái của tab "Tạo dự án mới" để tab đó sạch sẽ cho lần khởi tạo sau
+      if (selectedSpaceId) {
+        loadSpaceThreads(); // Tải lại danh sách phiên chat thuộc về Space vừa tạo ở tab "Chọn dự án space có sẵn"
+      }
     } catch (err: any) {
       console.error("Error importing tasks:", err);
       alert("Không thể tự động nạp Task vào Space. Vui lòng thử lại.");
@@ -222,10 +400,57 @@ ${text.trim()}`;
     }
   };
 
+  // Update tasks in state (CRUD / Move / Edit)
+  const handleUpdateTasks = (updatedTasks: DecomposedTaskItem[]) => {
+    if (!result) return;
+    setResult({ ...result, tasks: updatedTasks });
+    if (!importSuccess) {
+      setIsImported(false);
+    }
+  };
+
+  // Handle New Session
+  const handleNewSession = () => {
+    setActiveThreadId(null);
+    setResult(null);
+    setMessages([]);
+    setRequirementText("");
+    setNewSpaceName("");
+    setIsImported(false);
+    setImportSuccess(false);
+    setRestoredSessionBanner(false);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) { }
+  };
+
   const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
 
   return (
     <div className="space-y-6">
+      {/* Restored Session Notification Banner */}
+      {restoredSessionBanner && (messages.length > 0 || result) && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900 animate-in fade-in duration-300">
+          <span className="font-semibold flex items-center gap-2">
+            <span>💾 Đã tự động khôi phục phiên đàm thoại & Bảng Task WBS từ bộ nhớ tạm.</span>
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleNewSession}
+              className="text-blue-800 hover:text-blue-950 font-bold underline cursor-pointer"
+            >
+              Tạo phiên mới
+            </button>
+            <button
+              onClick={() => setRestoredSessionBanner(false)}
+              className="text-blue-500 hover:text-blue-700 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header Banner & Target Mode Selection */}
       <AiHeaderBanner
         spaces={spaces}
@@ -239,46 +464,46 @@ ${text.trim()}`;
           setRequirementText(text);
           handleDecompose(text);
         }}
+        onNewChatSession={handleNewSession}
       />
 
-      {/* 2. Requirement Input Form */}
-      <AiRequirementInput
-        requirementText={requirementText}
-        setRequirementText={setRequirementText}
-        onSubmit={() => handleDecompose()}
-        loading={loading}
-        disabled={targetMode === "EXISTING_SPACE" && !selectedSpaceId}
-        error={error}
-      />
-
-      {/* 3. Loading Skeleton */}
-      {loading && (
-        <div className="bg-[#F9FAFB] border border-[#E5E7EB] p-8 rounded-2xl text-center space-y-4 animate-pulse">
-          <Bot className="w-10 h-10 text-[#1A73E8] mx-auto animate-bounce" />
-          <div className="space-y-2">
-            <h3 className="font-extrabold text-sm text-[#111827]">Đang truy vấn Kho tri thức Vector RAG & Phân tích hiện trạng dự án...</h3>
-            <p className="text-xs text-[#6B7280] font-mono">
-              Requirement Agent đang đọc ngữ cảnh bài toán và bóc tách danh sách task tiếp theo...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Decomposed Results View */}
-      {result && !loading && (
-        <AiDecomposedResults
-          result={result}
-          targetMode={targetMode}
-          selectedSpace={selectedSpace}
-          newSpaceName={newSpaceName}
-          workspaceId={workspaceId}
-          selectedSpaceId={selectedSpaceId}
-          createdSpaceId={createdSpaceId}
-          onImportTasks={handleImportTasks}
-          importing={importing}
-          importSuccess={importSuccess}
-          onUpdateTasks={handleUpdateTasks}
+      {/* 2. Interactive Text Chat Window */}
+      <div className="w-full space-y-6">
+        <AiChatWindow
+          messages={messages}
+          onSendMessage={(text: string) => handleDecompose(text)}
+          loading={loading}
         />
+      </div>
+
+      {/* 3. SEPARATE TASK BREAKDOWN CANVAS SECTION */}
+      {result && (
+        <div className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+              <span>📋 Bảng Kết Quả Phân Rã WBS Tasks Theo Sprint</span>
+            </h3>
+            <span className="text-xs text-[#6B7280]">
+              Tự động cập nhật từ đàm thoại Chat AI (Kéo thả / Gán người làm / Nạp vào Space)
+            </span>
+          </div>
+
+          <AiDecomposedResults
+            result={result}
+            targetMode={targetMode}
+            selectedSpace={selectedSpace}
+            newSpaceName={newSpaceName}
+            workspaceId={workspaceId}
+            selectedSpaceId={selectedSpaceId}
+            createdSpaceId={createdSpaceId}
+            onImportTasks={handleImportTasks}
+            importing={importing}
+            importSuccess={importSuccess}
+            isImported={isImported}
+            members={membersList}
+            onUpdateTasks={handleUpdateTasks}
+          />
+        </div>
       )}
     </div>
   );

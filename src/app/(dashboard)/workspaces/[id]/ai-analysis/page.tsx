@@ -4,12 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Sparkles, ChevronRight } from "lucide-react";
 import { workspaceService } from "@/services/workspace.service";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { Workspace, Space } from "@/types";
 import { AiDecompositionContainer } from "@/components/ai/AiDecompositionContainer";
 
 export default function AiAnalysisPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuthStore();
 
   const workspaceId = parseInt(params.id as string, 10);
 
@@ -26,7 +28,7 @@ export default function AiAnalysisPage() {
         const wsData = await workspaceService.getWorkspaceById(workspaceId);
         setWorkspace(wsData);
 
-        const spaceList = await workspaceService.getSpacesByWorkspace(workspaceId);
+        const spaceList = await workspaceService.getSpacesByWorkspace(workspaceId, user?.id);
         setSpaces(spaceList);
       } catch (err) {
         console.error("Error loading workspace data for AI analysis:", err);
@@ -48,7 +50,7 @@ export default function AiAnalysisPage() {
   }
 
   return (
-    <div className="max-w-6xl space-y-6 font-sans animate-in fade-in duration-300">
+    <div className="w-full space-y-6 font-sans animate-in fade-in duration-300">
       {/* Path Breadcrumbs */}
       <div className="flex items-center gap-1.5 text-xs text-[#6B7280] font-mono">
         <span className="hover:underline cursor-pointer" onClick={() => router.push("/workspaces")}>

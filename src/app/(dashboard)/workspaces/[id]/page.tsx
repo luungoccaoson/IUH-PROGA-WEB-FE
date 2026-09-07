@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Plus, Sparkles, Calendar, Lock, Globe, ShieldAlert, UserPlus, Search, Check, Trash2, Mail } from "lucide-react";
+import { Plus, Sparkles, Calendar, Lock, Globe, ShieldAlert, UserPlus, Users, Search, Check, Trash2, Mail } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
 import { userService } from "@/services/user.service";
@@ -50,7 +50,7 @@ export default function WorkspaceDashboardPage() {
       const wsData = await workspaceService.getWorkspaceById(workspaceId);
       setWorkspace(wsData);
 
-      const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId);
+      const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId, currentUser?.id);
       setSpaces(spacesList);
 
       try {
@@ -176,7 +176,7 @@ export default function WorkspaceDashboardPage() {
   }
 
   return (
-    <div className="max-w-6xl space-y-8 animate-in fade-in duration-300 font-sans">
+    <div className="w-full space-y-8 animate-in fade-in duration-300 font-sans">
       {/* Header Bar */}
       <div className="flex items-center justify-between">
         <div>
@@ -194,6 +194,15 @@ export default function WorkspaceDashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* View Workspace Members Button */}
+          <button
+            onClick={() => router.push(`/workspaces/${workspaceId}/members`)}
+            className="px-3.5 py-2.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-gray-50 text-[#111827] font-bold text-sm transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <Users className="w-4 h-4 text-[#1A73E8]" />
+            <span>Thành viên Workspace ({members.length})</span>
+          </button>
+
           {/* Invite Members Button for Owner */}
           {isOwner && (
             <button

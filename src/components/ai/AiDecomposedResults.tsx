@@ -16,6 +16,13 @@ import {
   X,
   Save,
   GripVertical,
+  BookmarkCheck,
+  ExternalLink,
+  UserCheck,
+  Zap,
+  AlertTriangle,
+  HelpCircle,
+  Layers,
 } from "lucide-react";
 import { TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
 import { Space } from "@/types";
@@ -32,10 +39,12 @@ interface AiDecomposedResultsProps {
   onImportTasks: () => void;
   importing: boolean;
   importSuccess: boolean;
+  isImported?: boolean;
+  members?: string[];
   onUpdateTasks: (updatedTasks: DecomposedTaskItem[]) => void;
+  existingTaskCount?: number;
+  existingSprintsSummary?: { name: string; status: string; taskCount: number }[];
 }
-
-
 
 export function AiDecomposedResults({
   result,
@@ -48,27 +57,29 @@ export function AiDecomposedResults({
   onImportTasks,
   importing,
   importSuccess,
+  isImported = false,
+  members = [],
   onUpdateTasks,
+  existingTaskCount = 0,
+  existingSprintsSummary = [],
 }: AiDecomposedResultsProps) {
   const router = useRouter();
 
-  // Dynamically compute available Sprints from AI result tasks (3, 4, 5, 6+ Sprints flexible!)
-  const sprintNamesFromTasks = Array.from(
-    new Set(result.tasks.map((t) => t.sprint || "Sprint 1"))
-  );
+  // Group tasks by exact Sprint returned from AI result
+  const groupedTasks: Record<string, { task: DecomposedTaskItem; originalIndex: number }[]> = {};
+  if (result?.tasks) {
+    result.tasks.forEach((t, idx) => {
+      const sprintName = t.sprint || "Sprint 1";
+      if (!groupedTasks[sprintName]) groupedTasks[sprintName] = [];
+      groupedTasks[sprintName].push({ task: t, originalIndex: idx });
+    });
+  }
 
-  let maxSprintNum = 1;
-  sprintNamesFromTasks.forEach((s) => {
-    const m = s.match(/\d+/);
-    if (m) {
-      const num = parseInt(m[0], 10);
-      if (num > maxSprintNum) maxSprintNum = num;
-    }
-  });
-
-  const availableSprints: string[] = [];
-  for (let i = 1; i <= maxSprintNum; i++) {
-    availableSprints.push(`Sprint ${i}`);
+  // Available Sprints for rendering: ONLY Sprints that exist in result.tasks
+  const availableSprints: string[] = Object.keys(groupedTasks);
+  if (availableSprints.length === 0 && targetMode === "NEW_SPACE") {
+    availableSprints.push("Sprint 1");
+    groupedTasks["Sprint 1"] = [];
   }
 
   // Modal Edit State
@@ -77,6 +88,8 @@ export function AiDecomposedResults({
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("HIGH");
   const [editEstimatedDays, setEditEstimatedDays] = useState<number>(2);
+  const [editBufferDays, setEditBufferDays] = useState<number>(0);
+  const [editAssignedRole, setEditAssignedRole] = useState<string>("Backend Developer");
   const [editSprint, setEditSprint] = useState<string>("Sprint 1");
 
   // Modal Add State
@@ -88,21 +101,6 @@ export function AiDecomposedResults({
 
   // Drag over sprint state for visual dropzone highlighting
   const [dragOverSprint, setDragOverSprint] = useState<string | null>(null);
-
-  // Group tasks by Sprint
-  const groupedTasks: Record<string, { task: DecomposedTaskItem; originalIndex: number }[]> = {};
-  if (result?.tasks) {
-    result.tasks.forEach((t, idx) => {
-      const sprintName = t.sprint || "Sprint 1";
-      if (!groupedTasks[sprintName]) groupedTasks[sprintName] = [];
-      groupedTasks[sprintName].push({ task: t, originalIndex: idx });
-    });
-  }
-
-  // Ensure all dynamic Sprints exist in grouped view
-  availableSprints.forEach((sp) => {
-    if (!groupedTasks[sp]) groupedTasks[sp] = [];
-  });
 
   const getPriorityBadgeStyle = (priority: string) => {
     switch (priority) {
@@ -127,6 +125,8 @@ export function AiDecomposedResults({
     setEditDescription(item.description);
     setEditPriority(item.priority);
     setEditEstimatedDays(item.estimatedDays || 2);
+    setEditBufferDays(item.bufferDays || 0);
+    setEditAssignedRole(item.assignedRole || "Backend Developer");
     setEditSprint(item.sprint || "Sprint 1");
   };
 
@@ -141,6 +141,8 @@ export function AiDecomposedResults({
       description: editDescription.trim(),
       priority: editPriority,
       estimatedDays: editEstimatedDays,
+      bufferDays: editBufferDays,
+      assignedRole: editAssignedRole,
       sprint: editSprint,
     };
 
@@ -190,8 +192,38 @@ export function AiDecomposedResults({
             Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
+
+          {result.sourceReference && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
+                <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
+                <span>Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong></span>
+              </div>
+
+              {/* Render ALL Tri-Anchor Benchmark Citation Links */}
+              {((result.sourceUrls && result.sourceUrls.length > 0) || result.sourceUrl) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-[11px] font-mono font-bold text-[#4B5563] uppercase">🔗 Link Chứng Thực Thực Tế:</span>
+                  {(result.sourceUrls && result.sourceUrls.length > 0 ? result.sourceUrls : [result.sourceUrl!]).map((url, idx) => (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-white hover:bg-[#F3F4F6] border border-[#D1D5DB] hover:border-[#1A73E8] rounded-lg text-[11px] font-mono font-semibold text-[#1A73E8] transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
+                      title={url}
+                    >
+                      <span>Link #{idx + 1}: {url.replace(/^https?:\/\/(www\.)?/, "").substring(0, 32)}...</span>
+                      <ExternalLink className="w-3 h-3 text-[#1A73E8]" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-[#4B5563]">
-            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Bạn có thể Kéo thả / Chỉnh sửa / Xóa / Thêm Task giữa các Sprint trước khi nạp).
+            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Hỗ trợ Story Points Fibonacci, Phân Vai Role & Đánh giá Rủi ro).
           </p>
         </div>
 
@@ -199,22 +231,25 @@ export function AiDecomposedResults({
         <div className="space-y-2 text-left md:text-right shrink-0">
           <button
             onClick={onImportTasks}
-            disabled={importing || importSuccess || result.tasks.length === 0}
-            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-60 text-white ${
-              targetMode === "NEW_SPACE"
-                ? "bg-[#10B981] hover:bg-[#059669]"
-                : "bg-[#137333] hover:bg-[#0D652D]"
-            }`}
+            disabled={importing || importSuccess || isImported || result.tasks.length === 0}
+            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
+                ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
+                : targetMode === "NEW_SPACE"
+                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+              }`}
           >
             {importing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 {targetMode === "NEW_SPACE" ? "Đang khởi tạo Space Mới & Nạp Task..." : "Đang nạp Task vào Space..."}
               </>
-            ) : importSuccess ? (
+            ) : importSuccess || isImported ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-[#A8DAB5]" />
-                {targetMode === "NEW_SPACE" ? "Đã Khởi Tạo & Nạp Thành Công!" : "Đã nạp thành công!"}
+                <CheckCircle2 className="w-4 h-4 text-[#137333]" />
+                {targetMode === "NEW_SPACE"
+                  ? "✅ Đã Khởi Tạo Space & Nạp Bảng Task WBS Thành Công!"
+                  : "✅ Đã Nạp Bảng Task WBS Vào Space Thành Công!"}
               </>
             ) : targetMode === "NEW_SPACE" ? (
               <>
@@ -239,7 +274,9 @@ export function AiDecomposedResults({
               {targetSpaceId && (
                 <button
                   onClick={() => {
-                    // SPA Routing without full browser reload
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new Event("switch_to_kanban_tab"));
+                    }
                     router.push(`/workspaces/${workspaceId}/spaces/${targetSpaceId}`);
                   }}
                   className="text-xs text-[#1A73E8] hover:underline font-bold flex items-center justify-end gap-1 cursor-pointer ml-auto"
@@ -251,6 +288,51 @@ export function AiDecomposedResults({
           )}
         </div>
       </div>
+
+      {/* Ongoing Space Timeline Context Banner */}
+      {targetMode === "EXISTING_SPACE" && existingSprintsSummary && existingSprintsSummary.length > 0 && (
+        <div className="p-4 bg-[#111827] text-white rounded-2xl space-y-2.5 border border-gray-800 font-sans shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
+              <Zap className="w-4 h-4 text-[#10B981]" />
+              <span>Tiến Trình Các Sprint Trong Space "{selectedSpace?.name}" ({existingTaskCount} Tasks)</span>
+            </span>
+            <span className="text-[11px] text-gray-400 font-mono">Không đụng vào các Sprint cũ</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {existingSprintsSummary.map((sp, idx) => {
+              const statusUpper = (sp.status || "").toUpperCase();
+              const isActive = statusUpper === "ACTIVE" || statusUpper === "IN_PROGRESS";
+              const isClosed = statusUpper === "COMPLETED" || statusUpper === "CLOSED";
+
+              const badgeStyle = isActive
+                ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
+                : isClosed
+                  ? "bg-gray-800/80 text-gray-400 border-gray-700"
+                  : "bg-blue-500/20 text-blue-300 border-blue-500/40";
+
+              const statusText = isActive ? "Đang chạy" : isClosed ? "Đã hoàn thành" : "Sắp tới";
+
+              return (
+                <div
+                  key={idx}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold font-mono flex items-center gap-2 ${badgeStyle}`}
+                >
+                  <span>{sp.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/40 text-gray-200">
+                    {sp.taskCount} tasks ({statusText})
+                  </span>
+                </div>
+              );
+            })}
+            <div className="text-[#10B981] font-bold text-sm px-1 font-mono">➜</div>
+            <div className="px-3 py-1.5 rounded-xl bg-[#10B981] text-white font-mono text-xs font-extrabold shadow-sm animate-pulse">
+              ✨ {result.tasks[0]?.sprint || "Sprint Mới"} (AI Nối Tiếp)
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grouped Tasks By Sprint */}
       <div className="space-y-6">
@@ -276,22 +358,23 @@ export function AiDecomposedResults({
                   handleMoveSprint(taskIdx, sprintName);
                 }
               }}
-              className={`bg-white border rounded-2xl p-5 space-y-4 shadow-2xs transition-all ${
-                isDragOver
+              className={`bg-white border rounded-2xl p-4 space-y-3 shadow-2xs transition-all ${isDragOver
                   ? "border-[#1A73E8] bg-[#F0F7FF] ring-2 ring-[#1A73E8]/30"
                   : "border-[#E5E7EB]"
-              }`}
+                }`}
             >
               {/* Sprint Group Title Header */}
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#111827] text-white flex items-center justify-center font-mono font-bold text-xs">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-[#111827] text-white flex items-center justify-center font-mono font-bold text-xs shrink-0">
                     S{groupIdx + 1}
                   </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-[#111827]">{sprintName}</h4>
-                    <p className="text-[11px] text-[#6B7280]">
-                      Bao gồm {taskList.length} hạng mục công việc (Có thể thả Task vào đây)
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-extrabold text-sm text-[#111827] truncate">
+                      {sprintName.includes(":") ? sprintName.split(":")[0].trim() : sprintName}
+                    </h4>
+                    <p className="text-[11px] text-[#6B7280] truncate">
+                      {sprintName.includes(":") ? sprintName.split(":").slice(1).join(":").trim() : `Bao gồm ${taskList.length} hạng mục công việc`}
                     </p>
                   </div>
                 </div>
@@ -299,96 +382,167 @@ export function AiDecomposedResults({
                 {/* Add Task to this Sprint Button */}
                 <button
                   onClick={() => setAddingToSprint(sprintName)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#111827] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#111827] rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Thêm Task vào {sprintName}
+                  <Plus className="w-3.5 h-3.5" /> Thêm Task
                 </button>
               </div>
 
               {/* Tasks List */}
               {taskList.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {taskList.map(({ task, originalIndex }) => (
-                    <div
-                      key={originalIndex}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("aiTaskIndex", originalIndex.toString());
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
-                      className="p-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] hover:border-[#111827] transition-all space-y-3 shadow-2xs group relative cursor-grab active:cursor-grabbing hover:bg-white"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <GripVertical className="w-4 h-4 text-gray-400 shrink-0 cursor-grab active:cursor-grabbing hover:text-[#111827]" />
-                          <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0">
-                            Task-{originalIndex + 1}
-                          </span>
-                          <h5 className="font-extrabold text-sm text-[#111827] leading-snug truncate">
-                            {task.title}
-                          </h5>
-                        </div>
+                  {taskList.map(({ task, originalIndex }) => {
+                    const cleanTitle = (task.title || "").replace(/^Task-\d+\s*:\s*/i, "").trim();
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span
-                            className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${getPriorityBadgeStyle(
-                              task.priority
-                            )}`}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-[#4B5563] leading-relaxed line-clamp-3 pl-6">
-                        {task.description}
-                      </p>
-
-                      {/* Card Footer Controls (Move Sprint, Edit, Delete) */}
-                      <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">
-                        <span className="flex items-center gap-1 pl-6">
-                          <Clock className="w-3 h-3 text-[#111827]" />
-                          {task.estimatedDays || 2} ngày
-                        </span>
-
-                        <div className="flex items-center gap-2">
-                          {/* Move Sprint Selector */}
-                          <div className="flex items-center gap-1 text-[10px] text-[#4B5563]">
-                            <ArrowRightLeft className="w-3 h-3 text-[#6B7280]" />
-                            <select
-                              value={task.sprint || sprintName}
-                              onChange={(e) => handleMoveSprint(originalIndex, e.target.value)}
-                              className="bg-white border border-[#E5E7EB] rounded-lg px-1.5 py-0.5 font-bold text-[#111827] cursor-pointer"
-                            >
-                              {availableSprints.map((sp) => (
-                                <option key={sp} value={sp}>
-                                  Chuyển sang {sp}
-                                </option>
-                              ))}
-                            </select>
+                    return (
+                      <div
+                        key={originalIndex}
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("aiTaskIndex", originalIndex.toString());
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        className="p-3.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] hover:border-[#111827] transition-all space-y-2.5 shadow-2xs group relative cursor-grab active:cursor-grabbing hover:bg-white"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <GripVertical className="w-4 h-4 text-gray-400 shrink-0 cursor-grab active:cursor-grabbing hover:text-[#111827]" />
+                            <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0">
+                              Task-{(existingTaskCount || 0) + originalIndex + 1}
+                            </span>
+                            <h5 className="font-extrabold text-xs text-[#111827] leading-snug truncate">
+                              {cleanTitle}
+                            </h5>
                           </div>
 
-                          {/* Edit Button */}
-                          <button
-                            onClick={() => handleOpenEdit(originalIndex)}
-                            className="p-1 hover:bg-gray-200 rounded-md text-[#1A73E8] transition-colors"
-                            title="Sửa Task"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span
+                              className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-md border ${getPriorityBadgeStyle(
+                                task.priority
+                              )}`}
+                            >
+                              {task.priority}
+                            </span>
+                          </div>
+                        </div>
 
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => handleDeleteTask(originalIndex)}
-                            className="p-1 hover:bg-red-100 rounded-md text-[#D93025] transition-colors"
-                            title="Xóa Task"
+                        <p className="text-xs text-[#4B5563] leading-relaxed line-clamp-2 pl-6">
+                          {task.description}
+                        </p>
+
+                        {/* Role & Time Estimates */}
+                        <div className="flex flex-wrap items-center gap-1.5 pl-6 font-mono text-[10px]">
+                          {task.assignedRole && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E8F0FE] text-[#1A73E8] font-bold border border-[#D2E3FC]">
+                              <UserCheck className="w-3 h-3" />
+                              {task.assignedRole}
+                            </span>
+                          )}
+
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F3F4F6] text-[#374151] font-bold border border-[#E5E7EB]">
+                            <Clock className="w-3 h-3 text-[#6B7280]" />
+                            Ước tính: {task.estimatedDays || 2} ngày
+                          </span>
+
+                          {task.bufferDays ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF7E0] text-[#B06000] font-bold border border-[#FEEFC3]">
+                              🛡️ +{task.bufferDays} ngày dự phòng
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {/* Member Assignee Selector */}
+                        {/* <div className="ml-6 flex items-center gap-1.5 text-xs text-[#374151] bg-[#F9FAFB] p-1.5 rounded-xl border border-[#E5E7EB]">
+                          <span className="font-bold font-mono text-[10px] text-[#6B7280] shrink-0">Phân công:</span>
+                          <select
+                            value={task.suggestedMemberName || ""}
+                            onChange={(e) => {
+                              const updated = [...result.tasks];
+                              updated[originalIndex] = {
+                                ...updated[originalIndex],
+                                suggestedMemberName: e.target.value,
+                              };
+                              onUpdateTasks(updated);
+                            }}
+                            className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2 py-0.5 text-xs font-bold text-[#111827] focus:outline-none cursor-pointer truncate"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <option value="">-- Chưa gán --</option>
+                            {members && members.length > 0 ? (
+                              Array.from(new Set(members)).map((m, idx) => (
+                                <option key={`${m}-${idx}`} value={m}>
+                                  👤 {m}
+                                </option>
+                              ))
+                            ) : (
+                              <>
+                                <option value="Nam">👤 Nam (Backend)</option>
+                                <option value="Linh">👤 Linh (Frontend)</option>
+                                <option value="Tuấn">👤 Tuấn (QA / QC)</option>
+                                <option value="Hùng">👤 Hùng (DevOps)</option>
+                              </>
+                            )}
+                          </select>
+                        </div> */}
+
+                        {/* Risk Warning Box (ONLY for URGENT/HIGH or explicit risk) */}
+                        {(task.priority === "URGENT" || task.riskWarning) && (
+                          <div className="ml-6 p-2 rounded-lg bg-[#FFF0F0] border border-[#FADBD8] text-[11px] text-[#D93025] space-y-0.5">
+                            <span className="font-bold font-mono flex items-center gap-1 text-[10px]">
+                              <AlertTriangle className="w-3 h-3 text-[#D93025]" /> Cảnh báo rủi ro thực tế:
+                            </span>
+                            <p className="leading-snug text-[11px]">{task.riskWarning || "Task có tính chất phức tạp cao, cần chú ý kiểm thử kỹ."}</p>
+                          </div>
+                        )}
+
+                        {/* Card Footer Controls (Move Sprint, Edit, Delete) */}
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">
+                          <span className="flex items-center gap-1 pl-6 text-[10px]">
+                            <Clock className="w-3 h-3 text-[#111827]" />
+                            {task.estimatedDays || 2} ngày
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            {/* Move Sprint Selector (Shortened) */}
+                            <div className="flex items-center gap-1 text-[10px] text-[#4B5563]">
+                              <ArrowRightLeft className="w-3 h-3 text-[#6B7280]" />
+                              <select
+                                value={task.sprint || sprintName}
+                                onChange={(e) => handleMoveSprint(originalIndex, e.target.value)}
+                                className="bg-white border border-[#E5E7EB] rounded-lg px-1.5 py-0.5 font-bold text-[#111827] cursor-pointer max-w-[130px] truncate"
+                              >
+                                {availableSprints.map((sp) => {
+                                  const shortSpLabel = sp.includes(":") ? sp.split(":")[0].trim() : sp;
+                                  return (
+                                    <option key={sp} value={sp}>
+                                      {shortSpLabel}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+
+                            {/* Edit Button */}
+                            <button
+                              onClick={() => handleOpenEdit(originalIndex)}
+                              className="p-1 hover:bg-gray-200 rounded-md text-[#1A73E8] transition-colors"
+                              title="Sửa Task"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              onClick={() => handleDeleteTask(originalIndex)}
+                              className="p-1 hover:bg-red-100 rounded-md text-[#D93025] transition-colors"
+                              title="Xóa Task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-4 rounded-xl border border-dashed border-[#E5E7EB] text-center text-xs text-[#9CA3AF]">
@@ -474,6 +628,38 @@ export function AiDecomposedResults({
                     onChange={(e) => setEditEstimatedDays(parseInt(e.target.value, 10) || 1)}
                     className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Ngày dự phòng rủi ro:</label>
+                  <select
+                    value={editBufferDays}
+                    onChange={(e) => setEditBufferDays(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
+                  >
+                    <option value={0}>0 ngày (Không có rủi ro)</option>
+                    <option value={1}>+1 ngày dự phòng</option>
+                    <option value={2}>+2 ngày dự phòng (Rủi ro cao)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Vai trò đảm nhiệm (Role):</label>
+                  <select
+                    value={editAssignedRole}
+                    onChange={(e) => setEditAssignedRole(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
+                  >
+                    <option value="Tech Lead / System Architect">Tech Lead / System Architect</option>
+                    <option value="Senior Backend Developer">Senior Backend Developer</option>
+                    <option value="Backend Developer">Backend Developer</option>
+                    <option value="Frontend Developer">Frontend Developer</option>
+                    <option value="DevOps / SRE Engineer">DevOps / SRE Engineer</option>
+                    <option value="QA / QC Lead">QA / QC Lead</option>
+                    <option value="Business Analyst (BA)">Business Analyst (BA)</option>
+                  </select>
                 </div>
               </div>
             </div>

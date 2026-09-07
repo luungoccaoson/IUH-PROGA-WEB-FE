@@ -50,8 +50,14 @@ export const workspaceService = {
   },
 
   // Spaces
-  getSpacesByWorkspace: async (workspaceId: number): Promise<Space[]> => {
-    const response = await apiClient.get<ApiResponse<Space[]>>(`/spaces/workspace/${workspaceId}`);
+  getSpaceById: async (id: number): Promise<Space> => {
+    const response = await apiClient.get<ApiResponse<Space>>(`/spaces/${id}`);
+    return response.data.data;
+  },
+
+  getSpacesByWorkspace: async (workspaceId: number, userId?: number): Promise<Space[]> => {
+    const url = userId ? `/spaces/workspace/${workspaceId}?userId=${userId}` : `/spaces/workspace/${workspaceId}`;
+    const response = await apiClient.get<ApiResponse<Space[]>>(url);
     return response.data.data;
   },
 
@@ -67,6 +73,19 @@ export const workspaceService = {
 
   deleteSpace: async (id: number): Promise<void> => {
     await apiClient.delete<ApiResponse<void>>(`/spaces/${id}`);
+  },
+
+  addMemberToSpace: async (spaceId: number, userId: number, roleId: number = 3): Promise<void> => {
+    await apiClient.post(`/spaces/${spaceId}/members?userId=${userId}&roleId=${roleId}`);
+  },
+
+  removeMemberFromSpace: async (spaceId: number, userId: number): Promise<void> => {
+    await apiClient.delete(`/spaces/${spaceId}/members/${userId}`);
+  },
+
+  getSpaceMembers: async (spaceId: number): Promise<any[]> => {
+    const response = await apiClient.get<ApiResponse<any[]>>(`/spaces/${spaceId}/members`);
+    return response.data.data;
   },
 
   // Tasks & Kanban

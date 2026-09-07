@@ -10,6 +10,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { SpaceAiCopilotDrawer } from "./SpaceAiCopilotDrawer";
 
 interface SprintKanbanBoardProps {
   spaceId: number;
@@ -48,6 +49,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
   // Selected Sprint for Kanban filter (defaults to active sprint or first sprint)
   const [selectedSprintId, setSelectedSprintId] = useState<number | "backlog">(0);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   useEffect(() => {
     if (sprints.length > 0 && selectedSprintId === 0) {
@@ -114,13 +116,12 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
   const isDrawerOpen = Boolean(selectedTask);
 
   return (
-    <div className="relative font-sans space-y-6">
-      {/* Push layout container */}
-      <div className={`space-y-6 transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[315px]" : "mr-0"}`}>
+    <>
+      <div className="space-y-6 font-sans">
         {/* Top Controls & Sprint Selector Bar */}
         <div className="bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#F6F5EF] flex items-center justify-center text-[#111827] border border-[#E5E7EB]">
+            <div className="w-10 h-10 rounded-xl bg-[#111827] text-white flex items-center justify-center shadow-2xs">
               <KanbanSquare className="w-5 h-5" />
             </div>
             <div>
@@ -133,26 +134,37 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
             </div>
           </div>
 
-          {/* Sprint Filter Dropdown */}
-          <div className="flex items-center gap-2 bg-[#F9FAFB] border border-[#E5E7EB] p-2 rounded-xl">
-            <span className="text-xs font-mono font-bold text-[#6B7280] uppercase tracking-wider pl-1">
-              Sprint:
-            </span>
-            <select
-              value={selectedSprintId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedSprintId(val === "backlog" ? "backlog" : parseInt(val, 10));
-              }}
-              className="bg-white border border-[#E5E7EB] rounded-lg px-3 py-1.5 font-bold text-xs text-[#111827] focus:outline-none cursor-pointer"
+          <div className="flex items-center gap-3">
+            {/* AI Co-Pilot Drawer Button */}
+            {/* <button
+              onClick={() => setIsCopilotOpen(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer border border-gray-700"
             >
-              {sprints.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.status === "ACTIVE" ? "Đang diễn ra" : s.status === "CLOSED" ? "Đã đóng" : "Sắp tới"})
-                </option>
-              ))}
-              <option value="backlog">Công việc tồn đọng (Backlog)</option>
-            </select>
+              <Sparkles className="w-4 h-4 text-[#A7F3D0] animate-pulse" />
+              <span>🤖 AI Co-Pilot Phân Rã & Đánh Giá Rủi Ro</span>
+            </button> */}
+
+            {/* Sprint Filter Dropdown */}
+            <div className="flex items-center gap-2 bg-[#F9FAFB] border border-[#E5E7EB] p-1.5 rounded-xl">
+              <span className="text-xs font-mono font-bold text-[#6B7280] uppercase tracking-wider pl-1">
+                Sprint:
+              </span>
+              <select
+                value={selectedSprintId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedSprintId(val === "backlog" ? "backlog" : parseInt(val, 10));
+                }}
+                className="bg-white border border-[#E5E7EB] rounded-lg px-3 py-1.5 font-bold text-xs text-[#111827] focus:outline-none cursor-pointer"
+              >
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.status === "ACTIVE" ? "Đang diễn ra" : s.status === "CLOSED" ? "Đã đóng" : "Sắp tới"})
+                  </option>
+                ))}
+                <option value="backlog">Công việc tồn đọng (Backlog)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -214,10 +226,9 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                           e.dataTransfer.setData("taskId", task.id.toString());
                           e.dataTransfer.setData("sourceStatus", task.status);
                         }}
-                        onClick={() => setSelectedTask(task)}
-                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
-                          isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
-                        }`}
+                        onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)}
+                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
+                          }`}
                       >
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
@@ -300,6 +311,15 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
         onUpdate={updateTask}
         onDelete={deleteTask}
       />
-    </div>
+
+      {/* AI Co-Pilot Drawer for Existing Space */}
+      <SpaceAiCopilotDrawer
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        space={{ id: spaceId, name: currentSprint ? currentSprint.name : `Space #${spaceId}` } as any}
+        workspaceId={1}
+        existingTasks={tasks}
+      />
+    </>
   );
 }

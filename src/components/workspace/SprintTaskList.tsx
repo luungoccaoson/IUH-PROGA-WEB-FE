@@ -14,11 +14,13 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface SprintTaskListProps {
   spaceId: number;
+  members?: any[];
   onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
 export function SprintTaskList({
   spaceId,
+  members = [],
   onDrawerStateChange,
 }: SprintTaskListProps) {
   const {
@@ -37,6 +39,7 @@ export function SprintTaskList({
   const {
     selectedTask,
     setSelectedTask,
+    handleSelectTask,
     createTask,
     updateTask,
     updateTaskStatus,
@@ -121,9 +124,7 @@ export function SprintTaskList({
 
   return (
     <div className="relative font-sans">
-      <div
-        className={`space-y-6 transition-all duration-300 ease-in-out ${isDrawerOpen ? "mr-0 lg:mr-[30px]" : "mr-0"}`}
-      >
+      <div className="space-y-6">
         {/* Top Header Bar */}
         <div className="flex items-center justify-between bg-white border border-[#E5E7EB] p-4 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
@@ -166,11 +167,12 @@ export function SprintTaskList({
                 sprint={sprint}
                 tasks={sprintTasks}
                 allSpaceTasks={tasks}
+                members={members}
                 isTaskOverdue={isTaskOverdue}
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
                 onCreateTask={createTask}
-                onSelectTask={setSelectedTask}
+                onSelectTask={handleSelectTask}
                 onUpdateStatus={updateTaskStatus}
                 onUpdatePriority={handleUpdatePriority}
                 onUpdateOwner={handleUpdateOwner}
