@@ -53,24 +53,29 @@ export default function SpaceDetailPage() {
       setLoading(true);
       setError("");
 
-      const [wsData, spaceData, taskList, sprintList, memberList] = await Promise.all([
-        workspaceService.getWorkspaceById(workspaceId),
-        workspaceService.getSpaceById(spaceId).catch(async () => {
-          const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId, currentUser?.id);
-          return spacesList.find((s) => s.id === spaceId) || null;
-        }),
-        workspaceService.getTasksBySpace(spaceId).catch(() => []),
-        sprintService.getSprintsBySpace(spaceId).catch(() => []),
-        workspaceService.getSpaceMembers(spaceId).catch(() => []),
-      ]);
-
-      setWorkspace(wsData);
+      const spaceData = await workspaceService.getSpaceById(spaceId).catch(async () => {
+        const spacesList = await workspaceService.getSpacesByWorkspace(workspaceId, currentUser?.id);
+        return spacesList.find((s) => s.id === spaceId) || null;
+      });
 
       if (!spaceData) {
         setError("Không tìm thấy thông tin Space.");
         return;
       }
       setSpace(spaceData);
+
+      const targetWorkspaceId = spaceData.workspaceId || workspaceId;
+
+      const [wsData, taskList, sprintList, memberList] = await Promise.all([
+        workspaceService.getWorkspaceById(targetWorkspaceId).catch(() => null),
+        workspaceService.getTasksBySpace(spaceId).catch(() => []),
+        sprintService.getSprintsBySpace(spaceId).catch(() => []),
+        workspaceService.getSpaceMembers(spaceId).catch(() => []),
+      ]);
+
+      if (wsData) {
+        setWorkspace(wsData);
+      }
       setTasks(taskList || []);
       setSprints(sprintList || []);
 
