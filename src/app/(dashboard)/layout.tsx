@@ -297,12 +297,13 @@ export default function DashboardLayout({
                       { bg: "bg-[#FEF7E0]", text: "text-[#B06000]" },
                     ];
                     const color = colors[space.id % colors.length] || colors[0];
-                    const isActive = pathname === `/workspaces/${activeWorkspaceId}/spaces/${space.id}`;
+                    const targetWsId = space.workspaceId || activeWorkspaceId;
+                    const isActive = pathname.includes(`/spaces/${space.id}`);
 
                     return (
                       <Link
                         key={space.id}
-                        href={`/workspaces/${activeWorkspaceId}/spaces/${space.id}`}
+                        href={`/workspaces/${targetWsId}/spaces/${space.id}`}
                         className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${isActive
                           ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
                           : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
