@@ -36,24 +36,24 @@ export function SpaceOverviewTab({ tasks, members = [], onViewTasks }: SpaceOver
 
   const memberWorkloadList = (members && members.length > 0)
     ? members.map((m) => {
-        const uId = m.id?.userId || m.userId || m.id;
-        const uName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${uId}`;
-        const count = tasks.filter((t) => t.ownerId === uId || t.assignee?.id === uId || t.ownerName === uName).length;
-        return {
-          id: uId,
-          name: uName,
-          avatarUrl: m.avatarUrl || m.user?.avatarUrl,
-          count,
-          percent: Math.round((count / totalCount) * 100),
-        };
-      })
-    : Object.entries(memberWorkloadMap).map(([name, count]) => ({
-        id: name,
-        name,
-        avatarUrl: undefined,
+      const uId = m.id?.userId || m.userId || m.id;
+      const uName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${uId}`;
+      const count = tasks.filter((t) => t.ownerId === uId || t.assignee?.id === uId || t.ownerName === uName).length;
+      return {
+        id: uId,
+        name: uName,
+        avatarUrl: m.avatarUrl || m.user?.avatarUrl,
         count,
         percent: Math.round((count / totalCount) * 100),
-      }));
+      };
+    })
+    : Object.entries(memberWorkloadMap).map(([name, count]) => ({
+      id: name,
+      name,
+      avatarUrl: undefined,
+      count,
+      percent: Math.round((count / totalCount) * 100),
+    }));
 
   // Types of work (Task, Subtask, AI Generated)
   const taskTypeCount = Math.round(totalCount * 0.7);

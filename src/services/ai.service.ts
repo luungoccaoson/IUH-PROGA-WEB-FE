@@ -13,6 +13,14 @@ export interface DecomposedTaskItem {
   riskWarning?: string;
 }
 
+export interface RagCitationItem {
+  anchorCategory?: string;
+  title: string;
+  sourceUrl?: string;
+  snippet?: string;
+  priorityLevel?: string;
+}
+
 export interface TaskDecompositionResponse {
   threadId: number;
   suggestedSpaceName?: string;
@@ -20,6 +28,7 @@ export interface TaskDecompositionResponse {
   sourceReference?: string;
   sourceUrl?: string;
   sourceUrls?: string[];
+  citations?: RagCitationItem[];
   tasks: DecomposedTaskItem[];
 }
 

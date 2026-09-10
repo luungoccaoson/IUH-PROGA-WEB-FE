@@ -21,12 +21,15 @@ import {
   UserCheck,
   Zap,
   AlertTriangle,
-  HelpCircle,
   Layers,
+  FileText,
+  ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 import { TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
 import { Space } from "@/types";
 import { TargetMode } from "./AiHeaderBanner";
+import { RagCitationsDrawer } from "./RagCitationsDrawer";
 
 interface AiDecomposedResultsProps {
   result: TaskDecompositionResponse;
@@ -101,6 +104,17 @@ export function AiDecomposedResults({
 
   // Drag over sprint state for visual dropzone highlighting
   const [dragOverSprint, setDragOverSprint] = useState<string | null>(null);
+
+  // Citations Drawer State
+  const [isCitationsDrawerOpen, setIsCitationsDrawerOpen] = useState(false);
+
+  // Risk Popover Hover / Click States
+  const [hoveredRiskIndex, setHoveredRiskIndex] = useState<number | null>(null);
+  const [openRiskIndex, setOpenRiskIndex] = useState<number | null>(null);
+
+  // Citation Link Popover Hover / Click States
+  const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
+  const [openLinkIndex, setOpenLinkIndex] = useState<number | null>(null);
 
   const getPriorityBadgeStyle = (priority: string) => {
     switch (priority) {
@@ -187,9 +201,18 @@ export function AiDecomposedResults({
       {/* Summary Card */}
       <div className="bg-[#F0F7FF] border border-[#D2E3FC] p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-2 max-w-2xl">
-          <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-[#1A73E8]">
-            <CheckCircle2 className="w-4 h-4" />
-            Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-[#1A73E8]">
+              <CheckCircle2 className="w-4 h-4" />
+              Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
+            </span>
+            <button
+              onClick={() => setIsCitationsDrawerOpen(true)}
+              className="px-2.5 py-1 bg-[#111827] hover:bg-black text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <span>📚 Bằng chứng & Trích dẫn RAG</span>
+            </button>
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
 
@@ -200,23 +223,72 @@ export function AiDecomposedResults({
                 <span>Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong></span>
               </div>
 
-              {/* Render ALL Tri-Anchor Benchmark Citation Links */}
+              {/* Render ALL Tri-Anchor Benchmark Citation Links (Compact Badges with Popover) */}
               {((result.sourceUrls && result.sourceUrls.length > 0) || result.sourceUrl) && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-[11px] font-mono font-bold text-[#4B5563] uppercase">🔗 Link Chứng Thực Thực Tế:</span>
-                  {(result.sourceUrls && result.sourceUrls.length > 0 ? result.sourceUrls : [result.sourceUrl!]).map((url, idx) => (
-                    <a
-                      key={idx}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-white hover:bg-[#F3F4F6] border border-[#D1D5DB] hover:border-[#1A73E8] rounded-lg text-[11px] font-mono font-semibold text-[#1A73E8] transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
-                      title={url}
-                    >
-                      <span>Link #{idx + 1}: {url.replace(/^https?:\/\/(www\.)?/, "").substring(0, 32)}...</span>
-                      <ExternalLink className="w-3 h-3 text-[#1A73E8]" />
-                    </a>
-                  ))}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] font-mono font-bold text-[#4B5563] uppercase mr-1">
+                    🔗 Link Chứng Thực:
+                  </span>
+                  {(result.sourceUrls && result.sourceUrls.length > 0 ? result.sourceUrls : [result.sourceUrl!]).map(
+                    (url, idx) => {
+                      let domain = "";
+                      try {
+                        domain = new URL(url).hostname.replace(/^www\./, "");
+                      } catch {
+                        domain = url.substring(0, 24);
+                      }
+
+                      const isHovered = hoveredLinkIndex === idx;
+                      const isOpen = openLinkIndex === idx;
+
+                      return (
+                        <div key={idx} className="relative inline-block">
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onMouseEnter={() => setHoveredLinkIndex(idx)}
+                            onMouseLeave={() => setHoveredLinkIndex(null)}
+                            onClick={() => setOpenLinkIndex(isOpen ? null : idx)}
+                            className="px-2 py-0.5 bg-white hover:bg-[#E8F0FE] border border-[#D2E3FC] hover:border-[#1A73E8] rounded-md text-[11px] font-mono font-bold text-[#1A73E8] transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs cursor-pointer"
+                          >
+                            <span>Link #{idx + 1}</span>
+                            <ExternalLink className="w-3 h-3 text-[#1A73E8]" />
+                          </a>
+
+                          {/* Hover / Click Link Preview Popover */}
+                          {(isHovered || isOpen) && (
+                            <div className="absolute left-0 top-full mt-1.5 w-72 p-3 bg-[#111827] text-white text-[11px] rounded-2xl shadow-xl z-30 space-y-2 animate-in fade-in zoom-in-95 duration-150 border border-gray-700 pointer-events-auto">
+                              <div className="flex items-center justify-between text-[#38BDF8] font-mono font-bold text-[10px] uppercase border-b border-gray-800 pb-1">
+                                <span className="flex items-center gap-1 truncate">
+                                  <ExternalLink className="w-3.5 h-3.5 text-[#38BDF8]" /> {domain}
+                                </span>
+                                <span className="text-[9px] text-gray-400 bg-gray-800 px-1.5 py-0.5 rounded font-mono">
+                                  Link #{idx + 1}
+                                </span>
+                              </div>
+
+                              <p className="text-gray-200 text-xs font-mono break-all leading-relaxed bg-gray-900/80 p-2 rounded-xl border border-gray-800 select-all">
+                                {url}
+                              </p>
+
+                              <div className="pt-1 border-t border-gray-800 flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400 font-mono">Click để chuyển tới link</span>
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 bg-[#1A73E8] hover:bg-[#1557B0] text-white rounded-lg text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                                >
+                                  <span>Mở trang ↗</span>
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                  )}
                 </div>
               )}
             </div>
@@ -484,13 +556,39 @@ export function AiDecomposedResults({
                           </select>
                         </div> */}
 
-                        {/* Risk Warning Box (ONLY for URGENT/HIGH or explicit risk) */}
+                        {/* Compact Risk Warning Badge with Hover / Click Popover */}
                         {(task.priority === "URGENT" || task.riskWarning) && (
-                          <div className="ml-6 p-2 rounded-lg bg-[#FFF0F0] border border-[#FADBD8] text-[11px] text-[#D93025] space-y-0.5">
-                            <span className="font-bold font-mono flex items-center gap-1 text-[10px]">
-                              <AlertTriangle className="w-3 h-3 text-[#D93025]" /> Cảnh báo rủi ro thực tế:
-                            </span>
-                            <p className="leading-snug text-[11px]">{task.riskWarning || "Task có tính chất phức tạp cao, cần chú ý kiểm thử kỹ."}</p>
+                          <div className="relative inline-block ml-6">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenRiskIndex(openRiskIndex === originalIndex ? null : originalIndex);
+                              }}
+                              onMouseEnter={() => setHoveredRiskIndex(originalIndex)}
+                              onMouseLeave={() => setHoveredRiskIndex(null)}
+                              className="px-2 py-0.5 rounded-md bg-[#FFF0F0] text-[#D93025] border border-[#FADBD8] text-[10px] font-bold font-mono flex items-center gap-1 hover:bg-[#FCE8E6] transition-all cursor-pointer shadow-2xs"
+                            >
+                              <AlertTriangle className="w-3 h-3 text-[#D93025]" />
+                              <span>⚠️ Cảnh báo rủi ro</span>
+                            </button>
+
+                            {/* Risk Detail Popover */}
+                            {(hoveredRiskIndex === originalIndex || openRiskIndex === originalIndex) && (
+                              <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#111827] text-white text-[11px] rounded-2xl shadow-xl z-30 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 border border-gray-700 pointer-events-auto">
+                                <div className="flex items-center justify-between text-[#F87171] font-mono font-bold text-[10px] uppercase border-b border-gray-800 pb-1">
+                                  <span className="flex items-center gap-1">
+                                    <AlertTriangle className="w-3.5 h-3.5" /> Nguyên nhân & Căn cứ Rủi ro
+                                  </span>
+                                </div>
+                                <p className="text-gray-200 text-xs leading-relaxed font-sans font-medium">
+                                  {task.riskWarning || "Task có độ phức tạp kỹ thuật cao, cần chú ý kiểm soát mã hóa dữ liệu & kiểm thử kỹ lưỡng."}
+                                </p>
+                                <div className="text-[10px] text-[#60A5FA] font-mono font-semibold pt-1 border-t border-gray-800 flex items-center gap-1">
+                                  <span>🛡️ Tiêu chuẩn kiểm soát: OWASP & IEEE 12207</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -765,6 +863,15 @@ export function AiDecomposedResults({
           </div>
         </div>
       )}
+
+      {/* RAG Citations Slide-over Drawer */}
+      <RagCitationsDrawer
+        isOpen={isCitationsDrawerOpen}
+        onClose={() => setIsCitationsDrawerOpen(false)}
+        citations={result?.citations || []}
+        sourceReference={result?.sourceReference}
+        sourceUrl={result?.sourceUrl}
+      />
     </div>
   );
 }
