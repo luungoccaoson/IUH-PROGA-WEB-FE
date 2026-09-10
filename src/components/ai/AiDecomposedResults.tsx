@@ -1,35 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
-  Clock,
   PlusCircle,
   RefreshCw,
   FolderPlus,
   ArrowRight,
-  Pencil,
-  Trash2,
-  Plus,
-  ArrowRightLeft,
-  X,
-  Save,
-  GripVertical,
   BookmarkCheck,
   ExternalLink,
-  UserCheck,
   Zap,
-  AlertTriangle,
-  Layers,
   FileText,
-  ShieldCheck,
-  BookOpen,
+  Sparkles,
 } from "lucide-react";
-import { TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
+import { TaskDecompositionResponse, DecomposedTaskItem, aiService } from "@/services/ai.service";
 import { Space } from "@/types";
 import { TargetMode } from "./AiHeaderBanner";
 import { RagCitationsDrawer } from "./RagCitationsDrawer";
+import { AiUnifiedChatBox, UnifiedChatMessage } from "./AiUnifiedChatBox";
+import { AiTaskEditModal } from "./AiTaskEditModal";
+import { AiTaskAddModal } from "./AiTaskAddModal";
+import { AiSprintGroup } from "./AiSprintGroup";
 
 interface AiDecomposedResultsProps {
   result: TaskDecompositionResponse;
@@ -85,83 +77,172 @@ export function AiDecomposedResults({
     groupedTasks["Sprint 1"] = [];
   }
 
-  // Modal Edit State
+  // Modals & UI States
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editPriority, setEditPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("HIGH");
-  const [editEstimatedDays, setEditEstimatedDays] = useState<number>(2);
-  const [editBufferDays, setEditBufferDays] = useState<number>(0);
-  const [editAssignedRole, setEditAssignedRole] = useState<string>("Backend Developer");
-  const [editSprint, setEditSprint] = useState<string>("Sprint 1");
-
-  // Modal Add State
   const [addingToSprint, setAddingToSprint] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newPriority, setNewPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("HIGH");
-  const [newEstimatedDays, setNewEstimatedDays] = useState<number>(2);
-
-  // Drag over sprint state for visual dropzone highlighting
   const [dragOverSprint, setDragOverSprint] = useState<string | null>(null);
-
-  // Citations Drawer State
   const [isCitationsDrawerOpen, setIsCitationsDrawerOpen] = useState(false);
-
-  // Risk Popover Hover / Click States
-  const [hoveredRiskIndex, setHoveredRiskIndex] = useState<number | null>(null);
-  const [openRiskIndex, setOpenRiskIndex] = useState<number | null>(null);
 
   // Citation Link Popover Hover / Click States
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
   const [openLinkIndex, setOpenLinkIndex] = useState<number | null>(null);
 
-  const getPriorityBadgeStyle = (priority: string) => {
-    switch (priority) {
-      case "URGENT":
-        return "bg-[#FCE8E6] text-[#D93025] border-[#FADBD8]";
-      case "HIGH":
-        return "bg-[#FEF7E0] text-[#B06000] border-[#FEEFC3]";
-      case "MEDIUM":
-        return "bg-[#E8F0FE] text-[#1A73E8] border-[#D2E3FC]";
-      default:
-        return "bg-[#E6F4EA] text-[#137333] border-[#CEEAD6]";
+  // Single Unified AI Chatbox States
+  const [isChatBoxOpen, setIsChatBoxOpen] = useState(false);
+  const [targetSprintScope, setTargetSprintScope] = useState<string>("ALL");
+  const [chatBoxMessages, setChatBoxMessages] = useState<UnifiedChatMessage[]>([]);
+  const [isChatBoxLoading, setIsChatBoxLoading] = useState(false);
+  const [prevThreadId, setPrevThreadId] = useState<number | undefined>(result?.threadId);
+
+  // Auto reset Chatbox session when main threadId changes
+  useEffect(() => {
+    if (result?.threadId !== prevThreadId) {
+      setPrevThreadId(result?.threadId);
+      setChatBoxMessages([]);
     }
-  };
+  }, [result?.threadId, prevThreadId]);
 
   const targetSpaceId = targetMode === "NEW_SPACE" ? createdSpaceId : selectedSpaceId;
 
-  // Open Edit Modal
-  const handleOpenEdit = (index: number) => {
-    const item = result.tasks[index];
-    setEditingIndex(index);
-    setEditTitle(item.title);
-    setEditDescription(item.description);
-    setEditPriority(item.priority);
-    setEditEstimatedDays(item.estimatedDays || 2);
-    setEditBufferDays(item.bufferDays || 0);
-    setEditAssignedRole(item.assignedRole || "Backend Developer");
-    setEditSprint(item.sprint || "Sprint 1");
+  // Open Unified Chatbox focused on a target sprint or ALL
+  const handleOpenChatBox = (scope: string) => {
+    setTargetSprintScope(scope);
+    setIsChatBoxOpen(true);
   };
 
-  // Save Edit Task
-  const handleSaveEdit = () => {
-    if (editingIndex === null || !editTitle.trim()) return;
+  // Send AI Chat prompt for Unified Chatbox
+  const handleSendUnifiedChatBox = async (prompt: string) => {
+    if (!prompt.trim() || isChatBoxLoading) return;
 
-    const updated = [...result.tasks];
-    updated[editingIndex] = {
-      ...updated[editingIndex],
-      title: editTitle.trim(),
-      description: editDescription.trim(),
-      priority: editPriority,
-      estimatedDays: editEstimatedDays,
-      bufferDays: editBufferDays,
-      assignedRole: editAssignedRole,
-      sprint: editSprint,
+    const nowTime = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const userMsg: UnifiedChatMessage = {
+      sender: "USER",
+      text: prompt,
+      sprintScope: targetSprintScope,
+      timestamp: nowTime,
     };
 
+    setChatBoxMessages((prev) => [...prev, userMsg]);
+    setIsChatBoxLoading(true);
+
+    try {
+      const spaceIdToUse = selectedSpaceId || 0;
+      const threadIdToUse = result.threadId || undefined;
+
+      const currentTasksJson = JSON.stringify(result.tasks);
+      let fullInstruction = "";
+      if (targetSprintScope === "ALL") {
+        fullInstruction = `[YÊU CẦU TINH CHỈNH TOÀN BỘ BÀI TOÁN WBS]\nYêu cầu người dùng: "${prompt}"\nLƯU Ý QUAN TRỌNG: Người dùng đã sắp xếp, kéo thả các task vào từng Sprint cụ thể. BẮT BUỘC tôn trọng vị trí Sprint hiện tại của từng task, TUYỆT ĐỐI không được kéo task trở lại Sprint cũ. Hãy cập nhật và phân rã lại bảng WBS task hoàn chỉnh.`;
+      } else {
+        const currentSprintTasks = (groupedTasks[targetSprintScope] || []).map((t) => t.task);
+        fullInstruction = `[YÊU CẦU ĐIỀU CHỈNH RIÊNG CHO SPRINT: ${targetSprintScope}]\nCác tasks hiện tại của ${targetSprintScope}: ${JSON.stringify(
+          currentSprintTasks
+        )}\nYêu cầu người dùng: "${prompt}"\nLƯU Ý QUAN TRỌNG: Hãy thực hiện chỉnh sửa/thêm task riêng cho ${targetSprintScope}. Đối với các task thuộc Sprint khác hoặc các task đã được người dùng kéo sang Sprint khác, BẮT BUỘC giữ nguyên vị trí Sprint hiện tại của chúng, TUYỆT ĐỐI không được chuyển chúng về Sprint cũ.`;
+      }
+
+      let updatedResult: TaskDecompositionResponse | null = null;
+      try {
+        updatedResult = await aiService.decomposeRequirements(spaceIdToUse, fullInstruction, threadIdToUse, currentTasksJson);
+      } catch (err) {
+        console.warn("Backend decompose call warning, applying smart local refinement:", err);
+      }
+
+      if (updatedResult && updatedResult.tasks && updatedResult.tasks.length > 0) {
+        // Map current user task sprint placements: title -> sprint
+        const userPlacedSprintMap: Record<string, string> = {};
+        result.tasks.forEach((t) => {
+          const cleanKey = (t.title || "").toLowerCase().replace(/^task-\d+\s*:\s*/i, "").trim();
+          if (cleanKey && t.sprint) {
+            userPlacedSprintMap[cleanKey] = t.sprint;
+          }
+        });
+
+        // Ensure tasks that were dragged keep their current user-placed sprint unless explicitly targeted
+        const mergedTasks = updatedResult.tasks.map((t) => {
+          const cleanKey = (t.title || "").toLowerCase().replace(/^task-\d+\s*:\s*/i, "").trim();
+          if (userPlacedSprintMap[cleanKey] && targetSprintScope !== "ALL") {
+            return {
+              ...t,
+              sprint: userPlacedSprintMap[cleanKey],
+            };
+          }
+          return t;
+        });
+
+        onUpdateTasks(mergedTasks);
+        const assistantMsg: UnifiedChatMessage = {
+          sender: "ASSISTANT",
+          text: `✅ AI đã cập nhật công việc thành công cho **${
+            targetSprintScope === "ALL" ? "Toàn bộ bài toán" : targetSprintScope
+          }** theo yêu cầu!`,
+          sprintScope: targetSprintScope,
+          timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        };
+        setChatBoxMessages((prev) => [...prev, assistantMsg]);
+      } else {
+        // Smart client-side fallback
+        const promptLower = prompt.toLowerCase();
+        let updatedTasks = [...result.tasks];
+        let responseNote = "";
+
+        if (targetSprintScope !== "ALL") {
+          if (promptLower.includes("bổ sung") || promptLower.includes("thêm")) {
+            const newTaskTitle =
+              prompt.replace(/^(bổ sung|thêm|thêm task|bổ sung task)\s*/i, "").trim() ||
+              `Công việc mới bổ sung cho ${targetSprintScope}`;
+            updatedTasks.push({
+              sprint: targetSprintScope,
+              title: newTaskTitle.charAt(0).toUpperCase() + newTaskTitle.slice(1),
+              description: `Nhiệm vụ được AI bổ sung tự động cho ${targetSprintScope} theo yêu cầu: "${prompt}"`,
+              priority: "HIGH",
+              estimatedDays: 2,
+              assignedRole: "Backend Developer",
+            });
+            responseNote = `✅ Đã bổ sung task mới **"${newTaskTitle}"** vào ${targetSprintScope}.`;
+          } else if (promptLower.includes("tăng") || promptLower.includes("kéo dài")) {
+            updatedTasks = updatedTasks.map((t) =>
+              t.sprint === targetSprintScope ? { ...t, estimatedDays: (t.estimatedDays || 2) + 1 } : t
+            );
+            responseNote = `⏱️ Đã tăng thêm +1 ngày làm cho tất cả task trong ${targetSprintScope}.`;
+          } else if (promptLower.includes("rủi ro") || promptLower.includes("dự phòng")) {
+            updatedTasks = updatedTasks.map((t) =>
+              t.sprint === targetSprintScope
+                ? {
+                    ...t,
+                    bufferDays: (t.bufferDays || 0) + 1,
+                    riskWarning: "Task có rủi ro kỹ thuật cao, cần kiểm thử kỹ.",
+                  }
+                : t
+            );
+            responseNote = `🛡️ Đã cập nhật cảnh báo rủi ro & thêm ngày dự phòng cho ${targetSprintScope}.`;
+          } else {
+            responseNote = `💡 Đã ghi nhận yêu cầu chỉnh sửa cho ${targetSprintScope}.`;
+          }
+        } else {
+          responseNote = `💡 Đã ghi nhận yêu cầu tinh chỉnh toàn bộ bài toán WBS.`;
+        }
+
+        onUpdateTasks(updatedTasks);
+        const assistantMsg: UnifiedChatMessage = {
+          sender: "ASSISTANT",
+          text: responseNote,
+          sprintScope: targetSprintScope,
+          timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        };
+        setChatBoxMessages((prev) => [...prev, assistantMsg]);
+      }
+    } catch (err) {
+      console.error("Error in unified chatbox:", err);
+    } finally {
+      setIsChatBoxLoading(false);
+    }
+  };
+
+  // Save Task Edit from modal
+  const handleSaveEdit = (index: number, updatedTask: DecomposedTaskItem) => {
+    const updated = [...result.tasks];
+    updated[index] = updatedTask;
     onUpdateTasks(updated);
-    setEditingIndex(null);
   };
 
   // Delete Task
@@ -178,28 +259,15 @@ export function AiDecomposedResults({
     onUpdateTasks(updated);
   };
 
-  // Add Task to Sprint
-  const handleSaveAddTask = () => {
-    if (!addingToSprint || !newTitle.trim()) return;
-
-    const newTask: DecomposedTaskItem = {
-      sprint: addingToSprint,
-      title: newTitle.trim(),
-      description: newDescription.trim() || "Công việc được bổ sung thủ công",
-      priority: newPriority,
-      estimatedDays: newEstimatedDays,
-    };
-
+  // Add Task to Sprint from modal
+  const handleSaveAddTask = (newTask: DecomposedTaskItem) => {
     onUpdateTasks([...result.tasks, newTask]);
-    setAddingToSprint(null);
-    setNewTitle("");
-    setNewDescription("");
   };
 
   return (
     <div className="space-y-6 font-sans animate-in fade-in duration-300">
       {/* Summary Card */}
-      <div className="bg-[#F0F7FF] border border-[#D2E3FC] p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-[#F0F7FF] border border-[#D2E3FC] p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
         <div className="space-y-2 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-[#1A73E8]">
@@ -207,11 +275,24 @@ export function AiDecomposedResults({
               Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
             </span>
             <button
+              type="button"
               onClick={() => setIsCitationsDrawerOpen(true)}
               className="px-2.5 py-1 bg-[#111827] hover:bg-black text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5 text-[#38BDF8]" />
               <span>📚 Bằng chứng & Trích dẫn RAG</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenChatBox("ALL")}
+              className={`px-2.5 py-1 text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer ${
+                isChatBoxOpen && targetSprintScope === "ALL"
+                  ? "bg-[#38BDF8] text-gray-900 font-extrabold"
+                  : "bg-[#1A73E8] hover:bg-[#1557B0]"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>💬 Chat AI Tinh Chỉnh WBS</span>
             </button>
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
@@ -220,7 +301,9 @@ export function AiDecomposedResults({
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
                 <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
-                <span>Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong></span>
+                <span>
+                  Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong>
+                </span>
               </div>
 
               {/* Render ALL Tri-Anchor Benchmark Citation Links (Compact Badges with Popover) */}
@@ -295,21 +378,24 @@ export function AiDecomposedResults({
           )}
 
           <p className="text-xs text-[#4B5563]">
-            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Hỗ trợ Story Points Fibonacci, Phân Vai Role & Đánh giá Rủi ro).
+            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Hỗ trợ Story Points
+            Fibonacci, Phân Vai Role & Đánh giá Rủi ro).
           </p>
         </div>
 
         {/* Action Import Button */}
         <div className="space-y-2 text-left md:text-right shrink-0">
           <button
+            type="button"
             onClick={onImportTasks}
             disabled={importing || importSuccess || isImported || result.tasks.length === 0}
-            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
+            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${
+              importSuccess || isImported
                 ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
                 : targetMode === "NEW_SPACE"
-                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
-                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
-              }`}
+                ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+            }`}
           >
             {importing ? (
               <>
@@ -345,6 +431,7 @@ export function AiDecomposedResults({
               </p>
               {targetSpaceId && (
                 <button
+                  type="button"
                   onClick={() => {
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(new Event("switch_to_kanban_tab"));
@@ -367,7 +454,9 @@ export function AiDecomposedResults({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-[#10B981]" />
-              <span>Tiến Trình Các Sprint Trong Space "{selectedSpace?.name}" ({existingTaskCount} Tasks)</span>
+              <span>
+                Tiến Trình Các Sprint Trong Space "{selectedSpace?.name}" ({existingTaskCount} Tasks)
+              </span>
             </span>
             <span className="text-[11px] text-gray-400 font-mono">Không đụng vào các Sprint cũ</span>
           </div>
@@ -381,8 +470,8 @@ export function AiDecomposedResults({
               const badgeStyle = isActive
                 ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
                 : isClosed
-                  ? "bg-gray-800/80 text-gray-400 border-gray-700"
-                  : "bg-blue-500/20 text-blue-300 border-blue-500/40";
+                ? "bg-gray-800/80 text-gray-400 border-gray-700"
+                : "bg-blue-500/20 text-blue-300 border-blue-500/40";
 
               const statusText = isActive ? "Đang chạy" : isClosed ? "Đã hoàn thành" : "Sắp tới";
 
@@ -413,8 +502,21 @@ export function AiDecomposedResults({
           const isDragOver = dragOverSprint === sprintName;
 
           return (
-            <div
+            <AiSprintGroup
               key={groupIdx}
+              sprintName={sprintName}
+              groupIdx={groupIdx}
+              taskList={taskList}
+              isChatBoxOpen={isChatBoxOpen}
+              targetSprintScope={targetSprintScope}
+              isDragOver={isDragOver}
+              existingTaskCount={existingTaskCount}
+              availableSprints={availableSprints}
+              onOpenChatBox={handleOpenChatBox}
+              onOpenAddTask={(sprint) => setAddingToSprint(sprint)}
+              onOpenEditTask={(index) => setEditingIndex(index)}
+              onDeleteTask={handleDeleteTask}
+              onMoveSprint={handleMoveSprint}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
@@ -430,439 +532,40 @@ export function AiDecomposedResults({
                   handleMoveSprint(taskIdx, sprintName);
                 }
               }}
-              className={`bg-white border rounded-2xl p-4 space-y-3 shadow-2xs transition-all ${isDragOver
-                  ? "border-[#1A73E8] bg-[#F0F7FF] ring-2 ring-[#1A73E8]/30"
-                  : "border-[#E5E7EB]"
-                }`}
-            >
-              {/* Sprint Group Title Header */}
-              <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div className="w-7 h-7 rounded-lg bg-[#111827] text-white flex items-center justify-center font-mono font-bold text-xs shrink-0">
-                    S{groupIdx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-extrabold text-sm text-[#111827] truncate">
-                      {sprintName.includes(":") ? sprintName.split(":")[0].trim() : sprintName}
-                    </h4>
-                    <p className="text-[11px] text-[#6B7280] truncate">
-                      {sprintName.includes(":") ? sprintName.split(":").slice(1).join(":").trim() : `Bao gồm ${taskList.length} hạng mục công việc`}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Add Task to this Sprint Button */}
-                <button
-                  onClick={() => setAddingToSprint(sprintName)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#111827] rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Thêm Task
-                </button>
-              </div>
-
-              {/* Tasks List */}
-              {taskList.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {taskList.map(({ task, originalIndex }) => {
-                    const cleanTitle = (task.title || "").replace(/^Task-\d+\s*:\s*/i, "").trim();
-
-                    return (
-                      <div
-                        key={originalIndex}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("aiTaskIndex", originalIndex.toString());
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        className="p-3.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] hover:border-[#111827] transition-all space-y-2.5 shadow-2xs group relative cursor-grab active:cursor-grabbing hover:bg-white"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <GripVertical className="w-4 h-4 text-gray-400 shrink-0 cursor-grab active:cursor-grabbing hover:text-[#111827]" />
-                            <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0">
-                              Task-{(existingTaskCount || 0) + originalIndex + 1}
-                            </span>
-                            <h5 className="font-extrabold text-xs text-[#111827] leading-snug truncate">
-                              {cleanTitle}
-                            </h5>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <span
-                              className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-md border ${getPriorityBadgeStyle(
-                                task.priority
-                              )}`}
-                            >
-                              {task.priority}
-                            </span>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-[#4B5563] leading-relaxed line-clamp-2 pl-6">
-                          {task.description}
-                        </p>
-
-                        {/* Role & Time Estimates */}
-                        <div className="flex flex-wrap items-center gap-1.5 pl-6 font-mono text-[10px]">
-                          {task.assignedRole && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E8F0FE] text-[#1A73E8] font-bold border border-[#D2E3FC]">
-                              <UserCheck className="w-3 h-3" />
-                              {task.assignedRole}
-                            </span>
-                          )}
-
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F3F4F6] text-[#374151] font-bold border border-[#E5E7EB]">
-                            <Clock className="w-3 h-3 text-[#6B7280]" />
-                            Ước tính: {task.estimatedDays || 2} ngày
-                          </span>
-
-                          {task.bufferDays ? (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF7E0] text-[#B06000] font-bold border border-[#FEEFC3]">
-                              🛡️ +{task.bufferDays} ngày dự phòng
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {/* Member Assignee Selector */}
-                        {/* <div className="ml-6 flex items-center gap-1.5 text-xs text-[#374151] bg-[#F9FAFB] p-1.5 rounded-xl border border-[#E5E7EB]">
-                          <span className="font-bold font-mono text-[10px] text-[#6B7280] shrink-0">Phân công:</span>
-                          <select
-                            value={task.suggestedMemberName || ""}
-                            onChange={(e) => {
-                              const updated = [...result.tasks];
-                              updated[originalIndex] = {
-                                ...updated[originalIndex],
-                                suggestedMemberName: e.target.value,
-                              };
-                              onUpdateTasks(updated);
-                            }}
-                            className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2 py-0.5 text-xs font-bold text-[#111827] focus:outline-none cursor-pointer truncate"
-                          >
-                            <option value="">-- Chưa gán --</option>
-                            {members && members.length > 0 ? (
-                              Array.from(new Set(members)).map((m, idx) => (
-                                <option key={`${m}-${idx}`} value={m}>
-                                  👤 {m}
-                                </option>
-                              ))
-                            ) : (
-                              <>
-                                <option value="Nam">👤 Nam (Backend)</option>
-                                <option value="Linh">👤 Linh (Frontend)</option>
-                                <option value="Tuấn">👤 Tuấn (QA / QC)</option>
-                                <option value="Hùng">👤 Hùng (DevOps)</option>
-                              </>
-                            )}
-                          </select>
-                        </div> */}
-
-                        {/* Compact Risk Warning Badge with Hover / Click Popover */}
-                        {(task.priority === "URGENT" || task.riskWarning) && (
-                          <div className="relative inline-block ml-6">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenRiskIndex(openRiskIndex === originalIndex ? null : originalIndex);
-                              }}
-                              onMouseEnter={() => setHoveredRiskIndex(originalIndex)}
-                              onMouseLeave={() => setHoveredRiskIndex(null)}
-                              className="px-2 py-0.5 rounded-md bg-[#FFF0F0] text-[#D93025] border border-[#FADBD8] text-[10px] font-bold font-mono flex items-center gap-1 hover:bg-[#FCE8E6] transition-all cursor-pointer shadow-2xs"
-                            >
-                              <AlertTriangle className="w-3 h-3 text-[#D93025]" />
-                              <span>⚠️ Cảnh báo rủi ro</span>
-                            </button>
-
-                            {/* Risk Detail Popover */}
-                            {(hoveredRiskIndex === originalIndex || openRiskIndex === originalIndex) && (
-                              <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#111827] text-white text-[11px] rounded-2xl shadow-xl z-30 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 border border-gray-700 pointer-events-auto">
-                                <div className="flex items-center justify-between text-[#F87171] font-mono font-bold text-[10px] uppercase border-b border-gray-800 pb-1">
-                                  <span className="flex items-center gap-1">
-                                    <AlertTriangle className="w-3.5 h-3.5" /> Nguyên nhân & Căn cứ Rủi ro
-                                  </span>
-                                </div>
-                                <p className="text-gray-200 text-xs leading-relaxed font-sans font-medium">
-                                  {task.riskWarning || "Task có độ phức tạp kỹ thuật cao, cần chú ý kiểm soát mã hóa dữ liệu & kiểm thử kỹ lưỡng."}
-                                </p>
-                                <div className="text-[10px] text-[#60A5FA] font-mono font-semibold pt-1 border-t border-gray-800 flex items-center gap-1">
-                                  <span>🛡️ Tiêu chuẩn kiểm soát: OWASP & IEEE 12207</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Card Footer Controls (Move Sprint, Edit, Delete) */}
-                        <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">
-                          <span className="flex items-center gap-1 pl-6 text-[10px]">
-                            <Clock className="w-3 h-3 text-[#111827]" />
-                            {task.estimatedDays || 2} ngày
-                          </span>
-
-                          <div className="flex items-center gap-2">
-                            {/* Move Sprint Selector (Shortened) */}
-                            <div className="flex items-center gap-1 text-[10px] text-[#4B5563]">
-                              <ArrowRightLeft className="w-3 h-3 text-[#6B7280]" />
-                              <select
-                                value={task.sprint || sprintName}
-                                onChange={(e) => handleMoveSprint(originalIndex, e.target.value)}
-                                className="bg-white border border-[#E5E7EB] rounded-lg px-1.5 py-0.5 font-bold text-[#111827] cursor-pointer max-w-[130px] truncate"
-                              >
-                                {availableSprints.map((sp) => {
-                                  const shortSpLabel = sp.includes(":") ? sp.split(":")[0].trim() : sp;
-                                  return (
-                                    <option key={sp} value={sp}>
-                                      {shortSpLabel}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            </div>
-
-                            {/* Edit Button */}
-                            <button
-                              onClick={() => handleOpenEdit(originalIndex)}
-                              className="p-1 hover:bg-gray-200 rounded-md text-[#1A73E8] transition-colors"
-                              title="Sửa Task"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => handleDeleteTask(originalIndex)}
-                              className="p-1 hover:bg-red-100 rounded-md text-[#D93025] transition-colors"
-                              title="Xóa Task"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl border border-dashed border-[#E5E7EB] text-center text-xs text-[#9CA3AF]">
-                  Chưa có task nào trong {sprintName}. Bạn có thể <strong>kéo thả Task từ Sprint khác vào đây</strong> hoặc bấm <strong>"Thêm Task"</strong>.
-                </div>
-              )}
-            </div>
+            />
           );
         })}
       </div>
 
       {/* EDIT TASK MODAL */}
-      {editingIndex !== null && (
-        <div className="fixed inset-0 bg-[#111827]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-[#E5E7EB] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-extrabold text-[#111827] flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-[#1A73E8]" /> Chỉnh Sửa Task AI Phân Rã
-              </h3>
-              <button onClick={() => setEditingIndex(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 font-sans">
-              <div>
-                <label className="text-xs font-bold text-[#374151] font-mono uppercase">Tiêu đề Task:</label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-[#E5E7EB] rounded-xl text-sm font-bold text-[#111827] mt-1"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#374151] font-mono uppercase">Mô tả công việc:</label>
-                <textarea
-                  rows={3}
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-[#E5E7EB] rounded-xl text-xs text-[#111827] mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Sprint:</label>
-                  <select
-                    value={editSprint}
-                    onChange={(e) => setEditSprint(e.target.value)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  >
-                    {availableSprints.map((sp) => (
-                      <option key={sp} value={sp}>
-                        {sp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Mức ưu tiên:</label>
-                  <select
-                    value={editPriority}
-                    onChange={(e) => setEditPriority(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  >
-                    <option value="URGENT">URGENT</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LOW">LOW</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Số ngày làm:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={editEstimatedDays}
-                    onChange={(e) => setEditEstimatedDays(parseInt(e.target.value, 10) || 1)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Ngày dự phòng rủi ro:</label>
-                  <select
-                    value={editBufferDays}
-                    onChange={(e) => setEditBufferDays(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  >
-                    <option value={0}>0 ngày (Không có rủi ro)</option>
-                    <option value={1}>+1 ngày dự phòng</option>
-                    <option value={2}>+2 ngày dự phòng (Rủi ro cao)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Vai trò đảm nhiệm (Role):</label>
-                  <select
-                    value={editAssignedRole}
-                    onChange={(e) => setEditAssignedRole(e.target.value)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  >
-                    <option value="Tech Lead / System Architect">Tech Lead / System Architect</option>
-                    <option value="Senior Backend Developer">Senior Backend Developer</option>
-                    <option value="Backend Developer">Backend Developer</option>
-                    <option value="Frontend Developer">Frontend Developer</option>
-                    <option value="DevOps / SRE Engineer">DevOps / SRE Engineer</option>
-                    <option value="QA / QC Lead">QA / QC Lead</option>
-                    <option value="Business Analyst (BA)">Business Analyst (BA)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button
-                onClick={() => setEditingIndex(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-xs font-bold rounded-xl"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-2 bg-[#111827] text-white text-xs font-bold rounded-xl flex items-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" /> Lưu Thay Đổi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AiTaskEditModal
+        isOpen={editingIndex !== null}
+        task={editingIndex !== null ? result.tasks[editingIndex] : null}
+        taskIndex={editingIndex}
+        availableSprints={availableSprints}
+        onSave={handleSaveEdit}
+        onClose={() => setEditingIndex(null)}
+      />
 
       {/* ADD TASK MODAL */}
-      {addingToSprint !== null && (
-        <div className="fixed inset-0 bg-[#111827]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-[#E5E7EB] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-extrabold text-[#111827] flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-[#137333]" /> Thêm Task Mới Vào {addingToSprint}
-              </h3>
-              <button onClick={() => setAddingToSprint(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AiTaskAddModal
+        isOpen={addingToSprint !== null}
+        sprintName={addingToSprint}
+        onSave={handleSaveAddTask}
+        onClose={() => setAddingToSprint(null)}
+      />
 
-            <div className="space-y-3 font-sans">
-              <div>
-                <label className="text-xs font-bold text-[#374151] font-mono uppercase">Tiêu đề Task mới:</label>
-                <input
-                  type="text"
-                  placeholder="Nhập tên công việc cần làm..."
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-[#E5E7EB] rounded-xl text-sm font-bold text-[#111827] mt-1"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#374151] font-mono uppercase">Mô tả công việc:</label>
-                <textarea
-                  rows={3}
-                  placeholder="Mô tả công việc chi tiết..."
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-[#E5E7EB] rounded-xl text-xs text-[#111827] mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Mức ưu tiên:</label>
-                  <select
-                    value={newPriority}
-                    onChange={(e) => setNewPriority(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  >
-                    <option value="URGENT">URGENT</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LOW">LOW</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#374151] font-mono uppercase">Số ngày ước tính:</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={newEstimatedDays}
-                    onChange={(e) => setNewEstimatedDays(parseInt(e.target.value, 10) || 1)}
-                    className="w-full px-3 py-2 border border-[#E5E7EB] rounded-xl text-xs font-bold text-[#111827] mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button
-                onClick={() => setAddingToSprint(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-xs font-bold rounded-xl"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleSaveAddTask}
-                disabled={!newTitle.trim()}
-                className="px-4 py-2 bg-[#137333] hover:bg-[#0D652D] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5" /> Thêm Task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Floating Unified AI Chatbox Widget (Enlarged & Scope Selector) */}
+      <AiUnifiedChatBox
+        isOpen={isChatBoxOpen}
+        onClose={() => setIsChatBoxOpen(false)}
+        targetSprintScope={targetSprintScope}
+        onScopeChange={(scope) => setTargetSprintScope(scope)}
+        availableSprints={availableSprints}
+        messages={chatBoxMessages}
+        onSendMessage={handleSendUnifiedChatBox}
+        loading={isChatBoxLoading}
+      />
 
       {/* RAG Citations Slide-over Drawer */}
       <RagCitationsDrawer

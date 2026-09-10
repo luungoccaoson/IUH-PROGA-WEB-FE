@@ -182,8 +182,13 @@ export function AiChatWindow({
                     )}
                   </div>
 
-                  {/* Discreet Copy Button (Appears Below / Beside Text) */}
-                  <div className={`flex items-center gap-1 mt-1 ${isUser ? "justify-end" : "justify-start"}`}>
+                  {/* Discreet Timestamp & Copy Button */}
+                  <div className={`flex items-center gap-2 mt-1 ${isUser ? "justify-end" : "justify-start"}`}>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {msg.createdAt
+                        ? new Date(msg.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+                        : new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                     <button
                       onClick={() => handleCopy(msgId, content)}
                       className="text-[10px] font-medium text-[#6B7280] hover:text-[#111827] flex items-center gap-1 px-1.5 py-0.5 rounded-md hover:bg-gray-200/60 transition-all cursor-pointer opacity-80 group-hover:opacity-100"

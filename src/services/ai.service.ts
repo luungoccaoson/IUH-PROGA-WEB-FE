@@ -71,7 +71,8 @@ export const aiService = {
   decomposeRequirements: async (
     spaceId: number,
     requirementText: string,
-    threadId?: number | null
+    threadId?: number | null,
+    currentTasksJson?: string | null
   ): Promise<TaskDecompositionResponse> => {
     const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>(
       "/ai/agents/decompose",
@@ -79,6 +80,7 @@ export const aiService = {
         spaceId,
         threadId: threadId || undefined,
         requirementText,
+        currentTasksJson: currentTasksJson || undefined,
       },
       { timeout: 120000 } // Extended 2-minute timeout for AI LLM reasoning
     );
