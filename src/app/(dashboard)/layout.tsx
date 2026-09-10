@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { LayoutGrid, Sparkles, LogOut, Folder, Compass, HelpCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  LayoutGrid,
+  Sparkles,
+  LogOut,
+  Folder,
+  Compass,
+  HelpCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { usePathname } from "next/navigation";
 import { workspaceService } from "@/services/workspace.service";
@@ -19,7 +28,9 @@ export default function DashboardLayout({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Active workspace state
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(
+    null,
+  );
   const [spaces, setSpaces] = useState<Space[]>([]);
 
   // Create Space Modal state
@@ -39,7 +50,10 @@ export default function DashboardLayout({
   const loadSpaces = async () => {
     if (isNumberId && activeWorkspaceId) {
       try {
-        const data = await workspaceService.getSpacesByWorkspace(parseInt(activeWorkspaceId, 10), user?.id);
+        const data = await workspaceService.getSpacesByWorkspace(
+          parseInt(activeWorkspaceId, 10),
+          user?.id,
+        );
         setSpaces(data);
       } catch (err) {
         console.error("Error loading spaces for sidebar:", err);
@@ -52,18 +66,21 @@ export default function DashboardLayout({
   useEffect(() => {
     loadAuthFromStorage();
     setMounted(true);
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem("accessToken");
     if (!token) {
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
   }, [loadAuthFromStorage]);
 
   // Load workspace details dynamically when path parameter changes
   useEffect(() => {
     if (isNumberId && activeWorkspaceId) {
-      workspaceService.getWorkspaceById(parseInt(activeWorkspaceId, 10))
+      workspaceService
+        .getWorkspaceById(parseInt(activeWorkspaceId, 10))
         .then((data) => setActiveWorkspace(data))
-        .catch((err) => console.error("Error loading workspace for sidebar:", err));
+        .catch((err) =>
+          console.error("Error loading workspace for sidebar:", err),
+        );
       loadSpaces();
     } else {
       setActiveWorkspace(null);
@@ -74,7 +91,8 @@ export default function DashboardLayout({
       loadSpaces();
     };
     window.addEventListener("space-created", handleSpaceCreated);
-    return () => window.removeEventListener("space-created", handleSpaceCreated);
+    return () =>
+      window.removeEventListener("space-created", handleSpaceCreated);
   }, [activeWorkspaceId, isNumberId]);
 
   const handleCreateSpace = async (e: React.FormEvent) => {
@@ -87,7 +105,9 @@ export default function DashboardLayout({
       await workspaceService.createSpace({
         workspaceId: parseInt(activeWorkspaceId, 10),
         name: newSpaceName.trim(),
-        startDate: newSpaceStartDate ? `${newSpaceStartDate}T00:00:00` : undefined,
+        startDate: newSpaceStartDate
+          ? `${newSpaceStartDate}T00:00:00`
+          : undefined,
         endDate: newSpaceEndDate ? `${newSpaceEndDate}T23:59:59` : undefined,
       });
       setNewSpaceName("");
@@ -97,7 +117,9 @@ export default function DashboardLayout({
       await loadSpaces();
     } catch (err: any) {
       console.error("Error creating space:", err);
-      setCreateSpaceError(err.response?.data?.message || "Không thể tạo space.");
+      setCreateSpaceError(
+        err.response?.data?.message || "Không thể tạo space.",
+      );
     } finally {
       setCreateSpaceLoading(false);
     }
@@ -119,8 +141,12 @@ export default function DashboardLayout({
   const handleOpenEditSpace = () => {
     if (activeSpace) {
       setEditSpaceName(activeSpace.name);
-      setEditSpaceStartDate(activeSpace.startDate ? activeSpace.startDate.substring(0, 10) : "");
-      setEditSpaceEndDate(activeSpace.endDate ? activeSpace.endDate.substring(0, 10) : "");
+      setEditSpaceStartDate(
+        activeSpace.startDate ? activeSpace.startDate.substring(0, 10) : "",
+      );
+      setEditSpaceEndDate(
+        activeSpace.endDate ? activeSpace.endDate.substring(0, 10) : "",
+      );
       setIsEditSpaceOpen(true);
     } else {
       alert("Vui lòng chọn một Space trước khi cài đặt.");
@@ -137,14 +163,18 @@ export default function DashboardLayout({
       const updated = await workspaceService.updateSpace(activeSpaceId, {
         workspaceId: parseInt(activeWorkspaceId!, 10),
         name: editSpaceName.trim(),
-        startDate: editSpaceStartDate ? `${editSpaceStartDate}T00:00:00` : undefined,
+        startDate: editSpaceStartDate
+          ? `${editSpaceStartDate}T00:00:00`
+          : undefined,
         endDate: editSpaceEndDate ? `${editSpaceEndDate}T23:59:59` : undefined,
       });
       setIsEditSpaceOpen(false);
       setSpaces((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err: any) {
       console.error("Error editing space:", err);
-      setEditSpaceError(err.response?.data?.message || "Không thể cập nhật Space.");
+      setEditSpaceError(
+        err.response?.data?.message || "Không thể cập nhật Space.",
+      );
     } finally {
       setEditSpaceLoading(false);
     }
@@ -152,7 +182,11 @@ export default function DashboardLayout({
 
   const handleDeleteSpaceSubmit = async () => {
     if (!activeSpaceId) return;
-    if (!window.confirm("Bạn có chắc chắn muốn xóa Space này không? Tất cả các task thuộc về Space này cũng sẽ bị ảnh hưởng.")) {
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn xóa Space này không? Tất cả các task thuộc về Space này cũng sẽ bị ảnh hưởng.",
+      )
+    ) {
       return;
     }
 
@@ -185,15 +219,20 @@ export default function DashboardLayout({
     );
   }
 
-  if (typeof window !== 'undefined' && !localStorage.getItem('accessToken')) {
+  if (typeof window !== "undefined" && !localStorage.getItem("accessToken")) {
     return null;
   }
 
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
       {/* Left Sidebar - Warm Beige #F6F5EF */}
-      <aside className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${isSidebarCollapsed ? "hidden" : "w-64 p-5 flex flex-col justify-between hidden md:flex"
-        }`}>
+      <aside
+        className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${
+          isSidebarCollapsed
+            ? "hidden"
+            : "w-64 p-5 flex flex-col justify-between hidden md:flex"
+        }`}
+      >
         <div className="space-y-6">
           {/* Logo & Brand & Toggle Button */}
           <div className="flex items-center justify-between px-1">
@@ -237,10 +276,11 @@ export default function DashboardLayout({
                   {/* Dashboard */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}`
-                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                      }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                      pathname === `/workspaces/${activeWorkspaceId}`
+                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
                   >
                     <LayoutGrid className="w-5 h-5 text-[#111827]" />
                     <span>Dashboard</span>
@@ -249,10 +289,12 @@ export default function DashboardLayout({
                   {/* AI Khởi Tạo Space */}
                   <Link
                     href={`/workspaces/${activeWorkspaceId}/ai-analysis`}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === `/workspaces/${activeWorkspaceId}/ai-analysis`
-                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                      }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                      pathname ===
+                      `/workspaces/${activeWorkspaceId}/ai-analysis`
+                        ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    }`}
                   >
                     <Sparkles className="w-5 h-5 text-[#137333]" />
                     <span>AI Khởi Tạo Space</span>
@@ -304,12 +346,15 @@ export default function DashboardLayout({
                       <Link
                         key={space.id}
                         href={`/workspaces/${targetWsId}/spaces/${space.id}`}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${isActive
-                          ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
-                          : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                          }`}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+                          isActive
+                            ? "bg-white text-[#111827] border border-[#E5E7EB] shadow-sm scale-[1.01]"
+                            : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                        }`}
                       >
-                        <div className={`w-5 h-5 rounded-lg ${color.bg} flex items-center justify-center ${color.text} font-mono font-bold text-[10px]`}>
+                        <div
+                          className={`w-5 h-5 rounded-lg ${color.bg} flex items-center justify-center ${color.text} font-mono font-bold text-[10px]`}
+                        >
                           {initials}
                         </div>
                         <span className="truncate">{space.name}</span>
@@ -344,10 +389,11 @@ export default function DashboardLayout({
               <nav className="space-y-1 font-sans">
                 <Link
                   href="/workspaces"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${pathname === "/workspaces"
-                    ? "bg-white text-[#111827] border border-[#E5E7EB]"
-                    : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
-                    }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                    pathname === "/workspaces"
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                  }`}
                 >
                   <LayoutGrid className="w-5 h-5 text-[#111827]" />
                   <span>Danh sách Workspaces</span>
@@ -362,7 +408,9 @@ export default function DashboardLayout({
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shrink-0">
-                {mounted && user?.username ? user.username.substring(0, 2).toUpperCase() : "SL"}
+                {mounted && user?.username
+                  ? user.username.substring(0, 2).toUpperCase()
+                  : "SL"}
               </div>
               <div className="truncate text-xs">
                 <p className="font-bold text-[#111827] truncate">
@@ -484,7 +532,9 @@ export default function DashboardLayout({
                   disabled={createSpaceLoading}
                   className="flex-1 py-2.5 bg-[#111827] hover:bg-black text-white rounded-xl text-xs font-mono font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  {createSpaceLoading && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {createSpaceLoading && (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
                   TẠO MỚI
                 </button>
               </div>
@@ -559,7 +609,9 @@ export default function DashboardLayout({
 
               {/* Danger Zone */}
               <div className="pt-4 border-t border-[#E5E7EB] space-y-2">
-                <p className="text-[11px] font-bold text-[#D93025] uppercase tracking-wider font-mono">Vùng nguy hiểm</p>
+                <p className="text-[11px] font-bold text-[#D93025] uppercase tracking-wider font-mono">
+                  Vùng nguy hiểm
+                </p>
                 <button
                   type="button"
                   onClick={handleDeleteSpaceSubmit}
@@ -586,7 +638,9 @@ export default function DashboardLayout({
                   disabled={editSpaceLoading}
                   className="flex-1 py-2.5 bg-[#111827] hover:bg-black text-white rounded-xl text-xs font-mono font-bold transition-colors flex items-center justify-center gap-1.5"
                 >
-                  {editSpaceLoading && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {editSpaceLoading && (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
                   LƯU THAY ĐỔI
                 </button>
               </div>

@@ -13,6 +13,14 @@ export interface DecomposedTaskItem {
   riskWarning?: string;
 }
 
+export interface RagCitationItem {
+  anchorCategory?: string;
+  title: string;
+  sourceUrl?: string;
+  snippet?: string;
+  priorityLevel?: string;
+}
+
 export interface TaskDecompositionResponse {
   threadId: number;
   suggestedSpaceName?: string;
@@ -20,6 +28,7 @@ export interface TaskDecompositionResponse {
   sourceReference?: string;
   sourceUrl?: string;
   sourceUrls?: string[];
+  citations?: RagCitationItem[];
   tasks: DecomposedTaskItem[];
 }
 
@@ -62,7 +71,8 @@ export const aiService = {
   decomposeRequirements: async (
     spaceId: number,
     requirementText: string,
-    threadId?: number | null
+    threadId?: number | null,
+    currentTasksJson?: string | null
   ): Promise<TaskDecompositionResponse> => {
     const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>(
       "/ai/agents/decompose",
@@ -70,6 +80,7 @@ export const aiService = {
         spaceId,
         threadId: threadId || undefined,
         requirementText,
+        currentTasksJson: currentTasksJson || undefined,
       },
       { timeout: 120000 } // Extended 2-minute timeout for AI LLM reasoning
     );
