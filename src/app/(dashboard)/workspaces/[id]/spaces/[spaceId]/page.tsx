@@ -173,12 +173,22 @@ export default function SpaceDetailPage() {
     );
   }
 
+  const handleSelectTaskToggle = (task: Task) => {
+    if (isDrawerOpen && selectedTask?.id === task.id) {
+      setIsDrawerOpen(false);
+      setSelectedTask(null);
+    } else {
+      setSelectedTask(task);
+      setIsDrawerOpen(true);
+    }
+  };
+
   return (
     <>
       {/* Outer Page Container: Pushed inward (margin-right 410px) when task detail drawer is open so content is never covered! */}
       <div
         className={`space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
-          isDrawerOpen || !!selectedTask ? "mr-[410px]" : ""
+          isDrawerOpen && !!selectedTask ? "mr-[410px]" : ""
         }`}
       >
         {/* Modular Header */}
@@ -205,10 +215,7 @@ export default function SpaceDetailPage() {
               members={members}
               currentUser={currentUser}
               onViewTasks={() => setActiveTab("tasks")}
-              onSelectTask={(task) => {
-                setSelectedTask(task);
-                setIsDrawerOpen(true);
-              }}
+              onSelectTask={handleSelectTaskToggle}
             />
           )}
 
@@ -241,10 +248,7 @@ export default function SpaceDetailPage() {
                 tasks={tasks}
                 members={members}
                 spaceName={space?.name}
-                onSelectTask={(t) => {
-                  setSelectedTask((prev) => (prev?.id === t.id ? null : t));
-                  setIsDrawerOpen(true);
-                }}
+                onSelectTask={handleSelectTaskToggle}
               />
             </div>
           )}
@@ -257,10 +261,7 @@ export default function SpaceDetailPage() {
                 spaceId={spaceId}
                 tasks={tasks}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
-                onSelectTask={(t) => {
-                  setSelectedTask(t);
-                  setIsDrawerOpen(true);
-                }}
+                onSelectTask={handleSelectTaskToggle}
               />
             </div>
           )}
@@ -286,7 +287,7 @@ export default function SpaceDetailPage() {
       />
 
       {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview */}
-      {selectedTask && (
+      {selectedTask && isDrawerOpen && (
         <TaskDetailDrawer
           task={selectedTask}
           members={members}
@@ -304,7 +305,7 @@ export default function SpaceDetailPage() {
 
             const payload = {
               spaceId: current?.spaceId || spaceId,
-              sprintId: data.sprintId !== undefined ? data.sprintId : (current?.sprintId ?? null),
+              sprintId: (data as any).sprintId !== undefined ? (data as any).sprintId : (current?.sprintId ?? null),
               title: data.title || current?.title || "",
               description: data.description !== undefined ? data.description : (current?.description ?? ""),
               status: data.status || current?.status,

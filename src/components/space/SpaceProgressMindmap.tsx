@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Maximize2,
   Minimize2,
@@ -38,7 +38,41 @@ export function SpaceProgressMindmap({
   const [hoveredSpace, setHoveredSpace] = useState(false);
   const [spaceTooltipPos, setSpaceTooltipPos] = useState<"top" | "bottom">("bottom");
 
-  // Viewport-aware mouse enter for space root node (avoids clipping at edges)
+  const mindmapTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mindmapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Global click outside listener & cross-component sync to dismiss mindmap popovers
+  useEffect(() => {
+    const handleDocClick = (e: MouseEvent) => {
+      if (mindmapContainerRef.current && !mindmapContainerRef.current.contains(e.target as Node)) {
+        if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+        setHoveredTaskId(null);
+        setHoveredSprintId(null);
+        setHoveredSpace(false);
+      }
+    };
+
+    // Cross-component coordination: close when other sections open a popover
+    const handlePopoverChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ source: string }>;
+      if (customEvent.detail?.source !== "mindmap") {
+        if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+        setHoveredTaskId(null);
+        setHoveredSprintId(null);
+        setHoveredSpace(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleDocClick);
+    window.addEventListener("space-popover-change", handlePopoverChange);
+    return () => {
+      document.removeEventListener("mousedown", handleDocClick);
+      window.removeEventListener("space-popover-change", handlePopoverChange);
+      if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+    };
+  }, []);
+
+  // Viewport-aware mouse enter for space root node (avoids clipping at edges, auto-holds 30s)
   const handleSpaceMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.top < 260) {
@@ -48,10 +82,30 @@ export function SpaceProgressMindmap({
     } else {
       setSpaceTooltipPos("bottom");
     }
+    setHoveredTaskId(null);
+    setHoveredSprintId(null);
     setHoveredSpace(true);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+      );
+    }
+
+    if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+    mindmapTimerRef.current = setTimeout(() => {
+      setHoveredSpace(false);
+    }, 30000);
   };
 
-  // Viewport-aware mouse enter for sprint node (flips down if close to top of canvas/screen)
+  const handleSpaceClick = () => {
+    if (hoveredSpace) {
+      if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+      setHoveredSpace(false);
+    }
+  };
+
+  // Viewport-aware mouse enter for sprint node (flips down if close to top of canvas/screen, auto-holds 30s)
   const handleSprintMouseEnter = (e: React.MouseEvent<HTMLDivElement>, sprintId: number) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.top < 240) {
@@ -61,10 +115,31 @@ export function SpaceProgressMindmap({
     } else {
       setSprintTooltipPos("bottom");
     }
+    setHoveredSpace(false);
+    setHoveredTaskId(null);
     setHoveredSprintId(sprintId);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+      );
+    }
+
+    if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+    mindmapTimerRef.current = setTimeout(() => {
+      setHoveredSprintId(null);
+    }, 30000);
   };
 
-  // Viewport-aware mouse enter for task node (prevents clipping when rect.top < 260)
+  const handleSprintClick = (sprintKey: string, sprintId: number) => {
+    toggleSprint(sprintKey);
+    if (hoveredSprintId === sprintId) {
+      if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+      setHoveredSprintId(null);
+    }
+  };
+
+  // Viewport-aware mouse enter for task node (prevents clipping when rect.top < 260, auto-holds 30s)
   const handleTaskMouseEnter = (e: React.MouseEvent<HTMLDivElement>, taskId: number) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.top < 260) {
@@ -74,7 +149,26 @@ export function SpaceProgressMindmap({
     } else {
       setTaskTooltipPos(rect.top < window.innerHeight / 2 ? "bottom" : "top");
     }
+    setHoveredSpace(false);
+    setHoveredSprintId(null);
     setHoveredTaskId(taskId);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+      );
+    }
+
+    if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+    mindmapTimerRef.current = setTimeout(() => {
+      setHoveredTaskId(null);
+    }, 30000);
+  };
+
+  const handleTaskClick = (t: Task) => {
+    if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
+    setHoveredTaskId(null);
+    if (onSelectTask) onSelectTask(t);
   };
 
   const currentUserId = currentUser?.id;
@@ -339,7 +433,7 @@ export function SpaceProgressMindmap({
           </span>
         </div>
 
-        <button
+        {/* <button
           onClick={() => setIsFullscreen(!isFullscreen)}
           title={isFullscreen ? "Thu nhỏ" : "Phóng to toàn màn hình"}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#374151] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-xl border border-[#E5E7EB] transition-colors"
@@ -353,11 +447,14 @@ export function SpaceProgressMindmap({
               <Maximize2 className="w-3.5 h-3.5" /> Toàn màn hình
             </>
           )}
-        </button>
+        </button> */}
       </div>
 
       {/* ROADMAP CANVAS: 2-COLUMN LAYOUT (LEGEND ON LEFT, TREE AT TOP RIGHT) */}
-      <div className="relative overflow-x-auto overflow-y-visible py-6 px-4 sm:px-6 bg-[#FAFAFA] border border-[#E5E7EB] rounded-2xl min-h-[550px]">
+      <div
+        ref={mindmapContainerRef}
+        className="relative overflow-x-auto overflow-y-visible py-6 px-4 sm:px-6 bg-[#FAFAFA] border border-[#E5E7EB] rounded-2xl min-h-[550px]"
+      >
         <div className="flex flex-col xl:flex-row items-start gap-8 relative w-full">
           {/* ========================================================================= */}
           {/* 1. BẢNG CHÚ THÍCH (LEGEND BOX): NẰM 1 CHỖ BÊN TRÁI, STICKY */}
@@ -446,8 +543,8 @@ export function SpaceProgressMindmap({
             {/* ROOT NODE: TÊN ĐỀ TÀI SPACE (Ở TRÊN CÙNG) */}
             <div className="group relative z-30">
               <div
+                onClick={handleSpaceClick}
                 onMouseEnter={handleSpaceMouseEnter}
-                onMouseLeave={() => setHoveredSpace(false)}
                 className="px-7 py-3.5 rounded-2xl bg-[#FEF08A] border-2 border-black text-[#111827] shadow-md flex items-center gap-3 font-extrabold text-sm sm:text-base max-w-xl text-center cursor-pointer transition-transform hover:scale-105"
               >
                 <Sparkles className="w-5 h-5 text-[#B45309] shrink-0" />
@@ -564,9 +661,8 @@ export function SpaceProgressMindmap({
                       }`}
                   >
                     <div
-                      onClick={() => toggleSprint(group.key)}
+                      onClick={() => handleSprintClick(group.key, group.sprint?.id || 9999)}
                       onMouseEnter={(e) => handleSprintMouseEnter(e, group.sprint?.id || 9999)}
-                      onMouseLeave={() => setHoveredSprintId(null)}
                       className={`px-6 py-2.5 rounded-xl border-2 text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center gap-2.5 ${group.isDone
                         ? "bg-[#DCFCE7] border-2 border-emerald-600 text-[#14532D]"
                         : group.isClosedIncomplete
@@ -687,9 +783,8 @@ export function SpaceProgressMindmap({
                               key={t.id}
                               className={`relative flex items-center gap-2 group cursor-pointer ${isHovered ? "z-50" : "z-10"
                                 }`}
-                              onClick={() => onSelectTask && onSelectTask(t)}
+                              onClick={() => handleTaskClick(t)}
                               onMouseEnter={(e) => handleTaskMouseEnter(e, t.id)}
-                              onMouseLeave={() => setHoveredTaskId(null)}
                             >
                               {/* Task Card (Wider, longer, rich layout) */}
                               <div
@@ -780,9 +875,8 @@ export function SpaceProgressMindmap({
                               key={t.id}
                               className={`relative flex items-center gap-2 group cursor-pointer ${isHovered ? "z-50" : "z-10"
                                 }`}
-                              onClick={() => onSelectTask && onSelectTask(t)}
+                              onClick={() => handleTaskClick(t)}
                               onMouseEnter={(e) => handleTaskMouseEnter(e, t.id)}
-                              onMouseLeave={() => setHoveredTaskId(null)}
                             >
                               {/* Connecting Dotted Line to Spine */}
                               <div className="w-10 border-b-2 border-dotted border-[#3B82F6]" />
