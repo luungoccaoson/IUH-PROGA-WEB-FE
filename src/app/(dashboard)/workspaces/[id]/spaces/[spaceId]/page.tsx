@@ -1,4 +1,5 @@
 "use client";
+// Space detail page route: /workspaces/[id]/spaces/[spaceId]
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -17,6 +18,7 @@ import { AddSpaceMemberModal } from "@/components/space/AddSpaceMemberModal";
 import { SpaceAiCopilotDrawer } from "@/components/workspace/SpaceAiCopilotDrawer";
 import { TaskDetailDrawer } from "@/components/workspace/sprint/TaskDetailDrawer";
 import { sprintService } from "@/services/sprint.service";
+import { taskService } from "@/services/task.service";
 import { Space, Task, Sprint, Workspace, User } from "@/types";
 
 export default function SpaceDetailPage() {
@@ -47,10 +49,10 @@ export default function SpaceDetailPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
-  // Fetch all details
-  const fetchData = async () => {
+  // Fetch all details (supports silent background sync without remounting page)
+  const fetchData = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       setError("");
 
       const spaceData = await workspaceService.getSpaceById(spaceId).catch(async () => {
@@ -59,7 +61,7 @@ export default function SpaceDetailPage() {
       });
 
       if (!spaceData) {
-        setError("Không tìm thấy thông tin Space.");
+        if (!isSilent) setError("Không tìm thấy thông tin Space.");
         return;
       }
       setSpace(spaceData);
@@ -92,9 +94,9 @@ export default function SpaceDetailPage() {
       setMembers(validMembers);
     } catch (err: any) {
       console.error("Error loading space page details:", err);
-      setError("Không thể tải thông tin Space. Vui lòng thử lại.");
+      if (!isSilent) setError("Không thể tải thông tin Space. Vui lòng thử lại.");
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -173,13 +175,11 @@ export default function SpaceDetailPage() {
 
   return (
     <>
-      {/* Outer Page Container: Shrinks left when task detail drawer is open! */}
+      {/* Outer Page Container: Pushed inward (margin-right 410px) when task detail drawer is open so content is never covered! */}
       <div
-        className="space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out"
-        style={{
-          width: isDrawerVisible ? "calc(100% - 390px)" : "100%",
-          transition: "width 0.2s ease-in-out",
-        }}
+        className={`space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
+          isDrawerOpen || !!selectedTask ? "mr-[410px]" : ""
+        }`}
       >
         {/* Modular Header */}
         <SpaceHeader
@@ -199,9 +199,16 @@ export default function SpaceDetailPage() {
           {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
             <SpaceOverviewTab
+              space={space}
               tasks={tasks}
+              sprints={sprints}
               members={members}
+              currentUser={currentUser}
               onViewTasks={() => setActiveTab("tasks")}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setIsDrawerOpen(true);
+              }}
             />
           )}
 
@@ -234,7 +241,10 @@ export default function SpaceDetailPage() {
                 tasks={tasks}
                 members={members}
                 spaceName={space?.name}
-                onSelectTask={(t) => setSelectedTask((prev) => (prev?.id === t.id ? null : t))}
+                onSelectTask={(t) => {
+                  setSelectedTask((prev) => (prev?.id === t.id ? null : t));
+                  setIsDrawerOpen(true);
+                }}
               />
             </div>
           )}
@@ -247,7 +257,10 @@ export default function SpaceDetailPage() {
                 spaceId={spaceId}
                 tasks={tasks}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
-                onSelectTask={(t) => setSelectedTask(t)}
+                onSelectTask={(t) => {
+                  setSelectedTask(t);
+                  setIsDrawerOpen(true);
+                }}
               />
             </div>
           )}
@@ -272,19 +285,48 @@ export default function SpaceDetailPage() {
         onMemberAdded={fetchData}
       />
 
-      {/* Task Detail Drawer when selecting task from Timeline */}
+      {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview */}
       {selectedTask && (
         <TaskDetailDrawer
           task={selectedTask}
           members={members}
-          onClose={() => setSelectedTask(null)}
+          onClose={() => {
+            setSelectedTask(null);
+            setIsDrawerOpen(false);
+          }}
           onUpdate={async (tId, data) => {
-            await workspaceService.createTask({ spaceId, title: "", ...data } as any);
-            fetchData();
+            const current = tasks.find((t) => t.id === tId) || selectedTask;
+            const formatIso = (dateStr?: string, isEnd = false) => {
+              if (!dateStr) return undefined;
+              if (dateStr.includes("T")) return dateStr;
+              return isEnd ? `${dateStr}T23:59:59` : `${dateStr}T00:00:00`;
+            };
+
+            const payload = {
+              spaceId: current?.spaceId || spaceId,
+              sprintId: data.sprintId !== undefined ? data.sprintId : (current?.sprintId ?? null),
+              title: data.title || current?.title || "",
+              description: data.description !== undefined ? data.description : (current?.description ?? ""),
+              status: data.status || current?.status,
+              priority: data.priority || current?.priority,
+              ownerId: data.ownerId !== undefined ? data.ownerId : (current?.ownerId ?? undefined),
+              startDate: formatIso(data.startDate !== undefined ? data.startDate : current?.startDate, false),
+              dueDate: formatIso(data.dueDate !== undefined ? data.dueDate : current?.dueDate, true),
+            };
+
+            const updated = await taskService.updateTask(tId, payload);
+            setSelectedTask(updated);
+            setTasks((prev) => prev.map((t) => (t.id === tId ? updated : t)));
+            await fetchData(true); // Silent re-render without remounting page!
+            window.dispatchEvent(new CustomEvent("space_tasks_updated"));
           }}
           onDelete={async (tId) => {
-            await workspaceService.deleteTask(tId);
-            fetchData();
+            await taskService.deleteTask(tId);
+            setSelectedTask(null);
+            setIsDrawerOpen(false);
+            setTasks((prev) => prev.filter((t) => t.id !== tId));
+            await fetchData(true); // Silent re-render without remounting page!
+            window.dispatchEvent(new CustomEvent("space_tasks_updated"));
           }}
         />
       )}
