@@ -35,6 +35,8 @@ interface AiHeaderBannerProps {
   setNewSpaceName: (name: string) => void;
   onSelectSamplePrompt: (text: string) => void;
   onNewChatSession?: () => void;
+  startDate?: string;
+  setStartDate?: (date: string) => void;
 }
 
 export function AiHeaderBanner({
@@ -47,6 +49,8 @@ export function AiHeaderBanner({
   setNewSpaceName,
   onSelectSamplePrompt,
   onNewChatSession,
+  startDate,
+  setStartDate,
 }: AiHeaderBannerProps) {
   return (
     <div className="bg-gradient-to-r from-[#111827] to-[#1F2937] text-white p-6 rounded-2xl shadow-sm space-y-5 font-sans">
@@ -59,11 +63,10 @@ export function AiHeaderBanner({
 
           <button
             onClick={() => setTargetMode("EXISTING_SPACE")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              targetMode === "EXISTING_SPACE"
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${targetMode === "EXISTING_SPACE"
                 ? "bg-white text-[#111827] shadow-sm"
                 : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-            }`}
+              }`}
           >
             <Compass className="w-4 h-4" />
             1. Chọn Space Có Sẵn
@@ -71,11 +74,10 @@ export function AiHeaderBanner({
 
           <button
             onClick={() => setTargetMode("NEW_SPACE")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              targetMode === "NEW_SPACE"
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${targetMode === "NEW_SPACE"
                 ? "bg-[#10B981] text-white shadow-sm"
                 : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-            }`}
+              }`}
           >
             <FolderPlus className="w-4 h-4" />
             2. ➕ Tạo Dự Án (Space) Mới Tự Động
@@ -121,7 +123,7 @@ export function AiHeaderBanner({
           </div>
         </div>
       ) : (
-        <div className="space-y-2 bg-white/5 p-3.5 rounded-xl border border-[#10B981]/30">
+        <div className="space-y-3 bg-white/5 p-4 rounded-xl border border-[#10B981]/30">
           <div className="flex items-center justify-between">
             <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#A7F3D0] flex items-center gap-1.5">
               <FolderPlus className="w-4 h-4" />
@@ -138,6 +140,28 @@ export function AiHeaderBanner({
             placeholder="Nhập tên Space hoặc để trống (AI sẽ tự động gợi ý tên phù hợp)..."
             className="w-full px-3.5 py-2.5 bg-white/10 border border-white/20 rounded-xl text-sm font-semibold text-white placeholder:text-white/40 focus:outline-hidden focus:ring-2 focus:ring-[#10B981]"
           />
+
+          {/* PROJECT START DATE CONFIGURATION */}
+          <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex-1">
+              <label className="text-xs font-mono font-bold text-[#D1D5DB] block mb-1">
+                📅 Ngày bắt đầu dự án:
+              </label>
+              <input
+                type="date"
+                value={startDate || new Date().toISOString().split("T")[0]}
+                onChange={(e) => setStartDate && setStartDate(e.target.value)}
+                className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:ring-2 focus:ring-[#10B981] w-full sm:w-64"
+              />
+            </div>
+            {/* <div className="text-xs text-gray-300 bg-white/5 border border-white/10 p-2.5 rounded-xl flex items-center gap-2">
+              <span className="text-base">⚡</span>
+              <div>
+                <span className="font-semibold text-white">Mặc định mỗi Sprint: 1 tuần (7 ngày)</span>
+                <p className="text-[11px] text-gray-400">Bạn có thể tùy chỉnh tăng/giảm thời lượng riêng cho từng Sprint bên dưới.</p>
+              </div>
+            </div> */}
+          </div>
         </div>
       )}
 

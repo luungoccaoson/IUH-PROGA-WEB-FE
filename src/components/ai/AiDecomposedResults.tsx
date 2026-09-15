@@ -39,6 +39,9 @@ interface AiDecomposedResultsProps {
   onUpdateTasks: (updatedTasks: DecomposedTaskItem[]) => void;
   existingTaskCount?: number;
   existingSprintsSummary?: { name: string; status: string; taskCount: number }[];
+  startDate?: string;
+  sprintCustomDays?: Record<string, number>;
+  onUpdateSprintDays?: (sprintName: string, days: number) => void;
 }
 
 export function AiDecomposedResults({
@@ -57,6 +60,9 @@ export function AiDecomposedResults({
   onUpdateTasks,
   existingTaskCount = 0,
   existingSprintsSummary = [],
+  startDate,
+  sprintCustomDays,
+  onUpdateSprintDays,
 }: AiDecomposedResultsProps) {
   const router = useRouter();
 
@@ -101,6 +107,30 @@ export function AiDecomposedResults({
       setChatBoxMessages([]);
     }
   }, [result?.threadId, prevThreadId]);
+
+  // Sprint Duration custom overrides per sprint (default: 7 days / 1 week each)
+  const [localSprintDays, setLocalSprintDays] = useState<Record<string, number>>({});
+  const activeSprintDays = sprintCustomDays || localSprintDays;
+  const handleSetSprintDays = (sprintName: string, days: number) => {
+    if (onUpdateSprintDays) {
+      onUpdateSprintDays(sprintName, days);
+    } else {
+      setLocalSprintDays((prev) => ({ ...prev, [sprintName]: days }));
+    }
+  };
+
+  const addDays = (baseDate: string, days: number): string => {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split("T")[0];
+  };
+
+  const formatDateVN = (dateStr: string) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+    return dateStr;
+  };
 
   const targetSpaceId = targetMode === "NEW_SPACE" ? createdSpaceId : selectedSpaceId;
 
@@ -501,6 +531,18 @@ export function AiDecomposedResults({
           const taskList = groupedTasks[sprintName] || [];
           const isDragOver = dragOverSprint === sprintName;
 
+          let currentOffsetDays = 0;
+          for (let k = 0; k < groupIdx; k++) {
+            const prevSprintName = availableSprints[k];
+            const prevDays = activeSprintDays[prevSprintName] || 7;
+            currentOffsetDays += prevDays;
+          }
+          const thisSprintDays = activeSprintDays[sprintName] || 7;
+          const baseStart = startDate || new Date().toISOString().split("T")[0];
+          const sprintStartStr = addDays(baseStart, currentOffsetDays);
+          const sprintEndStr = addDays(sprintStartStr, thisSprintDays - 1);
+          const dateRangeStr = `${formatDateVN(sprintStartStr)} ➔ ${formatDateVN(sprintEndStr)} (${thisSprintDays} ngày)`;
+
           return (
             <AiSprintGroup
               key={groupIdx}
@@ -512,6 +554,9 @@ export function AiDecomposedResults({
               isDragOver={isDragOver}
               existingTaskCount={existingTaskCount}
               availableSprints={availableSprints}
+              dateRangeStr={dateRangeStr}
+              sprintDays={thisSprintDays}
+              onChangeDays={(days) => handleSetSprintDays(sprintName, days)}
               onOpenChatBox={handleOpenChatBox}
               onOpenAddTask={(sprint) => setAddingToSprint(sprint)}
               onOpenEditTask={(index) => setEditingIndex(index)}

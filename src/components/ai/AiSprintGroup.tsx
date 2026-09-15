@@ -14,6 +14,9 @@ interface AiSprintGroupProps {
   isDragOver: boolean;
   existingTaskCount: number;
   availableSprints: string[];
+  dateRangeStr?: string;
+  sprintDays?: number;
+  onChangeDays?: (days: number) => void;
   onOpenChatBox: (sprint: string) => void;
   onOpenAddTask: (sprint: string) => void;
   onOpenEditTask: (index: number) => void;
@@ -33,6 +36,9 @@ export function AiSprintGroup({
   isDragOver,
   existingTaskCount,
   availableSprints,
+  dateRangeStr,
+  sprintDays = 7,
+  onChangeDays,
   onOpenChatBox,
   onOpenAddTask,
   onOpenEditTask,
@@ -42,30 +48,27 @@ export function AiSprintGroup({
   onDragLeave,
   onDrop,
 }: AiSprintGroupProps) {
-  const isSelectedForChat = isChatBoxOpen && targetSprintScope === sprintName;
-
   const shortSprintTitle = sprintName.includes(":") ? sprintName.split(":")[0].trim() : sprintName;
-  const sprintSubtitle = sprintName.includes(":") ? sprintName.split(":")[1].trim() : "Giai đoạn phát triển";
+  const sprintSubtitle = sprintName.includes(":") ? sprintName.split(":").slice(1).join(":").trim() : "";
+  const isSelectedForChat = isChatBoxOpen && targetSprintScope === sprintName;
 
   return (
     <div
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`bg-white border rounded-2xl p-4 space-y-3 shadow-2xs transition-all font-sans ${
+      className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${
         isDragOver
-          ? "border-[#1A73E8] bg-[#F0F7FF] ring-2 ring-[#1A73E8]/30"
-          : isSelectedForChat
-          ? "border-[#1A73E8] ring-1 ring-[#1A73E8]/40 shadow-xs"
-          : "border-[#E5E7EB]"
+          ? "border-[#1A73E8] ring-2 ring-[#1A73E8]/20 bg-[#F8FAFC]"
+          : "border-gray-200 hover:border-gray-300"
       }`}
     >
-      {/* Sprint Group Title Header */}
-      <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3 gap-2 flex-wrap">
+      {/* Sprint Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50/70 border-b border-gray-100">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className="w-7 h-7 rounded-lg bg-[#111827] text-white flex items-center justify-center font-mono font-bold text-xs shrink-0">
-            S{groupIdx + 1}
-          </div>
+          <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#1A73E8]/10 text-[#1A73E8] shrink-0 font-bold text-xs">
+            {groupIdx + 1}
+          </span>
           <div className="min-w-0 flex-1">
             <h4 className="font-extrabold text-sm text-[#111827] truncate">
               {shortSprintTitle}
@@ -77,6 +80,29 @@ export function AiSprintGroup({
           <span className="text-[11px] font-mono text-[#6B7280] bg-gray-100 px-2 py-0.5 rounded-md font-bold shrink-0">
             {taskList.length} tasks
           </span>
+
+          {dateRangeStr && (
+            <span className="text-[11px] font-mono text-[#1E40AF] bg-[#EFF6FF] border border-[#BFDBFE] px-2.5 py-0.5 rounded-md font-bold shrink-0">
+              📅 {dateRangeStr}
+            </span>
+          )}
+
+          {onChangeDays && (
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 shrink-0">
+              <span className="text-gray-400">Thời lượng:</span>
+              <select
+                value={sprintDays || 7}
+                onChange={(e) => onChangeDays(Number(e.target.value))}
+                className="px-2 py-0.5 rounded-md border border-gray-300 text-[11px] font-mono font-bold bg-white text-gray-800 shadow-2xs hover:border-[#1A73E8] focus:outline-none"
+              >
+                <option value={7}>1 tuần (7 ngày) - Chuẩn</option>
+                <option value={10}>10 ngày</option>
+                <option value={14}>2 tuần (14 ngày)</option>
+                <option value={21}>3 tuần (21 ngày)</option>
+                <option value={28}>4 tuần (28 ngày)</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Action buttons: AI Chat & Add Task */}

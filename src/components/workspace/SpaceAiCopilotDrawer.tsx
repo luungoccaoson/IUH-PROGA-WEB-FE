@@ -277,16 +277,30 @@ ${text.trim()}`;
         }
 
         const cleanedTitle = cleanTaskTitle(item.title);
+        const baseStart = space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0];
+        const taskDueDate = new Date(Date.now() + (item.estimatedDays || 2) * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
         const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
-${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
+
+        const normalizePriority = (priority?: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" => {
+          if (!priority) return "MEDIUM";
+          const p = priority.toUpperCase().trim();
+          if (p === "URGENT" || p.includes("KHẨN")) return "URGENT";
+          if (p === "HIGH" || p.includes("CAO")) return "HIGH";
+          if (p === "LOW" || p.includes("THẤP")) return "LOW";
+          return "MEDIUM";
+        };
 
         await taskService.createTask({
           spaceId: space.id,
           sprintId: targetSprint ? targetSprint.id : undefined,
           title: cleanedTitle,
           description: richDescription,
-          priority: item.priority,
+          priority: normalizePriority(item.priority),
           status: "TODO",
+          startDate: `${baseStart}T08:00:00`,
+          dueDate: `${taskDueDate}T18:00:00`,
         });
       }
 
@@ -433,6 +447,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               onUpdateTasks={handleUpdateTasks}
               existingTaskCount={totalExistingTaskCount}
               existingSprintsSummary={existingSprintsSummary}
+              startDate={space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0]}
             />
           </div>
         )}
