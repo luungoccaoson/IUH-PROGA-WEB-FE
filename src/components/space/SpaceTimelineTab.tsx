@@ -30,8 +30,43 @@ export function SpaceTimelineTab({
 }: SpaceTimelineTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("Weeks");
   const [searchTerm, setSearchTerm] = useState("");
-  // COLLAPSED BY DEFAULT: User clicks to expand each Sprint!
-  const [openSprints, setOpenSprints] = useState<Record<string, boolean>>({});
+  // Auto-expand ongoing/active sprint by default without requiring manual click
+  const [openSprints, setOpenSprints] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    sprints.forEach((s) => {
+      const st = s.status?.toUpperCase();
+      if (st === "ACTIVE" || st === "IN_PROGRESS" || st === "CURRENT") {
+        init[s.id.toString()] = true;
+      }
+    });
+    return init;
+  });
+
+  // Sync when sprints load asynchronously
+  useEffect(() => {
+    if (sprints && sprints.length > 0) {
+      setOpenSprints((prev) => {
+        const next = { ...prev };
+        let hasAnyOpen = Object.values(next).some(Boolean);
+        if (!hasAnyOpen) {
+          sprints.forEach((s) => {
+            const st = s.status?.toUpperCase();
+            if (st === "ACTIVE" || st === "IN_PROGRESS" || st === "CURRENT") {
+              next[s.id.toString()] = true;
+              hasAnyOpen = true;
+            }
+          });
+          if (!hasAnyOpen) {
+            const firstActive = sprints.find((s) => s.status?.toUpperCase() !== "CLOSED");
+            if (firstActive) {
+              next[firstActive.id.toString()] = true;
+            }
+          }
+        }
+        return next;
+      });
+    }
+  }, [sprints]);
 
   const timelineContainerRef = useRef<HTMLDivElement>(null);
 
@@ -401,7 +436,7 @@ export function SpaceTimelineTab({
                                 <span className="text-[#1A73E8] font-mono text-[11px] font-bold hover:underline shrink-0">
                                   {taskKey}
                                 </span>
-                                <span className={`truncate font-medium ${isDone ? "line-through text-[#9CA3AF]" : "text-[#111827]"}`}>
+                                <span className={`truncate font-medium ${isDone ? "text-[#9CA3AF] opacity-60" : "text-[#111827]"}`}>
                                   {t.title}
                                 </span>
                               </div>

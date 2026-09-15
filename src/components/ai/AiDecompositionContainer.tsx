@@ -40,8 +40,34 @@ export function AiDecompositionContainer({
 
   const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [targetDurationWeeks, setTargetDurationWeeks] = useState<number>(4);
+  const [sprintCustomDays, setSprintCustomDays] = useState<Record<string, number>>({});
   const [selectedMemberRoles, setSelectedMemberRoles] = useState<any[]>([]);
+
+  const addDays = (baseDate: string, days: number): string => {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split("T")[0];
+  };
+
+  const normalizePriority = (priority?: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" => {
+    if (!priority) return "MEDIUM";
+    const p = priority.toUpperCase().trim();
+    if (p === "URGENT" || p.includes("KHẨN")) return "URGENT";
+    if (p === "HIGH" || p.includes("CAO")) return "HIGH";
+    if (p === "LOW" || p.includes("THẤP")) return "LOW";
+    return "MEDIUM";
+  };
+
+  const cleanTaskTitle = (title?: string): string => {
+    if (!title || !title.trim()) return "Công việc mới";
+    return title.replace(/^Task-\d+\s*:\s*/i, "").trim() || "Công việc mới";
+  };
+
+  const toIsoDateTime = (dateStr?: string, timeStr: string = "08:00:00"): string => {
+    if (!dateStr) return `${new Date().toISOString().split("T")[0]}T${timeStr}`;
+    const datePart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+    return `${datePart}T${timeStr}`;
+  };
 
   // Import State
   const [importing, setImporting] = useState(false);
@@ -236,7 +262,6 @@ ${text.trim()}`;
         }
       }
 
-
       const data = await aiService.decomposeRequirements(
         contextSpaceId,
         finalPromptText,
@@ -280,10 +305,25 @@ ${text.trim()}`;
       if (targetMode === "NEW_SPACE") {
         const spaceNameToUse = newSpaceName.trim() || result.suggestedSpaceName || "Dự Án Mới AI";
 
-        // 1. Create a brand new Space in Workspace (creates default Sprint 0: Kickoff & Setup)
+        const uniqueSprintNames = Array.from(
+          new Set(result.tasks.map((t) => t.sprint || "Sprint 1"))
+        ).sort();
+
+        let totalDurationDays = 0;
+        uniqueSprintNames.forEach((name) => {
+          totalDurationDays += sprintCustomDays[name] || 7;
+        });
+        totalDurationDays = Math.max(1, totalDurationDays);
+
+        const spaceStartIso = `${startDate}T08:00:00`;
+        const spaceEndIso = `${addDays(startDate, totalDurationDays - 1)}T18:00:00`;
+
+        // 1. Create a brand new Space in Workspace with explicit start & end dates
         const newSpace = await workspaceService.createSpace({
           workspaceId,
           name: spaceNameToUse,
+          startDate: spaceStartIso,
+          endDate: spaceEndIso,
         });
         setCreatedSpaceId(newSpace.id);
         setSelectedSpaceId(newSpace.id);
@@ -293,38 +333,53 @@ ${text.trim()}`;
           window.dispatchEvent(new Event("space-created"));
         }
 
-        // 2. Extract dynamic unique Sprint names from AI result (e.g. Sprint 1, Sprint 2...)
+        // 2. Extract dynamic unique Sprint names and assign sequential dates based on custom days
         const dynamicSprintMap: Record<string, Sprint> = {};
-        const uniqueSprintNames = Array.from(
-          new Set(result.tasks.map((t) => t.sprint || "Sprint 1"))
-        ).sort();
+        const sprintDatesMap: Record<string, { start: string; end: string; duration: number }> = {};
 
+        let offsetDays = 0;
         for (let i = 0; i < uniqueSprintNames.length; i++) {
           const rawName = uniqueSprintNames[i];
+          const durationDays = sprintCustomDays[rawName] || 7;
+          const sprintStart = addDays(startDate, offsetDays);
+          const sprintEnd = addDays(sprintStart, durationDays - 1);
+          offsetDays += durationDays;
+
           const createdSprint = await sprintService.createSprint({
             spaceId: newSpace.id,
             name: rawName.includes(":") ? rawName : `${rawName}: Phân Rã AI`,
             goal: `Mục tiêu phát triển cho ${rawName}`,
             status: i === 0 ? "ACTIVE" : "FUTURE",
+            startDate: `${sprintStart}T08:00:00`,
+            endDate: `${sprintEnd}T18:00:00`,
           });
           dynamicSprintMap[rawName] = createdSprint;
+          sprintDatesMap[rawName] = { start: sprintStart, end: sprintEnd, duration: durationDays };
         }
 
-        // 3. Populate tasks into their matching AI Created Sprints
+        // 3. Populate tasks into their matching AI Created Sprints with calculated due dates
         for (const item of result.tasks) {
           const rawSprint = item.sprint || uniqueSprintNames[0];
           const targetSprint = dynamicSprintMap[rawSprint] || dynamicSprintMap[uniqueSprintNames[0]];
+          const sprintInfo = sprintDatesMap[rawSprint] || { start: startDate, duration: 7 };
+
+          const taskEstDays = item.estimatedDays || 2;
+          const taskDueDate = addDays(sprintInfo.start, Math.min(taskEstDays, Math.max(1, sprintInfo.duration - 1)));
+          const taskStartIso = toIsoDateTime(sprintInfo.start, "08:00:00");
+          const taskDueIso = toIsoDateTime(taskDueDate, "18:00:00");
 
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
-${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: newSpace.id,
             sprintId: targetSprint ? targetSprint.id : undefined,
-            title: item.title,
+            title: cleanTaskTitle(item.title),
             description: richDescription,
-            priority: item.priority,
+            priority: normalizePriority(item.priority),
             status: "TODO",
+            startDate: taskStartIso,
+            dueDate: taskDueIso,
           });
         }
       } else {
@@ -351,11 +406,12 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         for (const item of result.tasks) {
           const rawSprintName = item.sprint || "Sprint 1";
           let targetSprint = sprintMap[rawSprintName];
+          const durationDays = sprintCustomDays[rawSprintName] || 7;
 
-          // If matching sprint doesn't exist, create it for the space dynamically
+          // If matching sprint doesn't exist, create it for the space dynamically with dates
           try {
-            const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
-            const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
+            const todayIso = toIsoDateTime(startDate, "08:00:00");
+            const futureIso = toIsoDateTime(addDays(startDate, durationDays - 1), "18:00:00");
             const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
 
             targetSprint = await sprintService.createSprint({
@@ -368,19 +424,25 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             });
             sprintMap[rawSprintName] = targetSprint;
           } catch (spErr) {
-            console.error("Could not create sprint in AiDecompositionContainer:", spErr);
+            console.warn("Could not create dynamic sprint for existing space:", spErr);
           }
 
+          const taskDueDate = addDays(startDate, Math.min(item.estimatedDays || 2, Math.max(1, durationDays - 1)));
+          const taskStartIso = toIsoDateTime(startDate, "08:00:00");
+          const taskDueIso = toIsoDateTime(taskDueDate, "18:00:00");
+
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
-${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
+${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
           await taskService.createTask({
             spaceId: selectedSpaceId,
             sprintId: targetSprint ? targetSprint.id : undefined,
-            title: item.title,
+            title: cleanTaskTitle(item.title),
             description: richDescription,
-            priority: item.priority,
+            priority: normalizePriority(item.priority),
             status: "TODO",
+            startDate: taskStartIso,
+            dueDate: taskDueIso,
           });
         }
       }
@@ -460,6 +522,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         onSelectSpace={setSelectedSpaceId}
         newSpaceName={newSpaceName}
         setNewSpaceName={setNewSpaceName}
+        startDate={startDate}
+        setStartDate={setStartDate}
         onSelectSamplePrompt={(text) => {
           setRequirementText(text);
           handleDecompose(text);
@@ -502,6 +566,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             isImported={isImported}
             members={membersList}
             onUpdateTasks={handleUpdateTasks}
+            startDate={startDate}
+            sprintCustomDays={sprintCustomDays}
+            onUpdateSprintDays={(sprint, days) => setSprintCustomDays((prev) => ({ ...prev, [sprint]: days }))}
           />
         </div>
       )}
