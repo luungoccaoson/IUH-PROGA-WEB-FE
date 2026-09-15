@@ -49,7 +49,40 @@ export interface AiChatMessageResponse {
   createdAt: string;
 }
 
+export interface KnowledgeHarvestRequest {
+  spaceId: number;
+  spaceName: string;
+  requirementText: string;
+  domain?: string;
+  tasksJson: string;
+  summary?: string;
+  sourceReference?: string;
+  sourceUrl?: string;
+}
+
+export interface AiKnowledgeSampleItem {
+  id: number;
+  spaceId: number;
+  spaceName: string;
+  domain?: string;
+  requirementSummary?: string;
+  taskCount?: number;
+  sourceReference?: string;
+  createdAt?: string;
+}
+
 export const aiService = {
+  // Knowledge Harvesting: Lưu trữ mẫu phân rã không gian làm việc thành công vào tập tri thức động
+  harvestKnowledge: async (payload: KnowledgeHarvestRequest): Promise<void> => {
+    await apiClient.post<ApiResponse<void>>("/ai/knowledge/harvest", payload);
+  },
+
+  // Knowledge Harvesting: Lấy danh sách các mẫu tri thức đã thu hoạch
+  getHarvestedSamples: async (): Promise<AiKnowledgeSampleItem[]> => {
+    const response = await apiClient.get<ApiResponse<AiKnowledgeSampleItem[]>>("/ai/knowledge/samples");
+    return response.data.data;
+  },
+
   // Upload & parse PDF/Docx document into PgVector Store
   uploadAndParseDocument: async (file: File): Promise<{ fileName: string; fileSize: number; extractedText: string; chunkCount: number }> => {
     const formData = new FormData();

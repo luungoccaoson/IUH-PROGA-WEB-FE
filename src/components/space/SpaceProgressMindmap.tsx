@@ -232,6 +232,12 @@ export function SpaceProgressMindmap({
 
   // Determine which sprint is ACTIVE (Default only active sprint is expanded)
   const activeSprintId = useMemo(() => {
+    // Ưu tiên sprint có trạng thái ACTIVE (loại trừ Sprint 0 rỗng nếu có)
+    const activeNonZero = sprints.find(
+      (s) => s.status?.toUpperCase() === "ACTIVE" && !s.name?.toLowerCase().includes("sprint 0")
+    );
+    if (activeNonZero) return activeNonZero.id;
+
     const active = sprints.find((s) => s.status?.toUpperCase() === "ACTIVE");
     if (active) return active.id;
     return -1;
@@ -245,6 +251,18 @@ export function SpaceProgressMindmap({
     }
     return initial;
   });
+
+  // Sync expanded state when activeSprintId becomes available
+  useEffect(() => {
+    if (activeSprintId !== -1) {
+      setExpandedSprints((prev) => {
+        if (Object.keys(prev).length === 0 || !Object.values(prev).some(Boolean)) {
+          return { ...prev, [`sprint-${activeSprintId}`]: true };
+        }
+        return prev;
+      });
+    }
+  }, [activeSprintId]);
 
   const toggleSprint = (sprintKey: string) => {
     setExpandedSprints((prev) => ({
@@ -270,8 +288,13 @@ export function SpaceProgressMindmap({
       rightTasks: Task[];
     }[] = [];
 
+    // Bỏ qua Sprint 0 nếu là Sprint rỗng kế thừa từ trước để tránh xung đột trạng thái
+    const validSprints = sprints.filter(
+      (s) => !s.name?.toLowerCase().includes("sprint 0") || tasks.some((t) => t.sprintId === s.id)
+    );
+
     // Sắp xếp Sprint theo thứ tự chuẩn: theo số thứ tự Sprint (Sprint 1, 2, 3...) hoặc startDate/id
-    const sortedSprints = [...sprints].sort((a, b) => {
+    const sortedSprints = [...validSprints].sort((a, b) => {
       const numA = parseInt(a.name?.match(/\d+/)?.[0] || "", 10);
       const numB = parseInt(b.name?.match(/\d+/)?.[0] || "", 10);
       if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
@@ -291,7 +314,7 @@ export function SpaceProgressMindmap({
 
       const spStatus = (sp.status || "").toUpperCase();
       const isClosed = spStatus === "CLOSED";
-      const isActive = !isClosed && (spStatus === "ACTIVE" || sp.id === activeSprintId);
+      const isActive = !isClosed && sp.id === activeSprintId;
       const is100Done = pct === 100 && spTasks.length > 0;
       const isClosedIncomplete = isClosed && !is100Done;
       const isFuture = !isClosed && !isActive;

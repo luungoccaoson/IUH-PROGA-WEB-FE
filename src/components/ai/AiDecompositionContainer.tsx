@@ -245,7 +245,7 @@ export function AiDecompositionContainer({
           const sprintSummary =
             existingSprints.length > 0
               ? existingSprints.map((s) => `- ${s.name} [Trạng thái: ${s.status}]`).join("\n")
-              : "Sprint 0: Kickoff & Setup";
+              : "Chưa có sprint nào.";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
 - Dự án đang thực hiện: ${selectedSpaceObj?.name || "Space"}
@@ -302,6 +302,9 @@ ${text.trim()}`;
       setImporting(true);
       setImportSuccess(false);
 
+      let finalSpaceId = selectedSpaceId;
+      let finalSpaceName = spaces.find((s) => s.id === selectedSpaceId)?.name || "Space";
+
       if (targetMode === "NEW_SPACE") {
         const spaceNameToUse = newSpaceName.trim() || result.suggestedSpaceName || "Dự Án Mới AI";
 
@@ -325,6 +328,8 @@ ${text.trim()}`;
           startDate: spaceStartIso,
           endDate: spaceEndIso,
         });
+        finalSpaceId = newSpace.id;
+        finalSpaceName = newSpace.name;
         setCreatedSpaceId(newSpace.id);
         setSelectedSpaceId(newSpace.id);
 
@@ -445,6 +450,26 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             dueDate: taskDueIso,
           });
         }
+      }
+
+      // DYNAMIC KNOWLEDGE HARVESTING (Tập tri thức động phục vụ tái sử dụng vi sai)
+      try {
+        if (finalSpaceId && result.tasks && result.tasks.length > 0) {
+          const combinedReqText = messages.map((m) => `${m.senderType}: ${m.messageContent}`).join("\n");
+          await aiService.harvestKnowledge({
+            spaceId: finalSpaceId,
+            spaceName: finalSpaceName,
+            requirementText: combinedReqText,
+            domain: result.suggestedSpaceName || finalSpaceName,
+            tasksJson: JSON.stringify(result.tasks),
+            summary: result.summary,
+            sourceReference: result.sourceReference,
+            sourceUrl: result.sourceUrl,
+          });
+          console.log("[Dynamic-RAG] Đã thu hoạch tri thức phân rã cho Space:", finalSpaceName);
+        }
+      } catch (harvestErr) {
+        console.warn("[Dynamic-RAG] Non-blocking harvest error:", harvestErr);
       }
 
       setImportSuccess(true);

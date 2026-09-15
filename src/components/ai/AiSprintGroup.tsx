@@ -57,11 +57,10 @@ export function AiSprintGroup({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${
-        isDragOver
-          ? "border-[#1A73E8] ring-2 ring-[#1A73E8]/20 bg-[#F8FAFC]"
-          : "border-gray-200 hover:border-gray-300"
-      }`}
+      className={`p-4 bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${isDragOver
+        ? "border-[#1A73E8] ring-2 ring-[#1A73E8]/20 bg-[#F8FAFC]"
+        : "border-gray-200 hover:border-gray-300"
+        }`}
     >
       {/* Sprint Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50/70 border-b border-gray-100">
@@ -110,11 +109,10 @@ export function AiSprintGroup({
           <button
             type="button"
             onClick={() => onOpenChatBox(sprintName)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs ${
-              isSelectedForChat
-                ? "bg-[#1A73E8] text-white"
-                : "bg-[#E8F0FE] hover:bg-[#D2E3FC] text-[#1A73E8] border border-[#D2E3FC]"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs ${isSelectedForChat
+              ? "bg-[#1A73E8] text-white"
+              : "bg-[#E8F0FE] hover:bg-[#D2E3FC] text-[#1A73E8] border border-[#D2E3FC]"
+              }`}
             title="Đàm thoại với AI để thêm/sửa task trong Sprint này"
           >
             <Sparkles className="w-3.5 h-3.5" />
