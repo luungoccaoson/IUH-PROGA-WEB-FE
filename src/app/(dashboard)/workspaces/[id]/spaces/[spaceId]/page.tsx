@@ -148,7 +148,7 @@ export default function SpaceDetailPage() {
     setIsDrawerOpen(false);
   };
 
-  const isDrawerVisible = (isDrawerOpen || Boolean(selectedTask)) && (activeTab === "tasks" || activeTab === "kanban" || activeTab === "timeline");
+  const isDrawerVisible = isDrawerOpen || Boolean(selectedTask);
 
   if (loading) {
     return (
@@ -188,8 +188,12 @@ export default function SpaceDetailPage() {
       {/* Outer Page Container: Pushed inward (margin-right 410px) when task detail drawer is open so content is never covered! */}
       <div
         className={`space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
-          isDrawerOpen && !!selectedTask ? "mr-[410px]" : ""
+          isDrawerVisible ? "mr-[410px]" : ""
         }`}
+        style={{
+          width: isDrawerVisible ? "calc(100% - 410px)" : "100%",
+          transition: "all 0.3s ease-in-out",
+        }}
       >
         {/* Modular Header */}
         <SpaceHeader
