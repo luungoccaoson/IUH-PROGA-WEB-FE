@@ -316,7 +316,7 @@ export default function WorkspaceDashboardPage() {
             {spaces.map((s) => (
               <div
                 key={s.id}
-                onClick={() => router.push(`/workspaces/${workspaceId}/spaces/${s.id}`)}
+                onClick={() => router.push(`/workspaces/${s.workspaceId || workspaceId}/spaces/${s.id}`)}
                 className="bg-white p-5 rounded-2xl border border-[#E5E7EB] hover:border-[#111827] cursor-pointer shadow-2xs hover:shadow-md transition-all group space-y-3 flex flex-col justify-between relative"
               >
                 <div className="space-y-2">

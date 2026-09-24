@@ -13,6 +13,14 @@ export interface DecomposedTaskItem {
   riskWarning?: string;
 }
 
+export interface RagCitationItem {
+  anchorCategory?: string;
+  title: string;
+  sourceUrl?: string;
+  snippet?: string;
+  priorityLevel?: string;
+}
+
 export interface TaskDecompositionResponse {
   threadId: number;
   suggestedSpaceName?: string;
@@ -20,6 +28,7 @@ export interface TaskDecompositionResponse {
   sourceReference?: string;
   sourceUrl?: string;
   sourceUrls?: string[];
+  citations?: RagCitationItem[];
   tasks: DecomposedTaskItem[];
 }
 
@@ -40,7 +49,40 @@ export interface AiChatMessageResponse {
   createdAt: string;
 }
 
+export interface KnowledgeHarvestRequest {
+  spaceId: number;
+  spaceName: string;
+  requirementText: string;
+  domain?: string;
+  tasksJson: string;
+  summary?: string;
+  sourceReference?: string;
+  sourceUrl?: string;
+}
+
+export interface AiKnowledgeSampleItem {
+  id: number;
+  spaceId: number;
+  spaceName: string;
+  domain?: string;
+  requirementSummary?: string;
+  taskCount?: number;
+  sourceReference?: string;
+  createdAt?: string;
+}
+
 export const aiService = {
+  // Knowledge Harvesting: Lưu trữ mẫu phân rã không gian làm việc thành công vào tập tri thức động
+  harvestKnowledge: async (payload: KnowledgeHarvestRequest): Promise<void> => {
+    await apiClient.post<ApiResponse<void>>("/ai/knowledge/harvest", payload);
+  },
+
+  // Knowledge Harvesting: Lấy danh sách các mẫu tri thức đã thu hoạch
+  getHarvestedSamples: async (): Promise<AiKnowledgeSampleItem[]> => {
+    const response = await apiClient.get<ApiResponse<AiKnowledgeSampleItem[]>>("/ai/knowledge/samples");
+    return response.data.data;
+  },
+
   // Upload & parse PDF/Docx document into PgVector Store
   uploadAndParseDocument: async (file: File): Promise<{ fileName: string; fileSize: number; extractedText: string; chunkCount: number }> => {
     const formData = new FormData();
@@ -62,7 +104,8 @@ export const aiService = {
   decomposeRequirements: async (
     spaceId: number,
     requirementText: string,
-    threadId?: number | null
+    threadId?: number | null,
+    currentTasksJson?: string | null
   ): Promise<TaskDecompositionResponse> => {
     const response = await apiClient.post<ApiResponse<TaskDecompositionResponse>>(
       "/ai/agents/decompose",
@@ -70,6 +113,7 @@ export const aiService = {
         spaceId,
         threadId: threadId || undefined,
         requirementText,
+        currentTasksJson: currentTasksJson || undefined,
       },
       { timeout: 120000 } // Extended 2-minute timeout for AI LLM reasoning
     );
