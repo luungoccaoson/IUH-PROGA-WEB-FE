@@ -4,7 +4,9 @@ import { aiService, TaskDecompositionResponse, DecomposedTaskItem, AiThreadRespo
 import { taskService } from "@/services/task.service";
 import { sprintService } from "@/services/sprint.service";
 import { workspaceService } from "@/services/workspace.service";
-import { Space, Sprint } from "@/types";
+import { Space, Sprint, User } from "@/types";
+import { userService } from "@/services/user.service";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { AiHeaderBanner, TargetMode } from "./AiHeaderBanner";
 import { AiDecomposedResults } from "./AiDecomposedResults";
 import { AiChatSidebarSessions, ChatSessionItem } from "./AiChatSidebarSessions";
@@ -37,9 +39,18 @@ export function AiDecompositionContainer({
   const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
   const [isImported, setIsImported] = useState(false);
   const [membersList, setMembersList] = useState<string[]>([]);
-
   const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [workspaceUsers, setWorkspaceUsers] = useState<User[]>([]);
+  const [spaceUsers, setSpaceUsers] = useState<User[]>([]);
+
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 42); // 3 sprint * 14 days = 42 days
+    return d.toISOString().split("T")[0];
+  });
+  const [sprintCount, setSprintCount] = useState<number>(3);
+  const [daysPerSprint, setDaysPerSprint] = useState<number>(14);
   const [sprintCustomDays, setSprintCustomDays] = useState<Record<string, number>>({});
   const [selectedMemberRoles, setSelectedMemberRoles] = useState<any[]>([]);
 
@@ -120,20 +131,83 @@ export function AiDecompositionContainer({
     }
   }, [messages, result, activeThreadId, newSpaceName, workspaceId]);
 
-  // Load workspace members for Task Assignment Dropdown
+  // Load workspace members and their full User details (jobTitle, email, etc.) from Backend
   useEffect(() => {
-    async function fetchMembers() {
+    async function fetchWorkspaceUsers() {
       try {
-        const members = await workspaceService.getWorkspaceMembers(workspaceId);
-        setWorkspaceMembers(members);
-        const names = members.map((m: any) => m.fullName || m.email?.split("@")[0] || "Member");
-        setMembersList(names);
+        const wsMembers = await workspaceService.getWorkspaceMembers(workspaceId);
+        setWorkspaceMembers(wsMembers);
+
+        const userIds: number[] = Array.from(
+          new Set(
+            wsMembers
+              .map((m: any) => m.userId || m.id?.userId || (typeof m.user === "object" ? m.user?.id : null))
+              .filter((id): id is number => typeof id === "number" && id > 0)
+          )
+        );
+
+        if (userIds.length > 0) {
+          const userDetails = await Promise.all(
+            userIds.map((id) => userService.getUserById(id).catch(() => null))
+          );
+          const validUsers = userDetails.filter((u): u is User => u !== null);
+          setWorkspaceUsers(validUsers);
+          const names = validUsers.map((u) => u.fullName || u.email?.split("@")[0] || u.username);
+          setMembersList(names);
+        } else {
+          setWorkspaceUsers([]);
+          setMembersList([]);
+        }
       } catch (err) {
-        console.warn("Could not load workspace members, fallback to default roles:", err);
+        console.warn("Could not load workspace users:", err);
       }
     }
-    fetchMembers();
+    fetchWorkspaceUsers();
   }, [workspaceId]);
+
+  // Load space users when selectedSpaceId or targetMode changes
+  useEffect(() => {
+    async function fetchSpaceUsers() {
+      if (targetMode === "EXISTING_SPACE" && selectedSpaceId) {
+        try {
+          const sMembers = await workspaceService.getSpaceMembers(selectedSpaceId);
+          const spaceUserIds: number[] = Array.from(
+            new Set(
+              sMembers
+                .map((m: any) => m.userId || m.id?.userId || (typeof m.user === "object" ? m.user?.id : null))
+                .filter((id): id is number => typeof id === "number" && id > 0)
+            )
+          );
+
+          if (spaceUserIds.length > 0) {
+            const resolvedUsers = await Promise.all(
+              spaceUserIds.map(async (id) => {
+                const found = workspaceUsers.find((wu) => wu.id === id);
+                if (found) return found;
+                return await userService.getUserById(id).catch(() => null);
+              })
+            );
+            setSpaceUsers(resolvedUsers.filter((u): u is User => u !== null));
+          } else {
+            setSpaceUsers([]);
+          }
+        } catch (err) {
+          console.warn("Could not load space members:", err);
+          setSpaceUsers([]);
+        }
+      } else {
+        // In NEW_SPACE mode: the creator (current logged in user) is in the space by default!
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+          const matchUser = workspaceUsers.find((wu) => wu.id === currentUser.id) || currentUser;
+          setSpaceUsers([matchUser]);
+        } else {
+          setSpaceUsers([]);
+        }
+      }
+    }
+    fetchSpaceUsers();
+  }, [selectedSpaceId, targetMode, workspaceUsers]);
 
   // Load Chat Thread Sessions from Backend for selected Space
   const loadSpaceThreads = async () => {
@@ -230,6 +304,21 @@ export function AiDecompositionContainer({
 
       let finalPromptText = text.trim();
 
+      // Inject user-defined project duration constraint
+      const sDate = new Date(startDate);
+      const eDate = new Date(endDate);
+      const diffDays = Math.max(7, Math.ceil((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const timelineConstraint = `[CẤU HÌNH THỜI GIAN DỰ ÁN CỐ ĐỊNH: Bắt đầu từ ngày ${startDate} đến ngày ${endDate} (Tổng ${diffDays} ngày).
+QUY TẮC PHÂN BỔ SPRINT VÀ QUY TRÌNH PHẦN MỀM BẮT BUỘC:
+1. MẶC ĐỊNH 1 SPRINT LÀ 1 TUẦN (7 ngày). Chỉ những Sprint có độ phức tạp cao hoặc rủi ro lớn mới được kéo dài 2 tuần (14 ngày).
+2. TỔNG THỜI GIAN CÁC SPRINT PHẢI NẰM GỌN TRONG TỔNG ${diffDays} NGÀY. TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG TĂNG THÊM THỜI GIAN DỰ ÁN HAY THAY ĐỔI NGÀY KẾ THÚC (${endDate})! Nếu người dùng yêu cầu thêm Sprint, hãy phân bổ và cân đối lại các Sprint trong tổng ${diffDays} ngày này.
+3. ĐỌC KỸ TÀI LIỆU NẠP VÀO: Bám sát chính xác thông tin đề tài và số lượng nhân sự thực hiện (ví dụ trong tài liệu có 2 người làm thì phân bổ đúng cho 2 người).
+4. QUY TRÌNH PHẦN MỀM CHUẨN: BẮT BUỘC phải có giai đoạn / Sprint dành riêng cho KIỂM THỬ HỆ THỐNG (Testing, QA, UAT, Tích hợp)! Không được bỏ qua giai đoạn kiểm thử!]`;
+
+      if (targetMode === "NEW_SPACE" || !selectedSpaceId) {
+        finalPromptText = `${timelineConstraint}\n${finalPromptText}`;
+      }
+
       // IF EXISTING SPACE MODE: Build smart project status report context for AI
       if (targetMode === "EXISTING_SPACE" && selectedSpaceId) {
         try {
@@ -245,12 +334,12 @@ export function AiDecompositionContainer({
           const sprintSummary =
             existingSprints.length > 0
               ? existingSprints
-                  .map((s) => {
-                    const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
-                    const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
-                    return `- ${s.name} [Trạng thái: ${s.status}, Thời gian: ${sStart} đến ${sEnd}]`;
-                  })
-                  .join("\n")
+                .map((s) => {
+                  const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
+                  const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
+                  return `- ${s.name} [Trạng thái: ${s.status}, Thời gian: ${sStart} đến ${sEnd}]`;
+                })
+                .join("\n")
               : "Chưa có sprint nào.";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
@@ -616,6 +705,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         setNewSpaceName={setNewSpaceName}
         startDate={startDate}
         setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
         onSelectSamplePrompt={(text) => {
           setRequirementText(text);
           handleDecompose(text);
@@ -629,12 +720,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           messages={messages}
           onSendMessage={(text: string) => handleDecompose(text)}
           loading={loading}
+          onScrollToWbs={() => {
+            document.getElementById("wbs-result-table")?.scrollIntoView({ behavior: "smooth" });
+          }}
         />
       </div>
 
       {/* 3. SEPARATE TASK BREAKDOWN CANVAS SECTION */}
       {result && (
-        <div className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
+        <div id="wbs-result-table" className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
               <span>📋 Bảng Kết Quả Phân Rã WBS Tasks Theo Sprint</span>
@@ -657,8 +751,12 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             importSuccess={importSuccess}
             isImported={isImported}
             members={membersList}
+            workspaceUsers={workspaceUsers}
+            spaceUsers={spaceUsers}
+            onUpdateSpaceUsers={setSpaceUsers}
             onUpdateTasks={handleUpdateTasks}
             startDate={startDate}
+            endDate={endDate}
             sprintCustomDays={sprintCustomDays}
             onUpdateSprintDays={(sprint, days) => setSprintCustomDays((prev) => ({ ...prev, [sprint]: days }))}
           />

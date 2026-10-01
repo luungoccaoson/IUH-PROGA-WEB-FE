@@ -15,13 +15,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { TaskDecompositionResponse, DecomposedTaskItem, aiService } from "@/services/ai.service";
-import { Space } from "@/types";
+import { Space, User } from "@/types";
 import { TargetMode } from "./AiHeaderBanner";
 import { RagCitationsDrawer } from "./RagCitationsDrawer";
 import { AiUnifiedChatBox, UnifiedChatMessage } from "./AiUnifiedChatBox";
 import { AiTaskEditModal } from "./AiTaskEditModal";
 import { AiTaskAddModal } from "./AiTaskAddModal";
 import { AiSprintGroup } from "./AiSprintGroup";
+import { AiAutoAssignModal } from "./AiAutoAssignModal";
 
 interface AiDecomposedResultsProps {
   result: TaskDecompositionResponse;
@@ -36,10 +37,14 @@ interface AiDecomposedResultsProps {
   importSuccess: boolean;
   isImported?: boolean;
   members?: string[];
+  workspaceUsers?: User[];
+  spaceUsers?: User[];
+  onUpdateSpaceUsers?: (users: User[]) => void;
   onUpdateTasks: (updatedTasks: DecomposedTaskItem[]) => void;
   existingTaskCount?: number;
   existingSprintsSummary?: { name: string; status: string; taskCount: number }[];
   startDate?: string;
+  endDate?: string;
   sprintCustomDays?: Record<string, number>;
   onUpdateSprintDays?: (sprintName: string, days: number) => void;
 }
@@ -57,10 +62,14 @@ export function AiDecomposedResults({
   importSuccess,
   isImported = false,
   members = [],
+  workspaceUsers = [],
+  spaceUsers = [],
+  onUpdateSpaceUsers,
   onUpdateTasks,
   existingTaskCount = 0,
   existingSprintsSummary = [],
   startDate,
+  endDate,
   sprintCustomDays,
   onUpdateSprintDays,
 }: AiDecomposedResultsProps) {
@@ -88,6 +97,7 @@ export function AiDecomposedResults({
   const [addingToSprint, setAddingToSprint] = useState<string | null>(null);
   const [dragOverSprint, setDragOverSprint] = useState<string | null>(null);
   const [isCitationsDrawerOpen, setIsCitationsDrawerOpen] = useState(false);
+  const [isAutoAssignOpen, setIsAutoAssignOpen] = useState(false);
 
   // Citation Link Popover Hover / Click States
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
@@ -295,134 +305,81 @@ export function AiDecomposedResults({
 
   return (
     <div className="space-y-6 font-sans animate-in fade-in duration-300">
-      {/* Summary Card */}
-      <div className="bg-[#F0F7FF] border border-[#D2E3FC] p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
-        <div className="space-y-2 max-w-2xl">
+      {/* Polished Summary & Key KPI Metric Cards */}
+      <div className="bg-white border border-[#E5E7EB] p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+        <div className="space-y-3 max-w-3xl flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-[#1A73E8]">
-              <CheckCircle2 className="w-4 h-4" />
-              Kết Quả Phân Rã Bài Toán Bằng RAG AI Agent
+            <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Bảng Phân Rã WBS Hoàn Chỉnh
             </span>
             <button
               type="button"
               onClick={() => setIsCitationsDrawerOpen(true)}
-              className="px-2.5 py-1 bg-[#111827] hover:bg-black text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-2.5 py-1 bg-slate-900 hover:bg-black text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
-              <FileText className="w-3.5 h-3.5 text-[#38BDF8]" />
-              <span>📚 Bằng chứng & Trích dẫn RAG</span>
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span>📚 Căn cứ RAG Benchmark</span>
             </button>
-            {/* <button
-              type="button"
-              onClick={() => handleOpenChatBox("ALL")}
-              className={`px-2.5 py-1 text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer ${
-                isChatBoxOpen && targetSprintScope === "ALL"
-                  ? "bg-[#38BDF8] text-gray-900 font-extrabold"
-                  : "bg-[#1A73E8] hover:bg-[#1557B0]"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>💬 Chat AI Tinh Chỉnh WBS</span>
-            </button> */}
           </div>
-          <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
 
-          {result.sourceReference && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#1A73E8] bg-[#E8F0FE] px-3 py-1.5 rounded-xl border border-[#D2E3FC] font-mono font-bold w-fit">
-                <BookmarkCheck className="w-4 h-4 text-[#1A73E8]" />
-                <span>
-                  Nguồn RAG Tri Thức Chứng Thực: <strong>{result.sourceReference}</strong>
-                </span>
-              </div>
+          <h3 className="text-base font-extrabold text-[#111827]">
+            {newSpaceName || selectedSpace?.name || result.suggestedSpaceName || "Kế Hoạch Dự Án"}
+          </h3>
 
-              {/* Render ALL Tri-Anchor Benchmark Citation Links (Compact Badges with Popover) */}
-              {((result.sourceUrls && result.sourceUrls.length > 0) || result.sourceUrl) && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] font-mono font-bold text-[#4B5563] uppercase mr-1">
-                    🔗 Link Chứng Thực:
-                  </span>
-                  {(result.sourceUrls && result.sourceUrls.length > 0 ? result.sourceUrls : [result.sourceUrl!]).map(
-                    (url, idx) => {
-                      let domain = "";
-                      try {
-                        domain = new URL(url).hostname.replace(/^www\./, "");
-                      } catch {
-                        domain = url.substring(0, 24);
-                      }
-
-                      const isHovered = hoveredLinkIndex === idx;
-                      const isOpen = openLinkIndex === idx;
-
-                      return (
-                        <div key={idx} className="relative inline-block">
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onMouseEnter={() => setHoveredLinkIndex(idx)}
-                            onMouseLeave={() => setHoveredLinkIndex(null)}
-                            onClick={() => setOpenLinkIndex(isOpen ? null : idx)}
-                            className="px-2 py-0.5 bg-white hover:bg-[#E8F0FE] border border-[#D2E3FC] hover:border-[#1A73E8] rounded-md text-[11px] font-mono font-bold text-[#1A73E8] transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs cursor-pointer"
-                          >
-                            <span>Link #{idx + 1}</span>
-                            <ExternalLink className="w-3 h-3 text-[#1A73E8]" />
-                          </a>
-
-                          {/* Hover / Click Link Preview Popover */}
-                          {(isHovered || isOpen) && (
-                            <div className="absolute left-0 top-full mt-1.5 w-72 p-3 bg-[#111827] text-white text-[11px] rounded-2xl shadow-xl z-30 space-y-2 animate-in fade-in zoom-in-95 duration-150 border border-gray-700 pointer-events-auto">
-                              <div className="flex items-center justify-between text-[#38BDF8] font-mono font-bold text-[10px] uppercase border-b border-gray-800 pb-1">
-                                <span className="flex items-center gap-1 truncate">
-                                  <ExternalLink className="w-3.5 h-3.5 text-[#38BDF8]" /> {domain}
-                                </span>
-                                <span className="text-[9px] text-gray-400 bg-gray-800 px-1.5 py-0.5 rounded font-mono">
-                                  Link #{idx + 1}
-                                </span>
-                              </div>
-
-                              <p className="text-gray-200 text-xs font-mono break-all leading-relaxed bg-gray-900/80 p-2 rounded-xl border border-gray-800 select-all">
-                                {url}
-                              </p>
-
-                              <div className="pt-1 border-t border-gray-800 flex items-center justify-between">
-                                <span className="text-[10px] text-gray-400 font-mono">Click để chuyển tới link</span>
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2.5 py-1 bg-[#1A73E8] hover:bg-[#1557B0] text-white rounded-lg text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
-                                >
-                                  <span>Mở trang ↗</span>
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              )}
+          {/* 4 Clean Metric Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+              <span className="text-[10px] text-slate-500 font-mono block">Tổng số Tasks</span>
+              <span className="text-sm font-extrabold text-slate-900 block font-mono">
+                {result.tasks.length} tasks
+              </span>
             </div>
-          )}
 
-          <p className="text-xs text-[#4B5563]">
-            Tổng số: <strong className="text-[#111827]">{result.tasks.length} tasks</strong> (Hỗ trợ Story Points
-            Fibonacci, Phân Vai Role & Đánh giá Rủi ro).
-          </p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+              <span className="text-[10px] text-slate-500 font-mono block">Khung Thời Gian</span>
+              <span className="text-xs font-bold text-indigo-700 block font-mono truncate" title={`${startDate || 'Bắt đầu'} - ${endDate || 'Kết thúc'}`}>
+                {startDate ? startDate.substring(5) : 'Bắt đầu'} ➔ {endDate ? endDate.substring(5) : 'Kết thúc'}
+              </span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+              <span className="text-[10px] text-slate-500 font-mono block">Số Lượng Sprint</span>
+              <span className="text-sm font-extrabold text-emerald-700 block font-mono">
+                {availableSprints.length} Sprints
+              </span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+              <span className="text-[10px] text-slate-500 font-mono block">Thành Viên Trong Space</span>
+              <span className="text-xs font-bold text-amber-700 block truncate">
+                {spaceUsers.length > 0 ? `${spaceUsers.length} Thành viên` : "Chưa có thành viên"}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Action Import Button */}
-        <div className="space-y-2 text-left md:text-right shrink-0">
+        {/* Action Buttons: Auto Assign & Import */}
+        <div className="flex flex-wrap items-center gap-2.5 text-left md:text-right shrink-0">
+          {/* <button
+            type="button"
+            onClick={() => setIsAutoAssignOpen(true)}
+            disabled={result.tasks.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Tự động phân bổ công việc cho thành viên theo vai trò (Backend, Frontend, QA...)"
+          >
+            <span>Tự Động Phân Công</span>
+          </button> */}
+
           <button
             type="button"
             onClick={onImportTasks}
             disabled={importing || importSuccess || isImported || result.tasks.length === 0}
             className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
-                ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
-                : targetMode === "NEW_SPACE"
-                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
-                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+              ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
+              : targetMode === "NEW_SPACE"
+                ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
               }`}
           >
             {importing ? (
@@ -617,6 +574,18 @@ export function AiDecomposedResults({
         citations={result?.citations || []}
         sourceReference={result?.sourceReference}
         sourceUrl={result?.sourceUrl}
+      />
+
+      {/* Auto Assign Tasks by Role Modal */}
+      <AiAutoAssignModal
+        isOpen={isAutoAssignOpen}
+        onClose={() => setIsAutoAssignOpen(false)}
+        tasks={result?.tasks || []}
+        onApplyAssignments={(updatedTasks) => onUpdateTasks(updatedTasks)}
+        workspaceUsers={workspaceUsers}
+        currentSpaceUsers={spaceUsers}
+        onUpdateSpaceUsers={onUpdateSpaceUsers || (() => { })}
+        availableSprints={availableSprints}
       />
     </div>
   );
