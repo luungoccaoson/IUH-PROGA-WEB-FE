@@ -202,9 +202,8 @@ export function AiDecomposedResults({
         onUpdateTasks(mergedTasks);
         const assistantMsg: UnifiedChatMessage = {
           sender: "ASSISTANT",
-          text: `✅ AI đã cập nhật công việc thành công cho **${
-            targetSprintScope === "ALL" ? "Toàn bộ bài toán" : targetSprintScope
-          }** theo yêu cầu!`,
+          text: `✅ AI đã cập nhật công việc thành công cho **${targetSprintScope === "ALL" ? "Toàn bộ bài toán" : targetSprintScope
+            }** theo yêu cầu!`,
           sprintScope: targetSprintScope,
           timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         };
@@ -238,10 +237,10 @@ export function AiDecomposedResults({
             updatedTasks = updatedTasks.map((t) =>
               t.sprint === targetSprintScope
                 ? {
-                    ...t,
-                    bufferDays: (t.bufferDays || 0) + 1,
-                    riskWarning: "Task có rủi ro kỹ thuật cao, cần kiểm thử kỹ.",
-                  }
+                  ...t,
+                  bufferDays: (t.bufferDays || 0) + 1,
+                  riskWarning: "Task có rủi ro kỹ thuật cao, cần kiểm thử kỹ.",
+                }
                 : t
             );
             responseNote = `🛡️ Đã cập nhật cảnh báo rủi ro & thêm ngày dự phòng cho ${targetSprintScope}.`;
@@ -312,7 +311,7 @@ export function AiDecomposedResults({
               <FileText className="w-3.5 h-3.5 text-[#38BDF8]" />
               <span>📚 Bằng chứng & Trích dẫn RAG</span>
             </button>
-            <button
+            {/* <button
               type="button"
               onClick={() => handleOpenChatBox("ALL")}
               className={`px-2.5 py-1 text-white rounded-lg text-[11px] font-bold font-mono transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer ${
@@ -323,7 +322,7 @@ export function AiDecomposedResults({
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>💬 Chat AI Tinh Chỉnh WBS</span>
-            </button>
+            </button> */}
           </div>
           <h3 className="text-base font-extrabold text-[#111827]">{result.summary}</h3>
 
@@ -419,13 +418,12 @@ export function AiDecomposedResults({
             type="button"
             onClick={onImportTasks}
             disabled={importing || importSuccess || isImported || result.tasks.length === 0}
-            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${
-              importSuccess || isImported
+            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
                 ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
                 : targetMode === "NEW_SPACE"
-                ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
-                : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
-            }`}
+                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+              }`}
           >
             {importing ? (
               <>
@@ -500,8 +498,8 @@ export function AiDecomposedResults({
               const badgeStyle = isActive
                 ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
                 : isClosed
-                ? "bg-gray-800/80 text-gray-400 border-gray-700"
-                : "bg-blue-500/20 text-blue-300 border-blue-500/40";
+                  ? "bg-gray-800/80 text-gray-400 border-gray-700"
+                  : "bg-blue-500/20 text-blue-300 border-blue-500/40";
 
               const statusText = isActive ? "Đang chạy" : isClosed ? "Đã hoàn thành" : "Sắp tới";
 

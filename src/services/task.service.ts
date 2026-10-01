@@ -58,4 +58,13 @@ export const taskService = {
   deleteTask: async (taskId: number): Promise<void> => {
     await apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`);
   },
+
+  deleteTasksBatch: async (taskIds: number[]): Promise<void> => {
+    try {
+      await apiClient.post<ApiResponse<void>>('/tasks/batch-delete', { taskIds });
+    } catch (err) {
+      // Fallback sequentially/concurrently if needed
+      await Promise.all(taskIds.map((id) => apiClient.delete(`/tasks/${id}`)));
+    }
+  },
 };

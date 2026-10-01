@@ -244,15 +244,32 @@ export function AiDecompositionContainer({
 
           const sprintSummary =
             existingSprints.length > 0
-              ? existingSprints.map((s) => `- ${s.name} [Trạng thái: ${s.status}]`).join("\n")
+              ? existingSprints
+                  .map((s) => {
+                    const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
+                    const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
+                    return `- ${s.name} [Trạng thái: ${s.status}, Thời gian: ${sStart} đến ${sEnd}]`;
+                  })
+                  .join("\n")
               : "Chưa có sprint nào.";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
 - Dự án đang thực hiện: ${selectedSpaceObj?.name || "Space"}
-- Danh sách Sprint hiện tại:
+- Danh sách Sprint hiện tại của Space:
 ${sprintSummary}
 - Các Task đang thực hiện / đã tạo gần đây:
 ${taskSummary}
+
+[QUY TẮC RÀNG BUỘC KHI THÊM / CHIA NHỎ TASK CHO SPRINT CÓ SẴN]:
+1. Nếu người dùng yêu cầu chia nhỏ hoặc thêm task vào một Sprint cụ thể (ví dụ: 'Sprint 7'):
+   - Kiểm tra trạng thái của Sprint đó trong danh sách trên:
+     + NẾU SPRINT ĐÃ HOÀN THÀNH ('CLOSED' / ĐÃ ĐÓNG): TUYỆT ĐỐI KHÔNG ĐƯỢC THÊM TASK VÀO SPRINT NÀY! Bắt buộc thông báo cho người dùng biết Sprint này đã đóng và đề xuất chuyển task vào Sprint ĐANG DIỄN RA (ACTIVE) hoặc tạo Sprint MỚI (FUTURE).
+     + NẾU SPRINT LÀ 'ACTIVE' (ĐANG DIỄN RA) HOẶC 'FUTURE' (SẮP TỚI): BẮT BUỘC chỉ gán trường "sprint" đúng tên của Sprint đó (ví dụ "Sprint 7"), TUYỆT ĐỐI KHÔNG TỰ Ý TẠO SPRINT MỚI hay đổi tên Sprint! Tập trung chia nhỏ và thêm task trực tiếp cho chính Sprint đó.
+2. QUY TẮC PHÂN TÁCH GIAI ĐOẠN NGHIỆP VỤ THỰC TẾ (REALISTIC AGILE SCOPE):
+   - ĐÂY LÀ SPRINT PHÁT TRIỂN TÍNH NĂNG CHUYÊN BIỆT (Feature Sprint), KHÔNG PHẢI TOÀN BỘ QUY TRÌNH DỰ ÁN (SDLC)!
+   - BẮT BUỘC chỉ bóc tách các Task phát triển nghiệp vụ trực tiếp cho chủ đề của Sprint đó (ví dụ: Service API nghiệp vụ, Giao diện Frontend, tích hợp API).
+   - TUYỆT ĐỐI KHÔNG gom cả quy trình (từ thiết kế Schema CSDL nền tảng, kiến trúc đến kiểm thử hệ thống tổng thể E2E hay đóng gói CI/CD/Docker) vào trong Sprint tính năng này! Schema CSDL nền tảng đã làm ở Sprint đầu; Kiểm thử hệ thống tổng thể và Triển khai CI/CD đã có Sprint riêng (như Sprint 8).
+3. Không được tự ý tạo Sprint mới khi người dùng chưa đồng ý.
 
 [YÊU CẦU BÓC TÁCH VÀ MỞ RỘNG CÁC HẠNG MỤC CÔNG VIỆC TIẾP THEO]
 Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách các Task mở rộng tiếp theo cho bài toán sau:
@@ -395,46 +412,96 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         }
 
         const existingSprints = await sprintService.getSprintsBySpace(selectedSpaceId);
-        const sprintMap: Record<string, Sprint> = {};
+        const activeSprint = existingSprints.find((s) => s.status === "ACTIVE");
+        const futureSprints = existingSprints.filter((s) => s.status === "FUTURE");
 
-        // Map existing sprints
+        // Helper to find matching existing sprint by exact name, sprint number (e.g. "Sprint 7"), or prefix
+        const findExistingSprint = (rawSprintName: string): Sprint | undefined => {
+          const cleanRaw = rawSprintName.trim().toLowerCase();
+          const cleanPrefix = cleanRaw.split(":")[0].trim();
+
+          // 1. Exact or prefix match
+          let found = existingSprints.find((sp) => {
+            const spClean = sp.name.trim().toLowerCase();
+            const spPrefix = spClean.split(":")[0].trim();
+            return spClean === cleanRaw || spPrefix === cleanPrefix;
+          });
+          if (found) return found;
+
+          // 2. Sprint number match (e.g., "Sprint 7" matches "Sprint 7: Tích hợp thanh toán")
+          const rawNumMatch = rawSprintName.match(/Sprint\s*(\d+)/i);
+          if (rawNumMatch) {
+            const sprintNum = rawNumMatch[1];
+            found = existingSprints.find((sp) => {
+              const spNumMatch = sp.name.match(/Sprint\s*(\d+)/i);
+              return spNumMatch && spNumMatch[1] === sprintNum;
+            });
+            if (found) return found;
+          }
+          return undefined;
+        };
+
+        // Cache for dynamically created sprints to avoid creating duplicates in this run
+        const createdSprintsCache: Record<string, Sprint> = {};
+
+        // Find latest end date among existing sprints to schedule new future sprints sequentially
+        let latestExistingEndDate = startDate;
         existingSprints.forEach((sp) => {
-          const match = sp.name.match(/Sprint\s+\d+/i);
-          if (match) {
-            sprintMap[match[0]] = sp;
-          } else {
-            sprintMap[sp.name] = sp;
+          if (sp.endDate) {
+            const ed = sp.endDate.substring(0, 10);
+            if (ed > latestExistingEndDate) {
+              latestExistingEndDate = ed;
+            }
           }
         });
 
         // For each decomposed task, put into matching existing Sprint or create new Sprint if needed
         for (const item of result.tasks) {
           const rawSprintName = item.sprint || "Sprint 1";
-          let targetSprint = sprintMap[rawSprintName];
+          const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
           const durationDays = sprintCustomDays[rawSprintName] || 7;
 
-          // If matching sprint doesn't exist, create it for the space dynamically with dates
-          try {
-            const todayIso = toIsoDateTime(startDate, "08:00:00");
-            const futureIso = toIsoDateTime(addDays(startDate, durationDays - 1), "18:00:00");
-            const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
+          let targetSprint: Sprint | undefined = findExistingSprint(rawSprintName) || createdSprintsCache[cleanName];
 
-            targetSprint = await sprintService.createSprint({
-              spaceId: selectedSpaceId,
-              name: cleanName,
-              goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
-              startDate: todayIso,
-              endDate: futureIso,
-              status: "FUTURE",
-            });
-            sprintMap[rawSprintName] = targetSprint;
-          } catch (spErr) {
-            console.warn("Could not create dynamic sprint for existing space:", spErr);
+          // Check if sprint is CLOSED (hoàn thành)
+          if (targetSprint && targetSprint.status === "CLOSED") {
+            // Không được thêm task vào sprint đã đóng! Đẩy sang sprint đang diễn ra hoặc sprint tương lai gần nhất
+            console.warn(`Sprint ${targetSprint.name} đã đóng, tự động chuyển task '${item.title}' sang Sprint đang diễn ra.`);
+            targetSprint = activeSprint || (futureSprints.length > 0 ? futureSprints[0] : undefined);
           }
 
-          const taskDueDate = addDays(startDate, Math.min(item.estimatedDays || 2, Math.max(1, durationDays - 1)));
-          const taskStartIso = toIsoDateTime(startDate, "08:00:00");
-          const taskDueIso = toIsoDateTime(taskDueDate, "18:00:00");
+          // If no matching sprint exists in DB and hasn't been created yet in this batch:
+          if (!targetSprint) {
+            try {
+              const newSprintStart = addDays(latestExistingEndDate, 1);
+              const newSprintEnd = addDays(newSprintStart, durationDays - 1);
+              latestExistingEndDate = newSprintEnd;
+
+              targetSprint = await sprintService.createSprint({
+                spaceId: selectedSpaceId,
+                name: cleanName,
+                goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
+                startDate: `${newSprintStart}T08:00:00`,
+                endDate: `${newSprintEnd}T18:00:00`,
+                status: "FUTURE",
+              });
+              createdSprintsCache[cleanName] = targetSprint;
+            } catch (spErr) {
+              console.warn("Could not create dynamic sprint for existing space:", spErr);
+            }
+          }
+
+          // Compute task dates bounded strictly within targetSprint's actual date range
+          const spStartStr = targetSprint?.startDate ? targetSprint.startDate.substring(0, 10) : startDate;
+          const spEndStr = targetSprint?.endDate ? targetSprint.endDate.substring(0, 10) : addDays(spStartStr, durationDays - 1);
+
+          const taskEstDays = item.estimatedDays || 2;
+          let calculatedDue = addDays(spStartStr, Math.max(1, taskEstDays));
+          if (calculatedDue > spEndStr) {
+            calculatedDue = spEndStr;
+          }
+          const taskStartIso = toIsoDateTime(spStartStr, "08:00:00");
+          const taskDueIso = toIsoDateTime(calculatedDue, "18:00:00");
 
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;

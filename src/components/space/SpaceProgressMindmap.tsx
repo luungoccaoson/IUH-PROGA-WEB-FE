@@ -9,7 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
 } from "lucide-react";
 import { Space, Task, Sprint } from "@/types";
 
@@ -33,10 +33,14 @@ export function SpaceProgressMindmap({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hoveredTaskId, setHoveredTaskId] = useState<number | null>(null);
   const [hoveredSprintId, setHoveredSprintId] = useState<number | null>(null);
-  const [sprintTooltipPos, setSprintTooltipPos] = useState<"top" | "bottom">("bottom");
+  const [sprintTooltipPos, setSprintTooltipPos] = useState<"top" | "bottom">(
+    "bottom",
+  );
   const [taskTooltipPos, setTaskTooltipPos] = useState<"top" | "bottom">("top");
   const [hoveredSpace, setHoveredSpace] = useState(false);
-  const [spaceTooltipPos, setSpaceTooltipPos] = useState<"top" | "bottom">("bottom");
+  const [spaceTooltipPos, setSpaceTooltipPos] = useState<"top" | "bottom">(
+    "bottom",
+  );
 
   const mindmapTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mindmapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -44,7 +48,10 @@ export function SpaceProgressMindmap({
   // Global click outside listener & cross-component sync to dismiss mindmap popovers
   useEffect(() => {
     const handleDocClick = (e: MouseEvent) => {
-      if (mindmapContainerRef.current && !mindmapContainerRef.current.contains(e.target as Node)) {
+      if (
+        mindmapContainerRef.current &&
+        !mindmapContainerRef.current.contains(e.target as Node)
+      ) {
         if (mindmapTimerRef.current) clearTimeout(mindmapTimerRef.current);
         setHoveredTaskId(null);
         setHoveredSprintId(null);
@@ -88,7 +95,9 @@ export function SpaceProgressMindmap({
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+        new CustomEvent("space-popover-change", {
+          detail: { source: "mindmap" },
+        }),
       );
     }
 
@@ -106,7 +115,10 @@ export function SpaceProgressMindmap({
   };
 
   // Viewport-aware mouse enter for sprint node (flips down if close to top of canvas/screen, auto-holds 30s)
-  const handleSprintMouseEnter = (e: React.MouseEvent<HTMLDivElement>, sprintId: number) => {
+  const handleSprintMouseEnter = (
+    e: React.MouseEvent<HTMLDivElement>,
+    sprintId: number,
+  ) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.top < 240) {
       setSprintTooltipPos("bottom");
@@ -121,7 +133,9 @@ export function SpaceProgressMindmap({
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+        new CustomEvent("space-popover-change", {
+          detail: { source: "mindmap" },
+        }),
       );
     }
 
@@ -140,7 +154,10 @@ export function SpaceProgressMindmap({
   };
 
   // Viewport-aware mouse enter for task node (prevents clipping when rect.top < 260, auto-holds 30s)
-  const handleTaskMouseEnter = (e: React.MouseEvent<HTMLDivElement>, taskId: number) => {
+  const handleTaskMouseEnter = (
+    e: React.MouseEvent<HTMLDivElement>,
+    taskId: number,
+  ) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.top < 260) {
       setTaskTooltipPos("bottom");
@@ -155,7 +172,9 @@ export function SpaceProgressMindmap({
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent("space-popover-change", { detail: { source: "mindmap" } })
+        new CustomEvent("space-popover-change", {
+          detail: { source: "mindmap" },
+        }),
       );
     }
 
@@ -178,7 +197,8 @@ export function SpaceProgressMindmap({
   // Robust Assignee Finder
   const getAssigneeInfo = (task: Task) => {
     const targetId = task.ownerId || task.assignee?.id;
-    const targetName = task.ownerName || task.assignee?.fullName || task.suggestedMemberName;
+    const targetName =
+      task.ownerName || task.assignee?.fullName || task.suggestedMemberName;
 
     if (targetId && members && members.length > 0) {
       const found = members.find((m: any) => {
@@ -187,7 +207,11 @@ export function SpaceProgressMindmap({
       });
       if (found) {
         return {
-          name: found.fullName || found.user?.fullName || found.email || `Thành viên #${targetId}`,
+          name:
+            found.fullName ||
+            found.user?.fullName ||
+            found.email ||
+            `Thành viên #${targetId}`,
           email: found.email || found.user?.email || "",
           avatarUrl: found.avatarUrl || found.user?.avatarUrl,
         };
@@ -205,14 +229,37 @@ export function SpaceProgressMindmap({
     if (!currentUser) return false;
     const myId = String(currentUser.id || "");
     const myEmail = (currentUser.email || "").toLowerCase().trim();
-    const myName = (currentUser.fullName || currentUser.username || currentUser.name || "").toLowerCase().trim();
+    const myName = (
+      currentUser.fullName ||
+      currentUser.username ||
+      currentUser.name ||
+      ""
+    )
+      .toLowerCase()
+      .trim();
 
     if (t.ownerId && myId && String(t.ownerId) === myId) return true;
     if (t.assignee?.id && myId && String(t.assignee.id) === myId) return true;
-    if (t.assignee?.email && myEmail && t.assignee.email.toLowerCase().trim() === myEmail) return true;
-    if (t.ownerName && myName && t.ownerName.toLowerCase().trim() === myName) return true;
-    if (t.assignee?.fullName && myName && t.assignee.fullName.toLowerCase().trim() === myName) return true;
-    if (t.suggestedMemberName && myName && t.suggestedMemberName.toLowerCase().trim() === myName) return true;
+    if (
+      t.assignee?.email &&
+      myEmail &&
+      t.assignee.email.toLowerCase().trim() === myEmail
+    )
+      return true;
+    if (t.ownerName && myName && t.ownerName.toLowerCase().trim() === myName)
+      return true;
+    if (
+      t.assignee?.fullName &&
+      myName &&
+      t.assignee.fullName.toLowerCase().trim() === myName
+    )
+      return true;
+    if (
+      t.suggestedMemberName &&
+      myName &&
+      t.suggestedMemberName.toLowerCase().trim() === myName
+    )
+      return true;
 
     // Check through space members list
     if (members && members.length > 0 && myId) {
@@ -221,10 +268,19 @@ export function SpaceProgressMindmap({
         return mId === myId;
       });
       if (myMember) {
-        const memberUserId = String(myMember.id?.userId || myMember.userId || myMember.id || "");
-        const memberEmail = (myMember.email || myMember.user?.email || "").toLowerCase().trim();
+        const memberUserId = String(
+          myMember.id?.userId || myMember.userId || myMember.id || "",
+        );
+        const memberEmail = (myMember.email || myMember.user?.email || "")
+          .toLowerCase()
+          .trim();
         if (t.ownerId && String(t.ownerId) === memberUserId) return true;
-        if (t.assignee?.email && memberEmail && t.assignee.email.toLowerCase().trim() === memberEmail) return true;
+        if (
+          t.assignee?.email &&
+          memberEmail &&
+          t.assignee.email.toLowerCase().trim() === memberEmail
+        )
+          return true;
       }
     }
     return false;
@@ -234,7 +290,9 @@ export function SpaceProgressMindmap({
   const activeSprintId = useMemo(() => {
     // Ưu tiên sprint có trạng thái ACTIVE (loại trừ Sprint 0 rỗng nếu có)
     const activeNonZero = sprints.find(
-      (s) => s.status?.toUpperCase() === "ACTIVE" && !s.name?.toLowerCase().includes("sprint 0")
+      (s) =>
+        s.status?.toUpperCase() === "ACTIVE" &&
+        !s.name?.toLowerCase().includes("sprint 0"),
     );
     if (activeNonZero) return activeNonZero.id;
 
@@ -244,7 +302,9 @@ export function SpaceProgressMindmap({
   }, [sprints]);
 
   // Expanded sprints state: initially ONLY the active sprint is expanded
-  const [expandedSprints, setExpandedSprints] = useState<Record<string, boolean>>(() => {
+  const [expandedSprints, setExpandedSprints] = useState<
+    Record<string, boolean>
+  >(() => {
     const initial: Record<string, boolean> = {};
     if (activeSprintId !== -1) {
       initial[`sprint-${activeSprintId}`] = true;
@@ -256,7 +316,10 @@ export function SpaceProgressMindmap({
   useEffect(() => {
     if (activeSprintId !== -1) {
       setExpandedSprints((prev) => {
-        if (Object.keys(prev).length === 0 || !Object.values(prev).some(Boolean)) {
+        if (
+          Object.keys(prev).length === 0 ||
+          !Object.values(prev).some(Boolean)
+        ) {
           return { ...prev, [`sprint-${activeSprintId}`]: true };
         }
         return prev;
@@ -290,7 +353,9 @@ export function SpaceProgressMindmap({
 
     // Bỏ qua Sprint 0 nếu là Sprint rỗng kế thừa từ trước để tránh xung đột trạng thái
     const validSprints = sprints.filter(
-      (s) => !s.name?.toLowerCase().includes("sprint 0") || tasks.some((t) => t.sprintId === s.id)
+      (s) =>
+        !s.name?.toLowerCase().includes("sprint 0") ||
+        tasks.some((t) => t.sprintId === s.id),
     );
 
     // Sắp xếp Sprint theo thứ tự chuẩn: theo số thứ tự Sprint (Sprint 1, 2, 3...) hoặc startDate/id
@@ -301,7 +366,9 @@ export function SpaceProgressMindmap({
         return numA - numB;
       }
       if (a.startDate && b.startDate) {
-        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        return (
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
       }
       return (a.id || 0) - (b.id || 0);
     });
@@ -310,7 +377,8 @@ export function SpaceProgressMindmap({
     sortedSprints.forEach((sp) => {
       const spTasks = tasks.filter((t) => t.sprintId === sp.id);
       const doneCount = spTasks.filter((t) => t.status === "DONE").length;
-      const pct = spTasks.length > 0 ? Math.round((doneCount / spTasks.length) * 100) : 0;
+      const pct =
+        spTasks.length > 0 ? Math.round((doneCount / spTasks.length) * 100) : 0;
 
       const spStatus = (sp.status || "").toUpperCase();
       const isClosed = spStatus === "CLOSED";
@@ -344,7 +412,9 @@ export function SpaceProgressMindmap({
     });
 
     // Backlog tasks
-    const backlogTasks = tasks.filter((t) => !t.sprintId || !sprints.some((sp) => sp.id === t.sprintId));
+    const backlogTasks = tasks.filter(
+      (t) => !t.sprintId || !sprints.some((sp) => sp.id === t.sprintId),
+    );
     if (backlogTasks.length > 0) {
       const doneCount = backlogTasks.filter((t) => t.status === "DONE").length;
       const pct = Math.round((doneCount / backlogTasks.length) * 100);
@@ -381,18 +451,27 @@ export function SpaceProgressMindmap({
 
   // Status helper for roadmap card
   const getTaskVisualProps = (task: Task, isSprintActive: boolean) => {
-    const isOverdue = task.status !== "DONE" && task.dueDate && task.dueDate < today;
+    const isOverdue =
+      task.status !== "DONE" && task.dueDate && task.dueDate < today;
     const isBlocked = !!task.riskWarning;
     const isMine = isMyTask(task);
 
     // Status corner badge
-    let badge = <div className="w-3.5 h-3.5 rounded-full bg-[#94A3B8] border border-white shrink-0" title="Cần làm" />;
+    let badge = (
+      <div
+        className="w-3.5 h-3.5 rounded-full bg-[#94A3B8] border border-white shrink-0"
+        title="Cần làm"
+      />
+    );
     let statusLabel = "Cần làm";
     let statusBadgeColor = "bg-gray-100 text-gray-700 border-gray-300";
 
     if (isOverdue || isBlocked) {
       badge = (
-        <div className="w-4 h-4 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0" title="Trễ hạn/Nghẽn">
+        <div
+          className="w-4 h-4 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0"
+          title="Trễ hạn/Nghẽn"
+        >
           !
         </div>
       );
@@ -400,7 +479,10 @@ export function SpaceProgressMindmap({
       statusBadgeColor = "bg-red-100 text-red-700 border-red-300";
     } else if (task.status === "DONE") {
       badge = (
-        <div className="w-4 h-4 rounded-full bg-[#10B981] text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0" title="Đã xong">
+        <div
+          className="w-4 h-4 rounded-full bg-[#10B981] text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0"
+          title="Đã xong"
+        >
           ✓
         </div>
       );
@@ -408,7 +490,10 @@ export function SpaceProgressMindmap({
       statusBadgeColor = "bg-emerald-100 text-emerald-700 border-emerald-300";
     } else if (task.status === "IN_PROGRESS") {
       badge = (
-        <div className="w-4 h-4 rounded-full bg-[#2563EB] text-white flex items-center justify-center shadow-xs shrink-0" title="Đang làm">
+        <div
+          className="w-4 h-4 rounded-full bg-[#2563EB] text-white flex items-center justify-center shadow-xs shrink-0"
+          title="Đang làm"
+        >
           <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
         </div>
       );
@@ -423,7 +508,8 @@ export function SpaceProgressMindmap({
 
     if (isMine) {
       if (isSprintActive || task.status === "IN_PROGRESS") {
-        borderClass = "border-2 border-[#2563EB] ring-2 ring-[#60A5FA] shadow-md animate-pulse";
+        borderClass =
+          "border-2 border-[#2563EB] ring-2 ring-[#60A5FA] shadow-md animate-pulse";
         bgClass = "bg-[#EFF6FF]";
       } else {
         borderClass = "border-2 border-[#3B82F6] ring-1 ring-[#93C5FD]";
@@ -450,7 +536,9 @@ export function SpaceProgressMindmap({
       {/* TOP CONTROLS & FULLSCREEN */}
       <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[#374151]">Sơ đồ lộ trình phát triển (Roadmap Style)</span>
+          <span className="text-xs font-bold text-[#374151]">
+            Sơ đồ lộ trình phát triển
+          </span>
           <span className="text-[10px] font-mono text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full border border-blue-200 font-bold">
             Tiến độ tổng: {overallPercent}%
           </span>
@@ -487,7 +575,9 @@ export function SpaceProgressMindmap({
               <span className="font-extrabold text-[#111827] uppercase tracking-wider text-[11px]">
                 Chú thích lộ trình
               </span>
-              <span className="text-[10px] text-gray-400 font-mono">Legend</span>
+              <span className="text-[10px] text-gray-400 font-mono">
+                Legend
+              </span>
             </div>
 
             {/* SPRINT STATUS SECTION */}
@@ -571,7 +661,9 @@ export function SpaceProgressMindmap({
                 className="px-7 py-3.5 rounded-2xl bg-[#FEF08A] border-2 border-black text-[#111827] shadow-md flex items-center gap-3 font-extrabold text-sm sm:text-base max-w-xl text-center cursor-pointer transition-transform hover:scale-105"
               >
                 <Sparkles className="w-5 h-5 text-[#B45309] shrink-0" />
-                <span className="truncate">{space?.name || "Đề tài Space"}</span>
+                <span className="truncate">
+                  {space?.name || "Đề tài Space"}
+                </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-black text-white text-[11px] font-mono font-bold shrink-0">
                   {overallPercent}%
                 </span>
@@ -580,12 +672,17 @@ export function SpaceProgressMindmap({
               {/* SPACE DETAIL HOVER POPOVER */}
               {hoveredSpace && (
                 <div
-                  className={`absolute ${spaceTooltipPos === "top" ? "bottom-full mb-3" : "top-full mt-3"
-                    } left-1/2 -translate-x-1/2 z-[100] w-80 sm:w-96 p-4 bg-white border-2 border-black rounded-2xl shadow-[0_20px_45px_rgba(0,0,0,0.25)] text-xs space-y-3 pointer-events-none animate-in fade-in zoom-in-95`}
+                  className={`absolute ${
+                    spaceTooltipPos === "top"
+                      ? "bottom-full mb-3"
+                      : "top-full mt-3"
+                  } left-1/2 -translate-x-1/2 z-[100] w-80 sm:w-96 p-4 bg-white border-2 border-black rounded-2xl shadow-[0_20px_45px_rgba(0,0,0,0.25)] text-xs space-y-3 pointer-events-none animate-in fade-in zoom-in-95`}
                 >
                   <div className="flex items-start justify-between gap-2 border-b border-gray-200 pb-2">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-gray-400">Không gian làm việc</span>
+                      <span className="text-[10px] uppercase font-bold text-gray-400">
+                        Không gian làm việc
+                      </span>
                       <h4 className="font-extrabold text-sm text-[#111827] leading-tight mt-0.5">
                         {space?.name || "Đề tài Space"}
                       </h4>
@@ -614,17 +711,25 @@ export function SpaceProgressMindmap({
                   {/* Stats Grid */}
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200">
-                      <span className="text-[10px] text-emerald-700 font-semibold block">Đã xong</span>
-                      <span className="font-mono font-bold text-sm text-emerald-900">{doneTasksCount}</span>
+                      <span className="text-[10px] text-emerald-700 font-semibold block">
+                        Đã xong
+                      </span>
+                      <span className="font-mono font-bold text-sm text-emerald-900">
+                        {doneTasksCount}
+                      </span>
                     </div>
                     <div className="p-2 rounded-xl bg-blue-50 border border-blue-200">
-                      <span className="text-[10px] text-blue-700 font-semibold block">Đang làm</span>
+                      <span className="text-[10px] text-blue-700 font-semibold block">
+                        Đang làm
+                      </span>
                       <span className="font-mono font-bold text-sm text-blue-900">
                         {tasks.filter((t) => t.status === "IN_PROGRESS").length}
                       </span>
                     </div>
                     <div className="p-2 rounded-xl bg-amber-50 border border-amber-200">
-                      <span className="text-[10px] text-amber-700 font-semibold block">Cần làm</span>
+                      <span className="text-[10px] text-amber-700 font-semibold block">
+                        Cần làm
+                      </span>
                       <span className="font-mono font-bold text-sm text-amber-900">
                         {tasks.filter((t) => t.status === "TODO").length}
                       </span>
@@ -635,17 +740,22 @@ export function SpaceProgressMindmap({
                   <div className="pt-2 border-t border-gray-100 text-[11px] text-gray-600 space-y-1">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Số lượng Sprint:</span>
-                      <span className="font-bold text-[#111827]">{sprints.length} sprints</span>
+                      <span className="font-bold text-[#111827]">
+                        {sprints.length} sprints
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Thành viên:</span>
-                      <span className="font-bold text-[#111827]">{members.length || 1} người</span>
+                      <span className="font-bold text-[#111827]">
+                        {members.length || 1} người
+                      </span>
                     </div>
                     {space?.startDate && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Thời gian:</span>
                         <span className="font-mono text-[10px] font-semibold text-[#111827]">
-                          {space.startDate.substring(0, 10)} ➔ {space.endDate?.substring(0, 10) || "Đang mở"}
+                          {space.startDate.substring(0, 10)} ➔{" "}
+                          {space.endDate?.substring(0, 10) || "Đang mở"}
                         </span>
                       </div>
                     )}
@@ -653,8 +763,11 @@ export function SpaceProgressMindmap({
 
                   {/* Pointer Arrow */}
                   <div
-                    className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${spaceTooltipPos === "top" ? "top-full border-t-black" : "bottom-full border-b-black"
-                      }`}
+                    className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${
+                      spaceTooltipPos === "top"
+                        ? "top-full border-t-black"
+                        : "bottom-full border-b-black"
+                    }`}
                   />
                 </div>
               )}
@@ -668,32 +781,42 @@ export function SpaceProgressMindmap({
               return (
                 <div
                   key={group.key}
-                  className={`w-full flex flex-col items-center relative transition-all ${hoveredSprintId === (group.sprint?.id || 9999)
-                    ? "z-50"
-                    : hoveredTaskId && group.tasks.some((t) => t.id === hoveredTaskId)
-                      ? "z-40"
-                      : "z-10"
-                    }`}
+                  className={`w-full flex flex-col items-center relative transition-all ${
+                    hoveredSprintId === (group.sprint?.id || 9999)
+                      ? "z-50"
+                      : hoveredTaskId &&
+                          group.tasks.some((t) => t.id === hoveredTaskId)
+                        ? "z-40"
+                        : "z-10"
+                  }`}
                 >
                   {/* VERTICAL CONNECTING SPINE LINE */}
                   <div className="w-0.5 h-10 bg-[#3B82F6]" />
 
                   {/* SPRINT CENTRAL NODE (High z-index when hovered so tooltip displays ABOVE task cards) */}
                   <div
-                    className={`relative transition-all ${hoveredSprintId === (group.sprint?.id || 9999) ? "z-50" : "z-20"
-                      }`}
+                    className={`relative transition-all ${
+                      hoveredSprintId === (group.sprint?.id || 9999)
+                        ? "z-50"
+                        : "z-20"
+                    }`}
                   >
                     <div
-                      onClick={() => handleSprintClick(group.key, group.sprint?.id || 9999)}
-                      onMouseEnter={(e) => handleSprintMouseEnter(e, group.sprint?.id || 9999)}
-                      className={`px-6 py-2.5 rounded-xl border-2 text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center gap-2.5 ${group.isDone
-                        ? "bg-[#DCFCE7] border-2 border-emerald-600 text-[#14532D]"
-                        : group.isClosedIncomplete
-                          ? "bg-[#FEF3C7] border-2 border-amber-500 text-[#92400E]"
-                          : group.isActive
-                            ? "bg-[#EFF6FF] border-2 border-[#2563EB] text-[#1D4ED8] ring-2 ring-blue-400 ring-offset-2 scale-105 shadow-md"
-                            : "bg-[#F8FAFC] border-2 border-slate-300 text-[#475569]"
-                        }`}
+                      onClick={() =>
+                        handleSprintClick(group.key, group.sprint?.id || 9999)
+                      }
+                      onMouseEnter={(e) =>
+                        handleSprintMouseEnter(e, group.sprint?.id || 9999)
+                      }
+                      className={`px-6 py-2.5 rounded-xl border-2 text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center gap-2.5 ${
+                        group.isDone
+                          ? "bg-[#DCFCE7] border-2 border-emerald-600 text-[#14532D]"
+                          : group.isClosedIncomplete
+                            ? "bg-[#FEF3C7] border-2 border-amber-500 text-[#92400E]"
+                            : group.isActive
+                              ? "bg-[#EFF6FF] border-2 border-[#2563EB] text-[#1D4ED8] ring-2 ring-blue-400 ring-offset-2 scale-105 shadow-md"
+                              : "bg-[#F8FAFC] border-2 border-slate-300 text-[#475569]"
+                      }`}
                     >
                       {group.isDone ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -705,18 +828,21 @@ export function SpaceProgressMindmap({
                         <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       )}
 
-                      <span className="text-sm font-extrabold">{group.title}</span>
+                      <span className="text-sm font-extrabold">
+                        {group.title}
+                      </span>
 
                       {/* Percentage Badge */}
                       <span
-                        className={`px-2 py-0.5 rounded-full font-mono text-[11px] font-bold ${group.isDone
-                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                          : group.isClosedIncomplete
-                            ? "bg-amber-100 text-amber-900 border border-amber-300"
-                            : group.isActive
-                              ? "bg-blue-600 text-white"
-                              : "bg-slate-200 text-slate-700"
-                          }`}
+                        className={`px-2 py-0.5 rounded-full font-mono text-[11px] font-bold ${
+                          group.isDone
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : group.isClosedIncomplete
+                              ? "bg-amber-100 text-amber-900 border border-amber-300"
+                              : group.isActive
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-200 text-slate-700"
+                        }`}
                       >
                         {group.percent}%
                       </span>
@@ -724,8 +850,9 @@ export function SpaceProgressMindmap({
                       {/* Expand / Collapse icon */}
                       {hasTasks && (
                         <ChevronRight
-                          className={`w-4 h-4 transition-transform duration-200 text-gray-700 ${isExpanded ? "rotate-90" : ""
-                            }`}
+                          className={`w-4 h-4 transition-transform duration-200 text-gray-700 ${
+                            isExpanded ? "rotate-90" : ""
+                          }`}
                         />
                       )}
                     </div>
@@ -733,20 +860,26 @@ export function SpaceProgressMindmap({
                     {/* SPRINT HOVER TOOLTIP (FLIPS UP/DOWN BASED ON VIEWPORT AND HAS z-[100]) */}
                     {hoveredSprintId === (group.sprint?.id || 9999) && (
                       <div
-                        className={`absolute ${sprintTooltipPos === "top" ? "bottom-full mb-3" : "top-full mt-3"
-                          } left-1/2 -translate-x-1/2 z-[100] w-72 p-3.5 bg-white border-2 border-black rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.2)] text-xs space-y-2 pointer-events-none animate-in fade-in zoom-in-95`}
+                        className={`absolute ${
+                          sprintTooltipPos === "top"
+                            ? "bottom-full mb-3"
+                            : "top-full mt-3"
+                        } left-1/2 -translate-x-1/2 z-[100] w-72 p-3.5 bg-white border-2 border-black rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.2)] text-xs space-y-2 pointer-events-none animate-in fade-in zoom-in-95`}
                       >
                         <div className="flex items-center justify-between border-b border-gray-200 pb-1.5">
-                          <p className="font-extrabold text-xs text-[#111827] truncate">{group.title}</p>
+                          <p className="font-extrabold text-xs text-[#111827] truncate">
+                            {group.title}
+                          </p>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${group.isDone
-                              ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                              : group.isClosedIncomplete
-                                ? "bg-amber-100 text-amber-900 border-amber-300"
-                                : group.isActive
-                                  ? "bg-blue-100 text-blue-900 border-blue-300"
-                                  : "bg-slate-100 text-slate-700 border-slate-300"
-                              }`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                              group.isDone
+                                ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                : group.isClosedIncomplete
+                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                  : group.isActive
+                                    ? "bg-blue-100 text-blue-900 border-blue-300"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                            }`}
                           >
                             {group.isDone
                               ? "Đã đóng (100%)"
@@ -761,26 +894,37 @@ export function SpaceProgressMindmap({
                           <p className="flex items-center justify-between">
                             <span>Tiến độ:</span>
                             <span className="font-bold text-black font-mono">
-                              {group.percent}% ({group.tasks.filter((t) => t.status === "DONE").length}/{group.tasks.length} task)
+                              {group.percent}% (
+                              {
+                                group.tasks.filter((t) => t.status === "DONE")
+                                  .length
+                              }
+                              /{group.tasks.length} task)
                             </span>
                           </p>
                           {group.sprint?.startDate && (
                             <p className="flex items-center justify-between text-[10px]">
                               <span>Thời gian:</span>
                               <span className="font-mono font-semibold">
-                                {group.sprint.startDate.substring(0, 10)} ➔ {group.sprint.endDate?.substring(0, 10) || "Hiện tại"}
+                                {group.sprint.startDate.substring(0, 10)} ➔{" "}
+                                {group.sprint.endDate?.substring(0, 10) ||
+                                  "Hiện tại"}
                               </span>
                             </p>
                           )}
                         </div>
                         <p className="text-[10px] text-blue-600 font-semibold text-center italic pt-0.5">
-                          💡 Bấm để {isExpanded ? "thu gọn" : "mở rộng"} nhánh công việc
+                          💡 Bấm để {isExpanded ? "thu gọn" : "mở rộng"} nhánh
+                          công việc
                         </p>
 
                         {/* Pointer arrow */}
                         <div
-                          className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${sprintTooltipPos === "top" ? "top-full border-t-black" : "bottom-full border-b-black"
-                            }`}
+                          className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${
+                            sprintTooltipPos === "top"
+                              ? "top-full border-t-black"
+                              : "bottom-full border-b-black"
+                          }`}
                         />
                       </div>
                     )}
@@ -791,8 +935,12 @@ export function SpaceProgressMindmap({
                   {/* ========================================================================= */}
                   {isExpanded && hasTasks && (
                     <div
-                      className={`w-full flex items-start justify-center gap-14 pt-4 pb-8 relative ${hoveredTaskId && group.tasks.some((t) => t.id === hoveredTaskId) ? "z-30" : "z-10"
-                        }`}
+                      className={`w-full flex items-start justify-center gap-14 pt-4 pb-8 relative ${
+                        hoveredTaskId &&
+                        group.tasks.some((t) => t.id === hoveredTaskId)
+                          ? "z-30"
+                          : "z-10"
+                      }`}
                     >
                       {/* LEFT TASKS COLUMN */}
                       <div className="flex-1 flex flex-col items-end space-y-4">
@@ -804,19 +952,26 @@ export function SpaceProgressMindmap({
                           return (
                             <div
                               key={t.id}
-                              className={`relative flex items-center gap-2 group cursor-pointer ${isHovered ? "z-50" : "z-10"
-                                }`}
+                              className={`relative flex items-center gap-2 group cursor-pointer ${
+                                isHovered ? "z-50" : "z-10"
+                              }`}
                               onClick={() => handleTaskClick(t)}
-                              onMouseEnter={(e) => handleTaskMouseEnter(e, t.id)}
+                              onMouseEnter={(e) =>
+                                handleTaskMouseEnter(e, t.id)
+                              }
                             >
                               {/* Task Card (Wider, longer, rich layout) */}
                               <div
                                 className={`w-80 sm:w-96 min-h-[64px] px-5 py-3.5 rounded-2xl border-2 text-xs font-medium transition-all hover:scale-105 hover:bg-yellow-50/80 shadow-xs flex items-center justify-between gap-3 ${visual.bgClass} ${visual.borderClass}`}
                               >
                                 <div className="min-w-0 flex-1">
-                                  <p className="font-bold text-[#111827] text-xs sm:text-sm line-clamp-1">{t.title}</p>
+                                  <p className="font-bold text-[#111827] text-xs sm:text-sm line-clamp-1">
+                                    {t.title}
+                                  </p>
                                   <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#6B7280]">
-                                    <span className="font-mono font-semibold">#{t.id}</span>
+                                    <span className="font-mono font-semibold">
+                                      #{t.id}
+                                    </span>
                                     <span>•</span>
                                     <span className="truncate max-w-[140px] font-semibold text-[#374151]">
                                       {assignee.name}
@@ -832,36 +987,67 @@ export function SpaceProgressMindmap({
                               {/* HOVER TOOLTIP POPOVER (FLIPS UP/DOWN BASED ON VIEWPORT AND HAS z-[100]) */}
                               {isHovered && (
                                 <div
-                                  className={`absolute ${taskTooltipPos === "top" ? "bottom-full mb-3" : "top-full mt-3"
-                                    } right-12 z-[100] w-80 p-4 bg-white text-[#111827] text-xs rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] border-2 border-black ring-4 ring-yellow-400/30 pointer-events-none animate-in fade-in zoom-in-95`}
+                                  className={`absolute ${
+                                    taskTooltipPos === "top"
+                                      ? "bottom-full mb-3"
+                                      : "top-full mt-3"
+                                  } right-12 z-[100] w-80 p-4 bg-white text-[#111827] text-xs rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] border-2 border-black ring-4 ring-yellow-400/30 pointer-events-none animate-in fade-in zoom-in-95`}
                                 >
                                   <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
                                     <span className="font-mono text-[11px] text-[#1E293B] font-extrabold bg-[#FEF08A] px-2.5 py-0.5 rounded-md border border-black/30">
                                       Mã #{t.id}
                                     </span>
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${visual.statusBadgeColor}`}>
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${visual.statusBadgeColor}`}
+                                    >
                                       {visual.statusLabel}
                                     </span>
                                   </div>
 
-                                  <p className="font-extrabold text-sm text-[#0F172A] mb-2.5 leading-snug">{t.title}</p>
+                                  <p className="font-extrabold text-sm text-[#0F172A] mb-2.5 leading-snug">
+                                    {t.title}
+                                  </p>
 
                                   <div className="p-2.5 rounded-xl bg-[#F8FAFC] border border-gray-200 space-y-1.5 mb-2.5">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Người thực hiện:</p>
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                                      Người thực hiện:
+                                    </p>
                                     <div className="flex items-center gap-2.5">
                                       <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                                        {assignee.name.substring(0, 2).toUpperCase()}
+                                        {assignee.name
+                                          .substring(0, 2)
+                                          .toUpperCase()}
                                       </div>
                                       <div className="min-w-0">
-                                        <p className="font-bold text-[#111827] text-xs truncate">{assignee.name}</p>
-                                        {assignee.email && <p className="text-[10px] text-gray-500 truncate">{assignee.email}</p>}
+                                        <p className="font-bold text-[#111827] text-xs truncate">
+                                          {assignee.name}
+                                        </p>
+                                        {assignee.email && (
+                                          <p className="text-[10px] text-gray-500 truncate">
+                                            {assignee.email}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
 
                                   <div className="grid grid-cols-2 gap-2 text-[11px] text-[#4B5563] pt-1.5 border-t border-gray-100">
-                                    <p><span className="text-gray-500">Độ ưu tiên:</span> <span className="font-bold text-[#111827]">{t.priority}</span></p>
-                                    <p><span className="text-gray-500">Hạn chót:</span> <span className="font-mono font-semibold text-[#111827]">{t.dueDate || "Chưa đặt"}</span></p>
+                                    <p>
+                                      <span className="text-gray-500">
+                                        Độ ưu tiên:
+                                      </span>{" "}
+                                      <span className="font-bold text-[#111827]">
+                                        {t.priority}
+                                      </span>
+                                    </p>
+                                    <p>
+                                      <span className="text-gray-500">
+                                        Hạn chót:
+                                      </span>{" "}
+                                      <span className="font-mono font-semibold text-[#111827]">
+                                        {t.dueDate || "Chưa đặt"}
+                                      </span>
+                                    </p>
                                   </div>
 
                                   {t.riskWarning && (
@@ -873,8 +1059,11 @@ export function SpaceProgressMindmap({
 
                                   {/* Arrow indicator */}
                                   <div
-                                    className={`absolute right-10 border-4 border-transparent ${taskTooltipPos === "top" ? "top-full border-t-black" : "bottom-full border-b-black"
-                                      }`}
+                                    className={`absolute right-10 border-4 border-transparent ${
+                                      taskTooltipPos === "top"
+                                        ? "top-full border-t-black"
+                                        : "bottom-full border-b-black"
+                                    }`}
                                   />
                                 </div>
                               )}
@@ -896,10 +1085,13 @@ export function SpaceProgressMindmap({
                           return (
                             <div
                               key={t.id}
-                              className={`relative flex items-center gap-2 group cursor-pointer ${isHovered ? "z-50" : "z-10"
-                                }`}
+                              className={`relative flex items-center gap-2 group cursor-pointer ${
+                                isHovered ? "z-50" : "z-10"
+                              }`}
                               onClick={() => handleTaskClick(t)}
-                              onMouseEnter={(e) => handleTaskMouseEnter(e, t.id)}
+                              onMouseEnter={(e) =>
+                                handleTaskMouseEnter(e, t.id)
+                              }
                             >
                               {/* Connecting Dotted Line to Spine */}
                               <div className="w-10 border-b-2 border-dotted border-[#3B82F6]" />
@@ -910,13 +1102,17 @@ export function SpaceProgressMindmap({
                               >
                                 <div className="shrink-0">{visual.badge}</div>
                                 <div className="min-w-0 flex-1 text-right">
-                                  <p className="font-bold text-[#111827] text-xs sm:text-sm line-clamp-1">{t.title}</p>
+                                  <p className="font-bold text-[#111827] text-xs sm:text-sm line-clamp-1">
+                                    {t.title}
+                                  </p>
                                   <div className="flex items-center justify-end gap-2 mt-1.5 text-[11px] text-[#6B7280]">
                                     <span className="truncate max-w-[140px] font-semibold text-[#374151]">
                                       {assignee.name}
                                     </span>
                                     <span>•</span>
-                                    <span className="font-mono font-semibold">#{t.id}</span>
+                                    <span className="font-mono font-semibold">
+                                      #{t.id}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -924,36 +1120,67 @@ export function SpaceProgressMindmap({
                               {/* HOVER TOOLTIP POPOVER (FLIPS UP/DOWN BASED ON VIEWPORT AND HAS z-[100]) */}
                               {isHovered && (
                                 <div
-                                  className={`absolute ${taskTooltipPos === "top" ? "bottom-full mb-3" : "top-full mt-3"
-                                    } left-12 z-[100] w-80 p-4 bg-white text-[#111827] text-xs rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] border-2 border-black ring-4 ring-yellow-400/30 pointer-events-none animate-in fade-in zoom-in-95`}
+                                  className={`absolute ${
+                                    taskTooltipPos === "top"
+                                      ? "bottom-full mb-3"
+                                      : "top-full mt-3"
+                                  } left-12 z-[100] w-80 p-4 bg-white text-[#111827] text-xs rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] border-2 border-black ring-4 ring-yellow-400/30 pointer-events-none animate-in fade-in zoom-in-95`}
                                 >
                                   <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
                                     <span className="font-mono text-[11px] text-[#1E293B] font-extrabold bg-[#FEF08A] px-2.5 py-0.5 rounded-md border border-black/30">
                                       Mã #{t.id}
                                     </span>
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${visual.statusBadgeColor}`}>
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${visual.statusBadgeColor}`}
+                                    >
                                       {visual.statusLabel}
                                     </span>
                                   </div>
 
-                                  <p className="font-extrabold text-sm text-[#0F172A] mb-2.5 leading-snug">{t.title}</p>
+                                  <p className="font-extrabold text-sm text-[#0F172A] mb-2.5 leading-snug">
+                                    {t.title}
+                                  </p>
 
                                   <div className="p-2.5 rounded-xl bg-[#F8FAFC] border border-gray-200 space-y-1.5 mb-2.5">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Người thực hiện:</p>
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                                      Người thực hiện:
+                                    </p>
                                     <div className="flex items-center gap-2.5">
                                       <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                                        {assignee.name.substring(0, 2).toUpperCase()}
+                                        {assignee.name
+                                          .substring(0, 2)
+                                          .toUpperCase()}
                                       </div>
                                       <div className="min-w-0">
-                                        <p className="font-bold text-[#111827] text-xs truncate">{assignee.name}</p>
-                                        {assignee.email && <p className="text-[10px] text-gray-500 truncate">{assignee.email}</p>}
+                                        <p className="font-bold text-[#111827] text-xs truncate">
+                                          {assignee.name}
+                                        </p>
+                                        {assignee.email && (
+                                          <p className="text-[10px] text-gray-500 truncate">
+                                            {assignee.email}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
 
                                   <div className="grid grid-cols-2 gap-2 text-[11px] text-[#4B5563] pt-1.5 border-t border-gray-100">
-                                    <p><span className="text-gray-500">Độ ưu tiên:</span> <span className="font-bold text-[#111827]">{t.priority}</span></p>
-                                    <p><span className="text-gray-500">Hạn chót:</span> <span className="font-mono font-semibold text-[#111827]">{t.dueDate || "Chưa đặt"}</span></p>
+                                    <p>
+                                      <span className="text-gray-500">
+                                        Độ ưu tiên:
+                                      </span>{" "}
+                                      <span className="font-bold text-[#111827]">
+                                        {t.priority}
+                                      </span>
+                                    </p>
+                                    <p>
+                                      <span className="text-gray-500">
+                                        Hạn chót:
+                                      </span>{" "}
+                                      <span className="font-mono font-semibold text-[#111827]">
+                                        {t.dueDate || "Chưa đặt"}
+                                      </span>
+                                    </p>
                                   </div>
 
                                   {t.riskWarning && (
@@ -965,8 +1192,11 @@ export function SpaceProgressMindmap({
 
                                   {/* Arrow indicator */}
                                   <div
-                                    className={`absolute left-10 border-4 border-transparent ${taskTooltipPos === "top" ? "top-full border-t-black" : "bottom-full border-b-black"
-                                      }`}
+                                    className={`absolute left-10 border-4 border-transparent ${
+                                      taskTooltipPos === "top"
+                                        ? "top-full border-t-black"
+                                        : "bottom-full border-b-black"
+                                    }`}
                                   />
                                 </div>
                               )}
@@ -985,5 +1215,3 @@ export function SpaceProgressMindmap({
     </div>
   );
 }
-
-

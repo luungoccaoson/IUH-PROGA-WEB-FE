@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 interface TaskDetailDrawerProps {
   task: Task | null;
   isClosedSprint?: boolean;
+  isActiveSprint?: boolean;
   members?: any[];
   onClose: () => void;
   onUpdate: (
@@ -31,7 +32,7 @@ const DEFAULT_MEMBERS = [
   { id: 5, name: "Hoa Tester" },
 ];
 
-export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, isClosedSprint = false, isActiveSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -57,6 +58,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
   if (!task) return null;
 
   const isReadOnly = isClosedSprint;
+  const canDelete = !isClosedSprint && (!isActiveSprint || task.status === "TODO");
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +113,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
           </div>
 
           <div className="flex items-center gap-2">
-            {!isReadOnly && (
+            {canDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 title="Xóa công việc"

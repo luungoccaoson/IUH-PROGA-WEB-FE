@@ -47,8 +47,10 @@ export const sprintService = {
     return response.data.data;
   },
 
-  deleteSprint: async (id: number): Promise<void> => {
-    await apiClient.delete<ApiResponse<void>>(`/sprints/${id}`);
+  deleteSprint: async (id: number, deleteTasks = false): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/sprints/${id}`, {
+      params: { deleteTasks },
+    });
   },
 
   getTasksBySprint: async (sprintId: number): Promise<Task[]> => {

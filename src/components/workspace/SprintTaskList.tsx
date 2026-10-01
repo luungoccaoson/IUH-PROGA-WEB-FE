@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Layers, Sparkles, AlertTriangle } from "lucide-react";
+import { Plus, Layers, Sparkles, AlertTriangle, Trash2, CheckSquare, X } from "lucide-react";
 import { useSprints } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, TaskStatus, TaskPriority } from "@/types";
@@ -9,6 +9,7 @@ import { SprintAccordion } from "./sprint/SprintAccordion";
 import { BacklogAccordion } from "./sprint/BacklogAccordion";
 import { CreateSprintModal } from "./sprint/CreateSprintModal";
 import { EditSprintModal } from "./sprint/EditSprintModal";
+import { DeleteSprintModal } from "./sprint/DeleteSprintModal";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
@@ -44,6 +45,7 @@ export function SprintTaskList({
     updateTask,
     updateTaskStatus,
     deleteTask,
+    deleteTasksBatch,
   } = useTasks(spaceId, reload);
 
   React.useEffect(() => {
@@ -56,13 +58,49 @@ export function SprintTaskList({
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
 
-  const handleConfirmDeleteSprint = async () => {
-    if (!deletingSprintId) return;
+  // Multi-task selection state for batch delete
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const handleToggleSelectTask = (taskId: number) => {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  const handleToggleSelectAll = (taskIds: number[], select: boolean) => {
+    if (select) {
+      setSelectedTaskIds((prev) => Array.from(new Set([...prev, ...taskIds])));
+    } else {
+      setSelectedTaskIds((prev) => prev.filter((id) => !taskIds.includes(id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTaskIds([]);
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    if (selectedTaskIds.length === 0) return;
     try {
-      await deleteSprint(deletingSprintId);
+      setIsBatchDeleting(true);
+      await deleteTasksBatch(selectedTaskIds);
+      setSelectedTaskIds([]);
+      setShowBatchDeleteConfirm(false);
+    } catch (err) {
+      alert("Không thể xóa các công việc đã chọn. Vui lòng thử lại!");
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const handleDeleteSprintWithOptions = async (sprintId: number, deleteTasks: boolean) => {
+    try {
+      await deleteSprint(sprintId, deleteTasks);
       setDeletingSprintId(null);
     } catch (err) {
-      alert("Không thể xóa Sprint!");
+      alert("Không thể xóa Sprint. Vui lòng thử lại!");
     }
   };
 
@@ -169,6 +207,9 @@ export function SprintTaskList({
                 allSpaceTasks={tasks}
                 members={members}
                 isTaskOverdue={isTaskOverdue}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelectTask={handleToggleSelectTask}
+                onToggleSelectAllSprint={handleToggleSelectAll}
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
                 onCreateTask={createTask}
@@ -187,6 +228,9 @@ export function SprintTaskList({
             tasks={backlogTasks}
             allSpaceTasks={tasks}
             isTaskOverdue={isTaskOverdue}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelectTask={handleToggleSelectTask}
+            onToggleSelectAllBacklog={handleToggleSelectAll}
             onCreateTask={createTask}
             onSelectTask={setSelectedTask}
             onUpdateStatus={updateTaskStatus}
@@ -197,6 +241,51 @@ export function SprintTaskList({
           />
         </div>
       </div>
+
+      {/* Floating Batch Action Bar when tasks are selected */}
+      {selectedTaskIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#111827] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in slide-in-from-bottom duration-200">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <CheckSquare className="w-4 h-4 text-[#10B981]" />
+            <span>
+              Đã chọn <strong className="text-[#10B981] font-mono">{selectedTaskIds.length}</strong> công việc
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-white/20" />
+
+          <button
+            onClick={handleClearSelection}
+            className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            Bỏ chọn
+          </button>
+
+          <button
+            onClick={() => setShowBatchDeleteConfirm(true)}
+            disabled={isBatchDeleting}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            {isBatchDeleting ? (
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+            <span>Xóa ({selectedTaskIds.length})</span>
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for Batch Task Delete */}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        title="Xóa nhiều công việc"
+        message={`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedTaskIds.length} công việc đã chọn không? Hành động này không thể hoàn tác.`}
+        confirmText="Xác nhận xóa"
+        cancelText="Hủy"
+        onConfirm={handleConfirmBatchDelete}
+        onCancel={() => setShowBatchDeleteConfirm(false)}
+      />
 
       {/* Sprint Modals */}
       <CreateSprintModal
@@ -212,15 +301,13 @@ export function SprintTaskList({
         onSubmit={updateSprint}
       />
 
-      {/* Confirmation Dialog for Sprint Delete */}
-      <ConfirmDialog
+      {/* Delete Sprint Modal with 2 options (Move to Backlog or Delete All) */}
+      <DeleteSprintModal
         isOpen={deletingSprintId !== null}
-        title="Xóa Sprint"
-        message="Bạn có chắc chắn muốn xóa Sprint này không? Các công việc chưa hoàn thành trong Sprint này sẽ tự động chuyển về Backlog."
-        confirmText="Xóa Sprint"
-        cancelText="Hủy"
-        onConfirm={handleConfirmDeleteSprint}
-        onCancel={() => setDeletingSprintId(null)}
+        sprint={sprints.find((s) => s.id === deletingSprintId) || null}
+        taskCount={tasks.filter((t) => t.sprintId === deletingSprintId).length}
+        onClose={() => setDeletingSprintId(null)}
+        onConfirm={handleDeleteSprintWithOptions}
       />
 
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
@@ -230,6 +317,11 @@ export function SprintTaskList({
           selectedTask?.sprintId &&
           sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
             "CLOSED",
+        )}
+        isActiveSprint={Boolean(
+          selectedTask?.sprintId &&
+          sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
+            "ACTIVE",
         )}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}

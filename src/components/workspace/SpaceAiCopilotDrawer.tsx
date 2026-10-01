@@ -32,7 +32,7 @@ export function SpaceAiCopilotDrawer({
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
   const [isImported, setIsImported] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
   const [spaceSprints, setSpaceSprints] = useState<Sprint[]>([]);
 
   // Position Dragging State
@@ -174,30 +174,48 @@ export function SpaceAiCopilotDrawer({
     setLoading(true);
 
     try {
-      // Build detailed context of current space's tasks for ongoing space
+      // Build detailed context of current space's sprints & tasks
+      const sprintSummary = spaceSprints.length > 0
+        ? spaceSprints.map((s) => {
+          const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
+          const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
+          return `- ${s.name} [ID: ${s.id}] [Trạng thái: ${s.status}] [Thời gian: ${sStart} đến ${sEnd}]`;
+        }).join("\n")
+        : "Chưa có Sprint nào.";
+
       const taskSummary = existingTasks.length > 0
         ? existingTasks.map((t, idx) => {
-          const spName = spaceSprints.find((sp) => sp.id === t.sprintId)?.name || "Sprint 1";
+          const spName = spaceSprints.find((sp) => sp.id === t.sprintId)?.name || "Chưa gắn Sprint";
           return `- Task-${idx + 1} [Sprint: ${spName}] [Trạng thái: ${t.status}] ${t.title}`;
         }).join("\n")
         : "Chưa có công việc nào trong Space.";
 
       const promptWithContext = `[NGỮ CẢNH DỰ ÁN ĐANG DIỄN RA: ${space.name} (Space ID: ${space.id})]
 
-=== THÔNG TIN SPRINT & TASK HIỆN CÓ TRONG SPACE ===
-- Tổng số Task đang có trong Space: ${totalExistingTaskCount} công việc.
-- Sprint cao nhất hiện có trong Space: Sprint ${maxExistingSprintNum || 1}.
-- Sprint MỚI TIẾP THEO BẮT BUỘC ĐẶT TÊN LÀ: "Sprint ${nextSprintNum}".
+=== DANH SÁCH SPRINT HIỆN CÓ TRONG SPACE ===
+${sprintSummary}
 
-Danh sách tất cả công việc ĐÃ VÀ ĐANG CÓ trong Space (KHÔNG ĐƯỢC TẠO TRÙNG LẶP):
+=== DANH SÁCH CÔNG VIỆC HIỆN CÓ TRONG SPACE (Tổng: ${totalExistingTaskCount} công việc) ===
 ${taskSummary}
 
-=== CÁC QUY TẮC NỐI TIẾP BẮT BUỘC (STRICT MANDATORY RULES) ===
-1. QUY TẮC SPRINT N+1: Các Sprint mới tạo ra BẮT BUỘC phải đặt tên từ "Sprint ${nextSprintNum}", "Sprint ${nextSprintNum + 1}"... KHÔNG ĐƯỢC ĐẶT TÊN LÀ "Sprint 1", "Sprint 2" HAY ĐỤNG VÀO CÁC SPRINT ĐANG DIỄN RA CŨ!
-2. ĐÁNH SỐ TASK NỐI TIẾP: Các task mới phát sinh phải tiếp tục nối số thứ tự từ Task-${totalExistingTaskCount + 1}, Task-${totalExistingTaskCount + 2}...
-3. KHÔNG TRÙNG LẶP: Đọc kỹ danh sách ${totalExistingTaskCount} task ở trên. Tuyệt đối KHÔNG tạo lại các tính năng đã có. Chỉ bóc tách các module/giai đoạn tiếp theo.
+=== CÁC NGUYÊN TẮC RÀNG BUỘC KHI PHÂN RÃ TASK CHO SPACE NÀY ===
+1. NẾU NGƯỜI DÙNG YÊU CẦU CHIA NHỎ / THÊM TASK VÀO SPRINT CỤ THỂ (ví dụ "Sprint 7"):
+   - Hãy tìm Sprint đó trong danh sách Sprint hiện có ở trên:
+     + NẾU SPRINT ĐÃ HOÀN THÀNH ('CLOSED'): CẢNH BÁO người dùng rằng Sprint này đã đóng và không thể thêm task vào. Đề xuất chuyển task sang Sprint Đang diễn ra ('ACTIVE') hoặc tạo Sprint Mới ('FUTURE').
+     + NẾU SPRINT LÀ 'ACTIVE' HOẶC 'FUTURE': BẮT BUỘC gán trường "sprint" đúng tên của Sprint đó (ví dụ "Sprint 7"). TẬP TRUNG TỐI ĐA bóc tách task cho chính Sprint đó. TUYỆT ĐỐI KHÔNG TỰ Ý TẠO THÊM SPRINT MỚI, KHÔNG ĐỔI TÊN SPRINT!
 
-[YÊU CẦU ĐÀM THOẠI CỦA NGƯỜI DÙNG]:
+2. QUY TẮC PHÂN TÁCH GIAI ĐOẠN & PHẠM VI NGHIỆP VỤ THỰC TẾ (REALISTIC AGILE SCOPE):
+   - ĐÂY LÀ SPRINT PHÁT TRIỂN TÍNH NĂNG CHUYÊN BIỆT (Feature Sprint), KHÔNG PHẢI TOÀN BỘ QUY TRÌNH VÒNG ĐỜI DỰ ÁN (SDLC)!
+   - BẮT BUỘC chỉ bóc tách các Task phát triển nghiệp vụ trực tiếp cho chủ đề của Sprint đó (Ví dụ với Sprint "Activity Log & Dashboard Thống kê Tiến độ": xây dựng Service & API ghi nhận event audit log, xây dựng API truy vấn dữ liệu thống kê tổng hợp, phát triển giao diện Timeline Audit Log, xây dựng các Widget biểu đồ Burndown/Velocity/Task Distribution, kết nối dữ liệu FE - BE).
+   - TUYỆT ĐỐI KHÔNG GOM CẢ QUY TRÌNH (từ thiết kế Schema CSDL nền tảng đến Kiểm thử tự động E2E toàn hệ thống hay Đóng gói CI/CD/Docker) VÀO CHUNG MỘT SPRINT TÍNH NĂNG!
+   - Lý do thực tế: Thiết kế CSDL/Schema hệ thống đã được thực hiện ở Sprint kiến trúc ban đầu. Kiểm thử toàn hệ thống (E2E Integration Testing), tối ưu hóa và đóng gói triển khai (CI/CD Pipeline, Docker) thuộc về Sprint Kiểm thử & Triển khai riêng biệt (như Sprint 8 đã có trong Space).
+   - Mỗi task phải là một hạng mục công việc cụ thể, thực tế, làm trong 1 - 3 ngày của Sprint.
+
+3. CHỈ KHI NGƯỜI DÙNG YÊU CẦU TẠO SPRINT MỚI: Mới đặt tên Sprint nối tiếp bắt đầu từ "Sprint ${nextSprintNum}".
+4. ĐÁNH SỐ TASK NỐI TIẾP: Các task mới phát sinh tiếp tục nối số thứ tự từ Task-${totalExistingTaskCount + 1}, Task-${totalExistingTaskCount + 2}...
+5. KHÔNG TRÙNG LẶP: Không tạo lại các tính năng đã có trong danh sách trên.
+
+[YÊU CẦU CỦA NGƯỜI DÙNG]:
 ${text.trim()}`;
 
       const data = await aiService.decomposeRequirements(space.id, promptWithContext, activeThreadId);
@@ -228,12 +246,45 @@ ${text.trim()}`;
     if (!result || !result.tasks || result.tasks.length === 0) return;
     setImporting(true);
     try {
+      // Helper function to add days
+      const addDays = (dateStr: string, days: number): string => {
+        const d = new Date(dateStr);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split("T")[0];
+      };
+
       // Fetch existing sprints in this space
       const existingSprints = await sprintService.getSprintsBySpace(space.id);
+      const activeSprint = existingSprints.find((s) => s.status === "ACTIVE");
+      const futureSprints = existingSprints.filter((s) => s.status === "FUTURE");
       const sprintMap: Record<string, any> = {};
-      existingSprints.forEach((sp: any) => {
-        sprintMap[sp.name] = sp;
-      });
+
+      // Helper to find matching existing sprint by exact name, sprint number (e.g. "Sprint 7"), or prefix
+      const findExistingSprint = (rawSprintName: string): any | undefined => {
+        if (!rawSprintName) return undefined;
+        const cleanRaw = rawSprintName.trim().toLowerCase();
+        const cleanPrefix = cleanRaw.split(":")[0].trim();
+
+        // 1. Exact or prefix match
+        let found = existingSprints.find((sp: any) => {
+          const spClean = sp.name.trim().toLowerCase();
+          const spPrefix = spClean.split(":")[0].trim();
+          return spClean === cleanRaw || spPrefix === cleanPrefix || spClean.startsWith(cleanPrefix);
+        });
+        if (found) return found;
+
+        // 2. Sprint number match (e.g., "Sprint 7" matches "Sprint 7: Activity Log & Dashboard...")
+        const rawNumMatch = rawSprintName.match(/Sprint\s*(\d+)/i);
+        if (rawNumMatch) {
+          const sprintNum = rawNumMatch[1];
+          found = existingSprints.find((sp: any) => {
+            const spNumMatch = sp.name.match(/Sprint\s*(\d+)/i);
+            return spNumMatch && spNumMatch[1] === sprintNum;
+          });
+          if (found) return found;
+        }
+        return undefined;
+      };
 
       const parseSprintHeader = (raw: string, fallbackNum: number) => {
         if (!raw) return { name: `Sprint ${fallbackNum}`, goal: "" };
@@ -249,25 +300,46 @@ ${text.trim()}`;
         return title.replace(/^Task-\d+\s*:\s*/i, "").trim();
       };
 
+      // Find latest end date among existing sprints to schedule new future sprints sequentially
+      let latestExistingEndDate = space.endDate ? space.endDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
+      existingSprints.forEach((sp) => {
+        if (sp.endDate) {
+          const ed = sp.endDate.substring(0, 10);
+          if (ed > latestExistingEndDate) {
+            latestExistingEndDate = ed;
+          }
+        }
+      });
+
       for (const item of result.tasks) {
+        const rawSprintName = item.sprint || `Sprint ${nextSprintNum}`;
         const { name: cleanSprintName, goal: sprintGoal } = parseSprintHeader(
-          item.sprint || `Sprint ${nextSprintNum}`,
+          rawSprintName,
           nextSprintNum
         );
 
-        let targetSprint = sprintMap[cleanSprintName];
+        let targetSprint = findExistingSprint(rawSprintName) || sprintMap[cleanSprintName];
 
+        // Ràng buộc trạng thái Sprint:
+        // Nếu sprint đã đóng (CLOSED): Không được thêm task vào sprint đã đóng!
+        if (targetSprint && targetSprint.status === "CLOSED") {
+          console.warn(`Sprint ${targetSprint.name} đã đóng, tự động chuyển task '${item.title}' sang Sprint đang diễn ra.`);
+          targetSprint = activeSprint || (futureSprints.length > 0 ? futureSprints[0] : undefined);
+        }
+
+        // Chỉ tạo sprint mới khi người dùng yêu cầu sprint hoàn toàn mới chưa có trong space
         if (!targetSprint) {
           try {
-            const todayIso = `${new Date().toISOString().split("T")[0]}T00:00:00`;
-            const futureIso = `${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59:59`;
+            const newSprintStart = addDays(latestExistingEndDate, 1);
+            const newSprintEnd = addDays(newSprintStart, 13);
+            latestExistingEndDate = newSprintEnd;
 
             targetSprint = await sprintService.createSprint({
               spaceId: space.id,
               name: cleanSprintName,
-              goal: sprintGoal || `Sprint ${cleanSprintName} nối tiếp được khởi tạo tự động bởi AI Co-Pilot`,
-              startDate: todayIso,
-              endDate: futureIso,
+              goal: sprintGoal || `Sprint ${cleanSprintName} mở rộng phát triển từ phân tích AI Agent`,
+              startDate: `${newSprintStart}T08:00:00`,
+              endDate: `${newSprintEnd}T18:00:00`,
               status: "FUTURE",
             });
             sprintMap[cleanSprintName] = targetSprint;
@@ -277,8 +349,19 @@ ${text.trim()}`;
         }
 
         const cleanedTitle = cleanTaskTitle(item.title);
-        const baseStart = space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0];
-        const taskDueDate = new Date(Date.now() + (item.estimatedDays || 2) * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+        // Bounding task dates strictly within targetSprint's actual date range:
+        const spStartStr = targetSprint?.startDate ? targetSprint.startDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const spEndStr = targetSprint?.endDate ? targetSprint.endDate.substring(0, 10) : addDays(spStartStr, 13);
+
+        const estDays = item.estimatedDays || 2;
+        let taskDueStr = addDays(spStartStr, Math.max(1, estDays));
+        if (taskDueStr > spEndStr) {
+          taskDueStr = spEndStr;
+        }
+
+        const taskStartIso = `${spStartStr}T08:00:00`;
+        const taskDueIso = `${taskDueStr}T18:00:00`;
 
         const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
@@ -299,8 +382,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           description: richDescription,
           priority: normalizePriority(item.priority),
           status: "TODO",
-          startDate: `${baseStart}T08:00:00`,
-          dueDate: `${taskDueDate}T18:00:00`,
+          startDate: taskStartIso,
+          dueDate: taskDueIso,
         });
       }
 
@@ -334,17 +417,17 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     } catch (e) { }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !space) return null;
 
   if (isMinimized) {
     return (
       <div className="fixed bottom-4 right-4 z-[9999] font-sans">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2.5 px-4 py-3 bg-[#111827] text-white hover:bg-black rounded-2xl shadow-2xl border border-gray-700 text-xs font-extrabold transition-all cursor-pointer animate-in zoom-in-95"
+          className="flex items-center gap-2 px-3.5 py-2.5 bg-[#111827] text-white hover:bg-black rounded-2xl shadow-2xl border border-gray-700 text-xs font-extrabold transition-all cursor-pointer animate-in zoom-in-95 hover:scale-105"
         >
           <Bot className="w-4 h-4 text-[#10B981]" />
-          <span>🤖 AI Phân Rã ({space.name})</span>
+          <span>AI Hỗ Trợ Space</span>
           <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
         </button>
       </div>
@@ -354,7 +437,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   return (
     <div
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      className="fixed bottom-4 right-4 z-[9999] w-full sm:w-[740px] max-w-[95vw] h-[600px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300"
+      className="fixed bottom-4 right-4 z-[9999] w-full sm:w-[1100px] max-w-[95vw] h-[700px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300"
     >
       {/* Draggable Header */}
       <div
@@ -369,7 +452,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           </div>
           <div>
             <h3 className="text-xs font-extrabold flex items-center gap-2">
-              <span>🤖 AI Phân Rã Task</span>
+              <span>AI Phân Rã Task</span>
             </h3>
             <p className="text-[10px] text-gray-300">
               Dự án: <span className="font-bold text-[#A7F3D0]">{space.name}</span>
@@ -392,16 +475,17 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
             title="Thu nhỏ cửa sổ"
           >
-            <span className="text-sm font-extrabold font-mono leading-none">−</span>
+            <X className="w-4 h-4" />
+            {/* <span className="text-sm font-extrabold font-mono leading-none">−</span> */}
           </button>
 
-          <button
+          {/* <button
             onClick={onClose}
             className="p-1 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
             title="Đóng AI Co-Pilot"
           >
             <X className="w-4 h-4" />
-          </button>
+          </button> */}
         </div>
       </div>
 

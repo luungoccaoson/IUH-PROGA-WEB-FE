@@ -11,6 +11,9 @@ interface TaskRowItemProps {
   members?: any[];
   isOverdue?: boolean;
   isClosedSprint?: boolean;
+  isActiveSprint?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (taskId: number) => void;
   onSelect?: (task: Task) => void;
   onUpdateStatus?: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority?: (taskId: number, priority: TaskPriority) => void;
@@ -30,6 +33,9 @@ export function TaskRowItem({
   members = [],
   isOverdue = false,
   isClosedSprint = false,
+  isActiveSprint = false,
+  isSelected = false,
+  onToggleSelect,
   onSelect,
   onUpdateStatus,
   onUpdatePriority,
@@ -37,6 +43,7 @@ export function TaskRowItem({
   onDelete,
 }: TaskRowItemProps) {
   const isReadOnly = isClosedSprint;
+  const canDelete = !isClosedSprint && (!isActiveSprint || task.status === "TODO");
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
 
   // Popover States
@@ -109,27 +116,58 @@ export function TaskRowItem({
           e.dataTransfer.setData("taskId", task.id.toString());
           e.dataTransfer.setData("sourceSprintId", (task.sprintId || "backlog").toString());
         }}
-        className={`p-3 transition-colors flex items-center justify-between gap-4 font-sans text-xs group ${
-          isReadOnly ? "bg-gray-50/70 cursor-default" : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+        className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${
+          isSelected
+            ? "bg-[#E8F0FE]/60 border-l-2 border-l-[#1A73E8]"
+            : isReadOnly
+            ? "bg-gray-50/70 cursor-default"
+            : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
         }`}
       >
-        {/* Left side: Task Code & Title (Click to open right detail drawer) */}
-        <div
-          onClick={() => onSelect && onSelect(task)}
-          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-        >
-          <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0 group-hover:border-[#111827] transition-colors">
-            Task-{taskIndex !== undefined ? taskIndex + 1 : task.id}
-          </span>
-          <span className={`font-semibold truncate ${task.status === "DONE" ? "line-through text-gray-500" : "text-[#111827] hover:underline"}`}>
-            {task.title}
-          </span>
-
-          {isReadOnly && (
-            <span title="Công việc đã hoàn thành hoặc nằm trong Sprint đã đóng">
-              <Lock className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
-            </span>
+        {/* Left side: Checkbox + Task Code & Title */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              disabled={!canDelete}
+              checked={isSelected && canDelete}
+              onChange={(e) => {
+                e.stopPropagation();
+                if (canDelete) onToggleSelect(task.id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-4 h-4 rounded border-gray-300 transition-all ${
+                canDelete
+                  ? "text-[#1A73E8] focus:ring-[#1A73E8] cursor-pointer"
+                  : "opacity-30 cursor-not-allowed bg-gray-200"
+              }`}
+              title={
+                isClosedSprint
+                  ? "Không thể xóa công việc trong Sprint đã đóng"
+                  : isActiveSprint && task.status !== "TODO"
+                  ? "Trong Sprint đang diễn ra, chỉ cho phép xóa công việc ở trạng thái Cần làm (TODO)"
+                  : "Chọn công việc để xóa hoặc thao tác hàng loạt"
+              }
+            />
           )}
+
+          <div
+            onClick={() => onSelect && onSelect(task)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+          >
+            <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0 group-hover:border-[#111827] transition-colors">
+              Task-{taskIndex !== undefined ? taskIndex + 1 : task.id}
+            </span>
+            <span className={`font-semibold truncate ${task.status === "DONE" ? "line-through text-gray-500" : "text-[#111827] hover:underline"}`}>
+              {task.title}
+            </span>
+
+            {isReadOnly && (
+              <span title="Công việc đã hoàn thành hoặc nằm trong Sprint đã đóng">
+                <Lock className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Right side controls */}
@@ -338,7 +376,7 @@ export function TaskRowItem({
           </div>
 
           {/* Quick Delete icon */}
-          {!isReadOnly && onDelete && (
+          {canDelete && onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
