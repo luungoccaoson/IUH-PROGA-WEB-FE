@@ -17,7 +17,7 @@ interface TaskRowItemProps {
   onSelect?: (task: Task) => void;
   onUpdateStatus?: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority?: (taskId: number, priority: TaskPriority) => void;
-  onUpdateOwner?: (taskId: number, ownerId?: number) => void;
+  onUpdateOwner?: (taskId: number, ownerId?: number | null) => void;
   onDelete?: (taskId: number) => void;
 }
 
@@ -324,7 +324,7 @@ export function TaskRowItem({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (onUpdateOwner) onUpdateOwner(task.id, undefined);
+                          if (onUpdateOwner) onUpdateOwner(task.id, null);
                           setShowAssigneePopover(false);
                         }}
                         className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
@@ -395,7 +395,7 @@ export function TaskRowItem({
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         title="Chuyển vào thùng rác"
-        message={`Bạn có chắc chắn muốn chuyển công việc "Task-${task.id}: ${task.title}" vào thùng rác không? Bạn có thể khôi phục lại từ thùng rác bất cứ lúc nào.`}
+        message={`Bạn có chắc chắn muốn chuyển công việc "Task-${taskIndex !== undefined ? taskIndex + 1 : task.id}: ${task.title}" vào thùng rác không? Bạn có thể khôi phục lại từ thùng rác bất cứ lúc nào.`}
         confirmText="Chuyển vào thùng rác"
         cancelText="Hủy"
         onConfirm={() => {

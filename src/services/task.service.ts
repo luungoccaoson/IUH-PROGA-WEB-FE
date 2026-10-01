@@ -41,7 +41,7 @@ export const taskService = {
       description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
-      ownerId?: number;
+      ownerId?: number | null;
       startDate?: string;
       dueDate?: string;
     }
@@ -65,6 +65,19 @@ export const taskService = {
     } catch (err) {
       // Fallback sequentially/concurrently if needed
       await Promise.all(taskIds.map((id) => apiClient.delete(`/tasks/${id}`)));
+    }
+  },
+
+  assignTasksBatch: async (assignments: { taskId: number; ownerId: number }[]): Promise<void> => {
+    try {
+      await apiClient.post<ApiResponse<void>>('/tasks/batch-assign', { assignments });
+    } catch (err) {
+      // Fallback sequentially/concurrently if needed
+      await Promise.all(
+        assignments.map((item) =>
+          apiClient.put(`/tasks/${item.taskId}`, { ownerId: item.ownerId }).catch(() => null)
+        )
+      );
     }
   },
 
