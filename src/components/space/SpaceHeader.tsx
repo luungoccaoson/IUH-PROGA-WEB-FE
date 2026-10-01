@@ -83,16 +83,7 @@ export function SpaceHeader({
             </button>
           )}
 
-          {/* AI Project Co-Pilot Button */}
-          <button
-            onClick={() => {
-              if (onOpenCopilot) onOpenCopilot();
-              else router.push(`/workspaces/${workspaceId}/ai-analysis`);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white border border-gray-700 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer"
-          >
-            <span>🤖 AI phân rã task</span>
-          </button>
+
 
           {isOwner && (
             <button

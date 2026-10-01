@@ -272,14 +272,16 @@ export default function SpaceDetailPage() {
         </div>
       </div>
 
-      {/* AI Co-Pilot Drawer for Space */}
-      <SpaceAiCopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        space={space}
-        workspaceId={workspaceId}
-        existingTasks={tasks}
-      />
+      {/* AI Co-Pilot Drawer for Space (Always available via floating bottom-right button) */}
+      {space && (
+        <SpaceAiCopilotDrawer
+          isOpen={true}
+          onClose={() => {}}
+          space={space}
+          workspaceId={workspaceId}
+          existingTasks={tasks}
+        />
+      )}
 
       {/* Add Space Member Modal */}
       <AddSpaceMemberModal
@@ -295,6 +297,14 @@ export default function SpaceDetailPage() {
         <TaskDetailDrawer
           task={selectedTask}
           members={members}
+          isClosedSprint={Boolean(
+            selectedTask?.sprintId &&
+            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "CLOSED"
+          )}
+          isActiveSprint={Boolean(
+            selectedTask?.sprintId &&
+            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "ACTIVE"
+          )}
           onClose={() => {
             setSelectedTask(null);
             setIsDrawerOpen(false);

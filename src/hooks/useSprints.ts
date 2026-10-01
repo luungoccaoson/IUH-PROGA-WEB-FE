@@ -130,9 +130,9 @@ export function useSprints(spaceId: number) {
   };
 
   // Delete Sprint
-  const deleteSprint = async (sprintId: number) => {
+  const deleteSprint = async (sprintId: number, deleteTasks = false) => {
     try {
-      await sprintService.deleteSprint(sprintId);
+      await sprintService.deleteSprint(sprintId, deleteTasks);
       await loadData(true);
     } catch (err: any) {
       console.error('Failed to delete sprint:', err);

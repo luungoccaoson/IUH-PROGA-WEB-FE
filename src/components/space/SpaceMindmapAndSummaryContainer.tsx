@@ -43,7 +43,7 @@ export function SpaceMindmapAndSummaryContainer({
               </h3>
             </div>
             <p className="text-xs text-[#6B7280]">
-              Lộ trình phát triển từ Đề tài Space ➔ Sprints ➔ Task theo phong cách Roadmap.
+              Lộ trình phát triển từ Đề tài Space ➔ Sprints ➔ Task
             </p>
           </div>
         </div>
@@ -55,7 +55,11 @@ export function SpaceMindmapAndSummaryContainer({
             title={isFullscreen ? "Thu nhỏ" : "Phóng to toàn màn hình"}
             className="p-2 text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-xl border border-[#E5E7EB] transition-colors"
           >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>

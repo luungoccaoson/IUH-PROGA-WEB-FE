@@ -10,7 +10,6 @@ import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { SpaceAiCopilotDrawer } from "./SpaceAiCopilotDrawer";
 
 interface SprintKanbanBoardProps {
   spaceId: number;
@@ -49,7 +48,6 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
   // Selected Sprint for Kanban filter (defaults to active sprint or first sprint)
   const [selectedSprintId, setSelectedSprintId] = useState<number | "backlog">(0);
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   useEffect(() => {
     if (sprints.length > 0 && selectedSprintId === 0) {
@@ -310,15 +308,6 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
-      />
-
-      {/* AI Co-Pilot Drawer for Existing Space */}
-      <SpaceAiCopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        space={{ id: spaceId, name: currentSprint ? currentSprint.name : `Space #${spaceId}` } as any}
-        workspaceId={1}
-        existingTasks={tasks}
       />
     </>
   );
