@@ -375,14 +375,14 @@ export function TaskRowItem({
             })()}
           </div>
 
-          {/* Quick Delete icon */}
+          {/* Quick Delete icon (Soft delete -> Move to trash) */}
           {canDelete && onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowDeleteConfirm(true);
               }}
-              title="Xóa công việc"
+              title="Chuyển vào thùng rác"
               className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors opacity-0 group-hover:opacity-100"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -391,12 +391,12 @@ export function TaskRowItem({
         </div>
       </div>
 
-      {/* Confirmation Dialog for Task Delete */}
+      {/* Confirmation Dialog for Task Soft Delete */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Xóa công việc"
-        message={`Bạn có chắc chắn muốn xóa công việc "Task-${task.id}: ${task.title}" không? Hành động này không thể hoàn tác.`}
-        confirmText="Xóa công việc"
+        title="Chuyển vào thùng rác"
+        message={`Bạn có chắc chắn muốn chuyển công việc "Task-${task.id}: ${task.title}" vào thùng rác không? Bạn có thể khôi phục lại từ thùng rác bất cứ lúc nào.`}
+        confirmText="Chuyển vào thùng rác"
         cancelText="Hủy"
         onConfirm={() => {
           if (onDelete) onDelete(task.id);

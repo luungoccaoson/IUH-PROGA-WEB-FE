@@ -116,7 +116,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, isActiveSprint 
             {canDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                title="Xóa công việc"
+                title="Chuyển vào thùng rác"
                 className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
@@ -289,12 +289,12 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, isActiveSprint 
         </form>
       </div>
 
-      {/* Confirmation Dialog for Task Delete */}
+      {/* Confirmation Dialog for Task Soft Delete */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Xóa công việc"
-        message={`Bạn có chắc chắn muốn xóa công việc "Task-${task.id}: ${task.title}" không?`}
-        confirmText="Xóa công việc"
+        title="Chuyển vào thùng rác"
+        message={`Bạn có chắc chắn muốn chuyển công việc "Task-${task.id}: ${task.title}" vào thùng rác không? Bạn có thể khôi phục lại bất cứ lúc nào.`}
+        confirmText="Chuyển vào thùng rác"
         cancelText="Hủy"
         onConfirm={handleConfirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}

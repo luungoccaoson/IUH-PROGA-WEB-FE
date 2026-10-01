@@ -271,17 +271,17 @@ export function SprintTaskList({
             ) : (
               <Trash2 className="w-3.5 h-3.5" />
             )}
-            <span>Xóa ({selectedTaskIds.length})</span>
+            <span>Chuyển vào thùng rác ({selectedTaskIds.length})</span>
           </button>
         </div>
       )}
 
-      {/* Confirmation Dialog for Batch Task Delete */}
+      {/* Confirmation Dialog for Batch Task Soft Delete */}
       <ConfirmDialog
         isOpen={showBatchDeleteConfirm}
-        title="Xóa nhiều công việc"
-        message={`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedTaskIds.length} công việc đã chọn không? Hành động này không thể hoàn tác.`}
-        confirmText="Xác nhận xóa"
+        title="Chuyển nhiều công việc vào thùng rác"
+        message={`Bạn có chắc chắn muốn chuyển ${selectedTaskIds.length} công việc đã chọn vào thùng rác không? Bạn có thể khôi phục lại bất cứ lúc nào.`}
+        confirmText="Chuyển vào thùng rác"
         cancelText="Hủy"
         onConfirm={handleConfirmBatchDelete}
         onCancel={() => setShowBatchDeleteConfirm(false)}

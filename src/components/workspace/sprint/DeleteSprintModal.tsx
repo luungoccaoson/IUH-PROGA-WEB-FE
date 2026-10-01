@@ -116,10 +116,10 @@ export function DeleteSprintModal({
               <div className="flex-1">
                 <div className="flex items-center gap-1.5 font-bold text-sm text-red-600">
                   <Trash2 className="w-4 h-4 text-red-600" />
-                  <span>Xóa vĩnh viễn cả Sprint và tất cả {taskCount} công việc</span>
+                  <span>Xóa Sprint và chuyển tất cả {taskCount} công việc vào Thùng rác</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Tất cả các công việc trong Sprint này sẽ bị xóa vĩnh viễn và không thể khôi phục.
+                  Xóa Sprint và chuyển {taskCount} công việc vào Thùng rác (bạn vẫn có thể khôi phục lại từ thùng rác trong vòng 15 ngày).
                 </p>
               </div>
             </label>

@@ -67,4 +67,18 @@ export const taskService = {
       await Promise.all(taskIds.map((id) => apiClient.delete(`/tasks/${id}`)));
     }
   },
+
+  getDeletedTasksBySpace: async (spaceId: number): Promise<Task[]> => {
+    const response = await apiClient.get<ApiResponse<Task[]>>(`/tasks/space/${spaceId}/trash`);
+    return response.data.data;
+  },
+
+  restoreTask: async (taskId: number): Promise<Task> => {
+    const response = await apiClient.post<ApiResponse<Task>>(`/tasks/${taskId}/restore`);
+    return response.data.data;
+  },
+
+  permanentDeleteTask: async (taskId: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}/permanent`);
+  },
 };
