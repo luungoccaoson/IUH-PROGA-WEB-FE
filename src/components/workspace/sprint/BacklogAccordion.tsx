@@ -17,7 +17,7 @@ interface BacklogAccordionProps {
   onSelectTask: (task: Task) => void;
   onUpdateStatus: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
-  onUpdateOwner: (taskId: number, ownerId?: number) => void;
+  onUpdateOwner: (taskId: number, ownerId?: number | null) => void;
   onDeleteTask: (taskId: number) => void;
   onMoveTask?: (taskId: number, targetSprintId: number | null) => void;
 }

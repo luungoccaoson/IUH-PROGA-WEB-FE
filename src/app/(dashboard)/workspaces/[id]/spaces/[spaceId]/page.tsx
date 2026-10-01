@@ -46,6 +46,29 @@ export default function SpaceDetailPage() {
 
   const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
 
+  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+
+  const orderedSpaceTasks = React.useMemo(() => {
+    const list: Task[] = [];
+    sprints.forEach((sprint) => {
+      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      list.push(...sTasks);
+    });
+    const bTasks = tasks.filter(
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+    );
+    list.push(...bTasks);
+    return list;
+  }, [sprints, tasks, sprintIds]);
+
+  const taskNumberMap = React.useMemo(() => {
+    const map = new Map<number, number>();
+    orderedSpaceTasks.forEach((t, idx) => {
+      map.set(t.id, idx + 1);
+    });
+    return map;
+  }, [orderedSpaceTasks]);
+
   // Modal States
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -299,6 +322,7 @@ export default function SpaceDetailPage() {
       {selectedTask && isDrawerOpen && (
         <TaskDetailDrawer
           task={selectedTask}
+          taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
           members={members}
           isClosedSprint={Boolean(
             selectedTask?.sprintId &&

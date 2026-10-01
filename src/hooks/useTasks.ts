@@ -59,7 +59,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
         description?: string;
         status?: TaskStatus;
         priority?: TaskPriority;
-        ownerId?: number;
+        ownerId?: number | null;
         startDate?: string;
         dueDate?: string;
       }
