@@ -20,6 +20,8 @@ export interface Task {
   startDate?: string;
   dueDate?: string;
   createdAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
 }
 
 export interface TaskNote {

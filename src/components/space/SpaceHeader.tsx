@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Calendar, Settings, History, ListTodo, KanbanSquare, UserPlus, Users, Trash2 } from "lucide-react";
 import { Space, Workspace } from "@/types";
 
 export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members";
@@ -16,6 +16,7 @@ interface SpaceHeaderProps {
   onOpenSettings: () => void;
   onOpenCopilot?: () => void;
   onOpenAddMember?: () => void;
+  onOpenTrash?: () => void;
   isOwner?: boolean;
 }
 
@@ -28,6 +29,7 @@ export function SpaceHeader({
   onOpenSettings,
   onOpenCopilot,
   onOpenAddMember,
+  onOpenTrash,
   isOwner = true,
 }: SpaceHeaderProps) {
   const router = useRouter();
@@ -71,7 +73,6 @@ export function SpaceHeader({
         </div>
 
         <div className="flex items-center gap-2">
-
           {/* Add Space Member Button */}
           {onOpenAddMember && (
             <button
@@ -83,7 +84,17 @@ export function SpaceHeader({
             </button>
           )}
 
-
+          {/* Trash Button (Soft-Deleted Tasks) */}
+          {onOpenTrash && (
+            <button
+              onClick={onOpenTrash}
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-red-50 hover:border-red-200 rounded-xl text-xs font-bold text-[#4B5563] hover:text-[#DC2626] transition-colors shadow-2xs cursor-pointer"
+              title="Thùng rác công việc"
+            >
+              <Trash2 className="w-4 h-4 text-[#EF4444]" />
+              <span>Thùng rác</span>
+            </button>
+          )}
 
           {isOwner && (
             <button
