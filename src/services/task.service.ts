@@ -41,7 +41,7 @@ export const taskService = {
       description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
-      ownerId?: number;
+      ownerId?: number | null;
       startDate?: string;
       dueDate?: string;
     }
@@ -57,5 +57,41 @@ export const taskService = {
 
   deleteTask: async (taskId: number): Promise<void> => {
     await apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`);
+  },
+
+  deleteTasksBatch: async (taskIds: number[]): Promise<void> => {
+    try {
+      await apiClient.post<ApiResponse<void>>('/tasks/batch-delete', { taskIds });
+    } catch (err) {
+      // Fallback sequentially/concurrently if needed
+      await Promise.all(taskIds.map((id) => apiClient.delete(`/tasks/${id}`)));
+    }
+  },
+
+  assignTasksBatch: async (assignments: { taskId: number; ownerId: number }[]): Promise<void> => {
+    try {
+      await apiClient.post<ApiResponse<void>>('/tasks/batch-assign', { assignments });
+    } catch (err) {
+      // Fallback sequentially/concurrently if needed
+      await Promise.all(
+        assignments.map((item) =>
+          apiClient.put(`/tasks/${item.taskId}`, { ownerId: item.ownerId }).catch(() => null)
+        )
+      );
+    }
+  },
+
+  getDeletedTasksBySpace: async (spaceId: number): Promise<Task[]> => {
+    const response = await apiClient.get<ApiResponse<Task[]>>(`/tasks/space/${spaceId}/trash`);
+    return response.data.data;
+  },
+
+  restoreTask: async (taskId: number): Promise<Task> => {
+    const response = await apiClient.post<ApiResponse<Task>>(`/tasks/${taskId}/restore`);
+    return response.data.data;
+  },
+
+  permanentDeleteTask: async (taskId: number): Promise<void> => {
+    await apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}/permanent`);
   },
 };

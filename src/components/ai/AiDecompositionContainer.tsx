@@ -4,7 +4,9 @@ import { aiService, TaskDecompositionResponse, DecomposedTaskItem, AiThreadRespo
 import { taskService } from "@/services/task.service";
 import { sprintService } from "@/services/sprint.service";
 import { workspaceService } from "@/services/workspace.service";
-import { Space, Sprint } from "@/types";
+import { Space, Sprint, User } from "@/types";
+import { userService } from "@/services/user.service";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { AiHeaderBanner, TargetMode } from "./AiHeaderBanner";
 import { AiDecomposedResults } from "./AiDecomposedResults";
 import { AiChatSidebarSessions, ChatSessionItem } from "./AiChatSidebarSessions";
@@ -37,9 +39,18 @@ export function AiDecompositionContainer({
   const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
   const [isImported, setIsImported] = useState(false);
   const [membersList, setMembersList] = useState<string[]>([]);
-
   const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [workspaceUsers, setWorkspaceUsers] = useState<User[]>([]);
+  const [spaceUsers, setSpaceUsers] = useState<User[]>([]);
+
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 42); // 3 sprint * 14 days = 42 days
+    return d.toISOString().split("T")[0];
+  });
+  const [sprintCount, setSprintCount] = useState<number>(3);
+  const [daysPerSprint, setDaysPerSprint] = useState<number>(14);
   const [sprintCustomDays, setSprintCustomDays] = useState<Record<string, number>>({});
   const [selectedMemberRoles, setSelectedMemberRoles] = useState<any[]>([]);
 
@@ -120,20 +131,83 @@ export function AiDecompositionContainer({
     }
   }, [messages, result, activeThreadId, newSpaceName, workspaceId]);
 
-  // Load workspace members for Task Assignment Dropdown
+  // Load workspace members and their full User details (jobTitle, email, etc.) from Backend
   useEffect(() => {
-    async function fetchMembers() {
+    async function fetchWorkspaceUsers() {
       try {
-        const members = await workspaceService.getWorkspaceMembers(workspaceId);
-        setWorkspaceMembers(members);
-        const names = members.map((m: any) => m.fullName || m.email?.split("@")[0] || "Member");
-        setMembersList(names);
+        const wsMembers = await workspaceService.getWorkspaceMembers(workspaceId);
+        setWorkspaceMembers(wsMembers);
+
+        const userIds: number[] = Array.from(
+          new Set(
+            wsMembers
+              .map((m: any) => m.userId || m.id?.userId || (typeof m.user === "object" ? m.user?.id : null))
+              .filter((id): id is number => typeof id === "number" && id > 0)
+          )
+        );
+
+        if (userIds.length > 0) {
+          const userDetails = await Promise.all(
+            userIds.map((id) => userService.getUserById(id).catch(() => null))
+          );
+          const validUsers = userDetails.filter((u): u is User => u !== null);
+          setWorkspaceUsers(validUsers);
+          const names = validUsers.map((u) => u.fullName || u.email?.split("@")[0] || u.username);
+          setMembersList(names);
+        } else {
+          setWorkspaceUsers([]);
+          setMembersList([]);
+        }
       } catch (err) {
-        console.warn("Could not load workspace members, fallback to default roles:", err);
+        console.warn("Could not load workspace users:", err);
       }
     }
-    fetchMembers();
+    fetchWorkspaceUsers();
   }, [workspaceId]);
+
+  // Load space users when selectedSpaceId or targetMode changes
+  useEffect(() => {
+    async function fetchSpaceUsers() {
+      if (targetMode === "EXISTING_SPACE" && selectedSpaceId) {
+        try {
+          const sMembers = await workspaceService.getSpaceMembers(selectedSpaceId);
+          const spaceUserIds: number[] = Array.from(
+            new Set(
+              sMembers
+                .map((m: any) => m.userId || m.id?.userId || (typeof m.user === "object" ? m.user?.id : null))
+                .filter((id): id is number => typeof id === "number" && id > 0)
+            )
+          );
+
+          if (spaceUserIds.length > 0) {
+            const resolvedUsers = await Promise.all(
+              spaceUserIds.map(async (id) => {
+                const found = workspaceUsers.find((wu) => wu.id === id);
+                if (found) return found;
+                return await userService.getUserById(id).catch(() => null);
+              })
+            );
+            setSpaceUsers(resolvedUsers.filter((u): u is User => u !== null));
+          } else {
+            setSpaceUsers([]);
+          }
+        } catch (err) {
+          console.warn("Could not load space members:", err);
+          setSpaceUsers([]);
+        }
+      } else {
+        // In NEW_SPACE mode: the creator (current logged in user) is in the space by default!
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+          const matchUser = workspaceUsers.find((wu) => wu.id === currentUser.id) || currentUser;
+          setSpaceUsers([matchUser]);
+        } else {
+          setSpaceUsers([]);
+        }
+      }
+    }
+    fetchSpaceUsers();
+  }, [selectedSpaceId, targetMode, workspaceUsers]);
 
   // Load Chat Thread Sessions from Backend for selected Space
   const loadSpaceThreads = async () => {
@@ -230,6 +304,21 @@ export function AiDecompositionContainer({
 
       let finalPromptText = text.trim();
 
+      // Inject user-defined project duration constraint
+      const sDate = new Date(startDate);
+      const eDate = new Date(endDate);
+      const diffDays = Math.max(7, Math.ceil((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const timelineConstraint = `[CẤU HÌNH THỜI GIAN DỰ ÁN CỐ ĐỊNH: Bắt đầu từ ngày ${startDate} đến ngày ${endDate} (Tổng ${diffDays} ngày).
+QUY TẮC PHÂN BỔ SPRINT VÀ QUY TRÌNH PHẦN MỀM BẮT BUỘC:
+1. MẶC ĐỊNH 1 SPRINT LÀ 1 TUẦN (7 ngày). Chỉ những Sprint có độ phức tạp cao hoặc rủi ro lớn mới được kéo dài 2 tuần (14 ngày).
+2. TỔNG THỜI GIAN CÁC SPRINT PHẢI NẰM GỌN TRONG TỔNG ${diffDays} NGÀY. TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG TĂNG THÊM THỜI GIAN DỰ ÁN HAY THAY ĐỔI NGÀY KẾ THÚC (${endDate})! Nếu người dùng yêu cầu thêm Sprint, hãy phân bổ và cân đối lại các Sprint trong tổng ${diffDays} ngày này.
+3. ĐỌC KỸ TÀI LIỆU NẠP VÀO: Bám sát chính xác thông tin đề tài và số lượng nhân sự thực hiện (ví dụ trong tài liệu có 2 người làm thì phân bổ đúng cho 2 người).
+4. QUY TRÌNH PHẦN MỀM CHUẨN: BẮT BUỘC phải có giai đoạn / Sprint dành riêng cho KIỂM THỬ HỆ THỐNG (Testing, QA, UAT, Tích hợp)! Không được bỏ qua giai đoạn kiểm thử!]`;
+
+      if (targetMode === "NEW_SPACE" || !selectedSpaceId) {
+        finalPromptText = `${timelineConstraint}\n${finalPromptText}`;
+      }
+
       // IF EXISTING SPACE MODE: Build smart project status report context for AI
       if (targetMode === "EXISTING_SPACE" && selectedSpaceId) {
         try {
@@ -244,15 +333,32 @@ export function AiDecompositionContainer({
 
           const sprintSummary =
             existingSprints.length > 0
-              ? existingSprints.map((s) => `- ${s.name} [Trạng thái: ${s.status}]`).join("\n")
+              ? existingSprints
+                .map((s) => {
+                  const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
+                  const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
+                  return `- ${s.name} [Trạng thái: ${s.status}, Thời gian: ${sStart} đến ${sEnd}]`;
+                })
+                .join("\n")
               : "Chưa có sprint nào.";
 
           finalPromptText = `[BÁO CÁO PHÂN TÍCH HIỆN TRẠNG DỰ ÁN DÀNH CHO AI AGENT]
 - Dự án đang thực hiện: ${selectedSpaceObj?.name || "Space"}
-- Danh sách Sprint hiện tại:
+- Danh sách Sprint hiện tại của Space:
 ${sprintSummary}
 - Các Task đang thực hiện / đã tạo gần đây:
 ${taskSummary}
+
+[QUY TẮC RÀNG BUỘC KHI THÊM / CHIA NHỎ TASK CHO SPRINT CÓ SẴN]:
+1. Nếu người dùng yêu cầu chia nhỏ hoặc thêm task vào một Sprint cụ thể (ví dụ: 'Sprint 7'):
+   - Kiểm tra trạng thái của Sprint đó trong danh sách trên:
+     + NẾU SPRINT ĐÃ HOÀN THÀNH ('CLOSED' / ĐÃ ĐÓNG): TUYỆT ĐỐI KHÔNG ĐƯỢC THÊM TASK VÀO SPRINT NÀY! Bắt buộc thông báo cho người dùng biết Sprint này đã đóng và đề xuất chuyển task vào Sprint ĐANG DIỄN RA (ACTIVE) hoặc tạo Sprint MỚI (FUTURE).
+     + NẾU SPRINT LÀ 'ACTIVE' (ĐANG DIỄN RA) HOẶC 'FUTURE' (SẮP TỚI): BẮT BUỘC chỉ gán trường "sprint" đúng tên của Sprint đó (ví dụ "Sprint 7"), TUYỆT ĐỐI KHÔNG TỰ Ý TẠO SPRINT MỚI hay đổi tên Sprint! Tập trung chia nhỏ và thêm task trực tiếp cho chính Sprint đó.
+2. QUY TẮC PHÂN TÁCH GIAI ĐOẠN NGHIỆP VỤ THỰC TẾ (REALISTIC AGILE SCOPE):
+   - ĐÂY LÀ SPRINT PHÁT TRIỂN TÍNH NĂNG CHUYÊN BIỆT (Feature Sprint), KHÔNG PHẢI TOÀN BỘ QUY TRÌNH DỰ ÁN (SDLC)!
+   - BẮT BUỘC chỉ bóc tách các Task phát triển nghiệp vụ trực tiếp cho chủ đề của Sprint đó (ví dụ: Service API nghiệp vụ, Giao diện Frontend, tích hợp API).
+   - TUYỆT ĐỐI KHÔNG gom cả quy trình (từ thiết kế Schema CSDL nền tảng, kiến trúc đến kiểm thử hệ thống tổng thể E2E hay đóng gói CI/CD/Docker) vào trong Sprint tính năng này! Schema CSDL nền tảng đã làm ở Sprint đầu; Kiểm thử hệ thống tổng thể và Triển khai CI/CD đã có Sprint riêng (như Sprint 8).
+3. Không được tự ý tạo Sprint mới khi người dùng chưa đồng ý.
 
 [YÊU CẦU BÓC TÁCH VÀ MỞ RỘNG CÁC HẠNG MỤC CÔNG VIỆC TIẾP THEO]
 Nhiệm vụ của AI Agent: Phân tích hiện trạng dự án trên và tiếp tục bóc tách danh sách các Task mở rộng tiếp theo cho bài toán sau:
@@ -395,46 +501,96 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         }
 
         const existingSprints = await sprintService.getSprintsBySpace(selectedSpaceId);
-        const sprintMap: Record<string, Sprint> = {};
+        const activeSprint = existingSprints.find((s) => s.status === "ACTIVE");
+        const futureSprints = existingSprints.filter((s) => s.status === "FUTURE");
 
-        // Map existing sprints
+        // Helper to find matching existing sprint by exact name, sprint number (e.g. "Sprint 7"), or prefix
+        const findExistingSprint = (rawSprintName: string): Sprint | undefined => {
+          const cleanRaw = rawSprintName.trim().toLowerCase();
+          const cleanPrefix = cleanRaw.split(":")[0].trim();
+
+          // 1. Exact or prefix match
+          let found = existingSprints.find((sp) => {
+            const spClean = sp.name.trim().toLowerCase();
+            const spPrefix = spClean.split(":")[0].trim();
+            return spClean === cleanRaw || spPrefix === cleanPrefix;
+          });
+          if (found) return found;
+
+          // 2. Sprint number match (e.g., "Sprint 7" matches "Sprint 7: Tích hợp thanh toán")
+          const rawNumMatch = rawSprintName.match(/Sprint\s*(\d+)/i);
+          if (rawNumMatch) {
+            const sprintNum = rawNumMatch[1];
+            found = existingSprints.find((sp) => {
+              const spNumMatch = sp.name.match(/Sprint\s*(\d+)/i);
+              return spNumMatch && spNumMatch[1] === sprintNum;
+            });
+            if (found) return found;
+          }
+          return undefined;
+        };
+
+        // Cache for dynamically created sprints to avoid creating duplicates in this run
+        const createdSprintsCache: Record<string, Sprint> = {};
+
+        // Find latest end date among existing sprints to schedule new future sprints sequentially
+        let latestExistingEndDate = startDate;
         existingSprints.forEach((sp) => {
-          const match = sp.name.match(/Sprint\s+\d+/i);
-          if (match) {
-            sprintMap[match[0]] = sp;
-          } else {
-            sprintMap[sp.name] = sp;
+          if (sp.endDate) {
+            const ed = sp.endDate.substring(0, 10);
+            if (ed > latestExistingEndDate) {
+              latestExistingEndDate = ed;
+            }
           }
         });
 
         // For each decomposed task, put into matching existing Sprint or create new Sprint if needed
         for (const item of result.tasks) {
           const rawSprintName = item.sprint || "Sprint 1";
-          let targetSprint = sprintMap[rawSprintName];
+          const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
           const durationDays = sprintCustomDays[rawSprintName] || 7;
 
-          // If matching sprint doesn't exist, create it for the space dynamically with dates
-          try {
-            const todayIso = toIsoDateTime(startDate, "08:00:00");
-            const futureIso = toIsoDateTime(addDays(startDate, durationDays - 1), "18:00:00");
-            const cleanName = rawSprintName.includes(":") ? rawSprintName.split(":")[0].trim() : rawSprintName;
+          let targetSprint: Sprint | undefined = findExistingSprint(rawSprintName) || createdSprintsCache[cleanName];
 
-            targetSprint = await sprintService.createSprint({
-              spaceId: selectedSpaceId,
-              name: cleanName,
-              goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
-              startDate: todayIso,
-              endDate: futureIso,
-              status: "FUTURE",
-            });
-            sprintMap[rawSprintName] = targetSprint;
-          } catch (spErr) {
-            console.warn("Could not create dynamic sprint for existing space:", spErr);
+          // Check if sprint is CLOSED (hoàn thành)
+          if (targetSprint && targetSprint.status === "CLOSED") {
+            // Không được thêm task vào sprint đã đóng! Đẩy sang sprint đang diễn ra hoặc sprint tương lai gần nhất
+            console.warn(`Sprint ${targetSprint.name} đã đóng, tự động chuyển task '${item.title}' sang Sprint đang diễn ra.`);
+            targetSprint = activeSprint || (futureSprints.length > 0 ? futureSprints[0] : undefined);
           }
 
-          const taskDueDate = addDays(startDate, Math.min(item.estimatedDays || 2, Math.max(1, durationDays - 1)));
-          const taskStartIso = toIsoDateTime(startDate, "08:00:00");
-          const taskDueIso = toIsoDateTime(taskDueDate, "18:00:00");
+          // If no matching sprint exists in DB and hasn't been created yet in this batch:
+          if (!targetSprint) {
+            try {
+              const newSprintStart = addDays(latestExistingEndDate, 1);
+              const newSprintEnd = addDays(newSprintStart, durationDays - 1);
+              latestExistingEndDate = newSprintEnd;
+
+              targetSprint = await sprintService.createSprint({
+                spaceId: selectedSpaceId,
+                name: cleanName,
+                goal: `Sprint ${cleanName} mở rộng phát triển từ phân tích AI Agent`,
+                startDate: `${newSprintStart}T08:00:00`,
+                endDate: `${newSprintEnd}T18:00:00`,
+                status: "FUTURE",
+              });
+              createdSprintsCache[cleanName] = targetSprint;
+            } catch (spErr) {
+              console.warn("Could not create dynamic sprint for existing space:", spErr);
+            }
+          }
+
+          // Compute task dates bounded strictly within targetSprint's actual date range
+          const spStartStr = targetSprint?.startDate ? targetSprint.startDate.substring(0, 10) : startDate;
+          const spEndStr = targetSprint?.endDate ? targetSprint.endDate.substring(0, 10) : addDays(spStartStr, durationDays - 1);
+
+          const taskEstDays = item.estimatedDays || 2;
+          let calculatedDue = addDays(spStartStr, Math.max(1, taskEstDays));
+          if (calculatedDue > spEndStr) {
+            calculatedDue = spEndStr;
+          }
+          const taskStartIso = toIsoDateTime(spStartStr, "08:00:00");
+          const taskDueIso = toIsoDateTime(calculatedDue, "18:00:00");
 
           const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
@@ -549,6 +705,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         setNewSpaceName={setNewSpaceName}
         startDate={startDate}
         setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
         onSelectSamplePrompt={(text) => {
           setRequirementText(text);
           handleDecompose(text);
@@ -562,12 +720,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           messages={messages}
           onSendMessage={(text: string) => handleDecompose(text)}
           loading={loading}
+          onScrollToWbs={() => {
+            document.getElementById("wbs-result-table")?.scrollIntoView({ behavior: "smooth" });
+          }}
         />
       </div>
 
       {/* 3. SEPARATE TASK BREAKDOWN CANVAS SECTION */}
       {result && (
-        <div className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
+        <div id="wbs-result-table" className="pt-4 border-t border-[#E5E7EB] space-y-4 animate-in fade-in duration-300">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
               <span>📋 Bảng Kết Quả Phân Rã WBS Tasks Theo Sprint</span>
@@ -590,8 +751,12 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             importSuccess={importSuccess}
             isImported={isImported}
             members={membersList}
+            workspaceUsers={workspaceUsers}
+            spaceUsers={spaceUsers}
+            onUpdateSpaceUsers={setSpaceUsers}
             onUpdateTasks={handleUpdateTasks}
             startDate={startDate}
+            endDate={endDate}
             sprintCustomDays={sprintCustomDays}
             onUpdateSprintDays={(sprint, days) => setSprintCustomDays((prev) => ({ ...prev, [sprint]: days }))}
           />

@@ -10,7 +10,6 @@ import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { SpaceAiCopilotDrawer } from "./SpaceAiCopilotDrawer";
 
 interface SprintKanbanBoardProps {
   spaceId: number;
@@ -49,7 +48,6 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
 
   // Selected Sprint for Kanban filter (defaults to active sprint or first sprint)
   const [selectedSprintId, setSelectedSprintId] = useState<number | "backlog">(0);
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   useEffect(() => {
     if (sprints.length > 0 && selectedSprintId === 0) {
@@ -61,10 +59,32 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
   const currentSprint = sprints.find((s) => s.id === selectedSprintId);
   const isClosedSprint = currentSprint?.status === "CLOSED";
 
+  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+
+  const orderedSpaceTasks = React.useMemo(() => {
+    const list: Task[] = [];
+    sprints.forEach((sprint) => {
+      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      list.push(...sTasks);
+    });
+    const bTasks = tasks.filter(
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+    );
+    list.push(...bTasks);
+    return list;
+  }, [sprints, tasks, sprintIds]);
+
+  const taskNumberMap = React.useMemo(() => {
+    const map = new Map<number, number>();
+    orderedSpaceTasks.forEach((t, idx) => {
+      map.set(t.id, idx + 1);
+    });
+    return map;
+  }, [orderedSpaceTasks]);
+
   // Filter tasks belonging to selected sprint or backlog
   const sprintTasks = tasks.filter((t) => {
     if (selectedSprintId === "backlog") {
-      const sprintIds = new Set(sprints.map((s) => s.id));
       return !t.sprintId || !sprintIds.has(t.sprintId);
     }
     return t.sprintId === selectedSprintId;
@@ -233,7 +253,7 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] group-hover:border-[#111827] transition-colors">
-                            Task-{tasks.findIndex((t) => t.id === task.id) !== -1 ? tasks.findIndex((t) => t.id === task.id) + 1 : tIdx + 1}
+                            Task-{taskNumberMap.get(task.id) ?? (tasks.findIndex((t) => t.id === task.id) !== -1 ? tasks.findIndex((t) => t.id === task.id) + 1 : tIdx + 1)}
                           </span>
 
                           <div className="flex items-center gap-1.5">
@@ -306,19 +326,11 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
       {/* Task Detail Drawer Side Panel (Non-blocking right layout) */}
       <TaskDetailDrawer
         task={selectedTask}
+        taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
         isClosedSprint={isClosedSprint}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
-      />
-
-      {/* AI Co-Pilot Drawer for Existing Space */}
-      <SpaceAiCopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        space={{ id: spaceId, name: currentSprint ? currentSprint.name : `Space #${spaceId}` } as any}
-        workspaceId={1}
-        existingTasks={tasks}
       />
     </>
   );

@@ -107,11 +107,20 @@ export function SpaceTimelineTab({
     }
   });
 
-  // Map task IDs to 1-based sequential indices in the Space (Task-1, Task-2, ..., Task-22)
+  // Map task IDs to 1-based sequential indices in the Space (Task-1, Task-2, ...) ordered by Sprints then Backlog
   const taskSeqMap = new Map<number | string, number>();
-  tasks.forEach((t, index) => {
-    if (t.id) {
-      taskSeqMap.set(t.id, index + 1);
+  let currentSeq = 1;
+  sprints.forEach((s) => {
+    const sTasks = sprintTaskMap[s.id.toString()]?.tasks || [];
+    sTasks.forEach((t) => {
+      if (t.id) {
+        taskSeqMap.set(t.id, currentSeq++);
+      }
+    });
+  });
+  (sprintTaskMap[backlogKey]?.tasks || []).forEach((t) => {
+    if (t.id && !taskSeqMap.has(t.id)) {
+      taskSeqMap.set(t.id, currentSeq++);
     }
   });
 

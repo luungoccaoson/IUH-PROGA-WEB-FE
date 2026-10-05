@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Layers, Sparkles, AlertTriangle } from "lucide-react";
+import { Plus, Layers, Sparkles, AlertTriangle, Trash2, CheckSquare, X } from "lucide-react";
 import { useSprints } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
-import { Sprint, TaskStatus, TaskPriority } from "@/types";
+import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { SprintAccordion } from "./sprint/SprintAccordion";
 import { BacklogAccordion } from "./sprint/BacklogAccordion";
 import { CreateSprintModal } from "./sprint/CreateSprintModal";
 import { EditSprintModal } from "./sprint/EditSprintModal";
+import { DeleteSprintModal } from "./sprint/DeleteSprintModal";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { AutoAssignModal } from "@/components/space/AutoAssignModal";
 
 interface SprintTaskListProps {
   spaceId: number;
@@ -44,6 +46,7 @@ export function SprintTaskList({
     updateTask,
     updateTaskStatus,
     deleteTask,
+    deleteTasksBatch,
   } = useTasks(spaceId, reload);
 
   React.useEffect(() => {
@@ -56,13 +59,50 @@ export function SprintTaskList({
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
 
-  const handleConfirmDeleteSprint = async () => {
-    if (!deletingSprintId) return;
+  // Multi-task selection state for batch delete
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isAutoAssignOpen, setIsAutoAssignOpen] = useState(false);
+
+  const handleToggleSelectTask = (taskId: number) => {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  const handleToggleSelectAll = (taskIds: number[], select: boolean) => {
+    if (select) {
+      setSelectedTaskIds((prev) => Array.from(new Set([...prev, ...taskIds])));
+    } else {
+      setSelectedTaskIds((prev) => prev.filter((id) => !taskIds.includes(id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTaskIds([]);
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    if (selectedTaskIds.length === 0) return;
     try {
-      await deleteSprint(deletingSprintId);
+      setIsBatchDeleting(true);
+      await deleteTasksBatch(selectedTaskIds);
+      setSelectedTaskIds([]);
+      setShowBatchDeleteConfirm(false);
+    } catch (err) {
+      alert("Không thể xóa các công việc đã chọn. Vui lòng thử lại!");
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const handleDeleteSprintWithOptions = async (sprintId: number, deleteTasks: boolean) => {
+    try {
+      await deleteSprint(sprintId, deleteTasks);
       setDeletingSprintId(null);
     } catch (err) {
-      alert("Không thể xóa Sprint!");
+      alert("Không thể xóa Sprint. Vui lòng thử lại!");
     }
   };
 
@@ -77,9 +117,9 @@ export function SprintTaskList({
     }
   };
 
-  const handleUpdateOwner = async (taskId: number, ownerId?: number) => {
+  const handleUpdateOwner = async (taskId: number, ownerId?: number | null) => {
     try {
-      await updateTask(taskId, { ownerId });
+      await updateTask(taskId, { ownerId: ownerId !== undefined ? ownerId : null });
     } catch (err) {
       alert("Không thể gán người thực hiện!");
     }
@@ -104,6 +144,38 @@ export function SprintTaskList({
     }
   };
 
+  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+  const backlogTasks = React.useMemo(
+    () => tasks.filter((t) => !t.sprintId || !sprintIds.has(t.sprintId)),
+    [tasks, sprintIds]
+  );
+
+  // Sequentially order all space tasks across Sprints (in sprint order) and then Backlog
+  const orderedSpaceTasks = React.useMemo(() => {
+    const list: Task[] = [];
+    // 1. All tasks in each sprint in sequential sprint order
+    sprints.forEach((sprint) => {
+      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      list.push(...sTasks);
+    });
+    // 2. All tasks in Backlog
+    const bTasks = tasks.filter(
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+    );
+    list.push(...bTasks);
+    return list;
+  }, [sprints, tasks, sprintIds]);
+
+  const taskNumberMap = React.useMemo(() => {
+    const map = new Map<number, number>();
+    orderedSpaceTasks.forEach((t, idx) => {
+      map.set(t.id, idx + 1);
+    });
+    return map;
+  }, [orderedSpaceTasks]);
+
+  const isDrawerOpen = Boolean(selectedTask);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#6B7280]">
@@ -114,13 +186,6 @@ export function SprintTaskList({
       </div>
     );
   }
-
-  const sprintIds = new Set(sprints.map((s) => s.id));
-  const backlogTasks = tasks.filter(
-    (t) => !t.sprintId || !sprintIds.has(t.sprintId),
-  );
-
-  const isDrawerOpen = Boolean(selectedTask);
 
   return (
     <div className="relative font-sans">
@@ -141,13 +206,27 @@ export function SprintTaskList({
             </div>
           </div>
 
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            TẠO SPRINT MỚI
-          </button>
+          <div className="flex items-center gap-2.5">
+            {/* Auto Assign Tasks by Role button */}
+            {members && members.length > 0 && (
+              <button
+                onClick={() => setIsAutoAssignOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer hover:shadow-md"
+                title="Tự động phân công công việc theo vai trò chuyên môn (FE, BE, Fullstack, QA, DevOps) & Cân bằng tải"
+              >
+                {/* <Sparkles className="w-4 h-4" /> */}
+                TỰ ĐỘNG PHÂN CÔNG
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              TẠO SPRINT MỚI
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -166,9 +245,12 @@ export function SprintTaskList({
                 key={sprint.id}
                 sprint={sprint}
                 tasks={sprintTasks}
-                allSpaceTasks={tasks}
+                allSpaceTasks={orderedSpaceTasks}
                 members={members}
                 isTaskOverdue={isTaskOverdue}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelectTask={handleToggleSelectTask}
+                onToggleSelectAllSprint={handleToggleSelectAll}
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
                 onCreateTask={createTask}
@@ -185,8 +267,11 @@ export function SprintTaskList({
           {/* Backlog Accordion */}
           <BacklogAccordion
             tasks={backlogTasks}
-            allSpaceTasks={tasks}
+            allSpaceTasks={orderedSpaceTasks}
             isTaskOverdue={isTaskOverdue}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelectTask={handleToggleSelectTask}
+            onToggleSelectAllBacklog={handleToggleSelectAll}
             onCreateTask={createTask}
             onSelectTask={setSelectedTask}
             onUpdateStatus={updateTaskStatus}
@@ -197,6 +282,60 @@ export function SprintTaskList({
           />
         </div>
       </div>
+
+      {/* Floating Batch Action Bar when tasks are selected */}
+      {selectedTaskIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#111827] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in slide-in-from-bottom duration-200">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <CheckSquare className="w-4 h-4 text-[#10B981]" />
+            <span>
+              Đã chọn <strong className="text-[#10B981] font-mono">{selectedTaskIds.length}</strong> công việc
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-white/20" />
+
+          <button
+            onClick={handleClearSelection}
+            className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            Bỏ chọn
+          </button>
+
+          <button
+            onClick={() => setIsAutoAssignOpen(true)}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Tự động phân công các công việc đã chọn"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Phân công theo vai trò ({selectedTaskIds.length})</span>
+          </button>
+
+          <button
+            onClick={() => setShowBatchDeleteConfirm(true)}
+            disabled={isBatchDeleting}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            {isBatchDeleting ? (
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+            <span>Chuyển vào thùng rác ({selectedTaskIds.length})</span>
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for Batch Task Soft Delete */}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        title="Chuyển nhiều công việc vào thùng rác"
+        message={`Bạn có chắc chắn muốn chuyển ${selectedTaskIds.length} công việc đã chọn vào thùng rác không? Bạn có thể khôi phục lại bất cứ lúc nào.`}
+        confirmText="Chuyển vào thùng rác"
+        cancelText="Hủy"
+        onConfirm={handleConfirmBatchDelete}
+        onCancel={() => setShowBatchDeleteConfirm(false)}
+      />
 
       {/* Sprint Modals */}
       <CreateSprintModal
@@ -212,28 +351,47 @@ export function SprintTaskList({
         onSubmit={updateSprint}
       />
 
-      {/* Confirmation Dialog for Sprint Delete */}
-      <ConfirmDialog
+      {/* Delete Sprint Modal with 2 options (Move to Backlog or Delete All) */}
+      <DeleteSprintModal
         isOpen={deletingSprintId !== null}
-        title="Xóa Sprint"
-        message="Bạn có chắc chắn muốn xóa Sprint này không? Các công việc chưa hoàn thành trong Sprint này sẽ tự động chuyển về Backlog."
-        confirmText="Xóa Sprint"
-        cancelText="Hủy"
-        onConfirm={handleConfirmDeleteSprint}
-        onCancel={() => setDeletingSprintId(null)}
+        sprint={sprints.find((s) => s.id === deletingSprintId) || null}
+        taskCount={tasks.filter((t) => t.sprintId === deletingSprintId).length}
+        onClose={() => setDeletingSprintId(null)}
+        onConfirm={handleDeleteSprintWithOptions}
       />
 
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
+        taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
         isClosedSprint={Boolean(
           selectedTask?.sprintId &&
           sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-            "CLOSED",
+          "CLOSED",
+        )}
+        isActiveSprint={Boolean(
+          selectedTask?.sprintId &&
+          sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
+          "ACTIVE",
         )}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
+      />
+
+      {/* Auto Assign Modal (Role-matching & Workload Balancing) */}
+      <AutoAssignModal
+        isOpen={isAutoAssignOpen}
+        tasks={selectedTaskIds.length > 0 ? tasks.filter((t) => selectedTaskIds.includes(t.id)) : tasks}
+        sprints={sprints}
+        members={members}
+        taskNumberMap={taskNumberMap}
+        onClose={() => setIsAutoAssignOpen(false)}
+        onSuccess={() => {
+          reload();
+          setSelectedTaskIds([]);
+          window.dispatchEvent(new CustomEvent("space_tasks_updated"));
+        }}
       />
     </div>
   );

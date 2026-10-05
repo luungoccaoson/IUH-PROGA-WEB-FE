@@ -17,6 +17,7 @@ import { EditSpaceModal } from "@/components/space/EditSpaceModal";
 import { AddSpaceMemberModal } from "@/components/space/AddSpaceMemberModal";
 import { SpaceAiCopilotDrawer } from "@/components/workspace/SpaceAiCopilotDrawer";
 import { TaskDetailDrawer } from "@/components/workspace/sprint/TaskDetailDrawer";
+import { SpaceTrashModal } from "@/components/space/SpaceTrashModal";
 import { sprintService } from "@/services/sprint.service";
 import { taskService } from "@/services/task.service";
 import { Space, Task, Sprint, Workspace, User } from "@/types";
@@ -45,9 +46,33 @@ export default function SpaceDetailPage() {
 
   const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
 
+  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+
+  const orderedSpaceTasks = React.useMemo(() => {
+    const list: Task[] = [];
+    sprints.forEach((sprint) => {
+      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      list.push(...sTasks);
+    });
+    const bTasks = tasks.filter(
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+    );
+    list.push(...bTasks);
+    return list;
+  }, [sprints, tasks, sprintIds]);
+
+  const taskNumberMap = React.useMemo(() => {
+    const map = new Map<number, number>();
+    orderedSpaceTasks.forEach((t, idx) => {
+      map.set(t.id, idx + 1);
+    });
+    return map;
+  }, [orderedSpaceTasks]);
+
   // Modal States
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
 
   // Fetch all details (supports silent background sync without remounting page)
   const fetchData = async (isSilent = false) => {
@@ -205,6 +230,7 @@ export default function SpaceDetailPage() {
           onOpenSettings={() => setIsEditOpen(true)}
           onOpenCopilot={() => setIsCopilotOpen(true)}
           onOpenAddMember={() => setIsAddMemberOpen(true)}
+          onOpenTrash={() => setIsTrashOpen(true)}
           isOwner={isOwner}
         />
 
@@ -272,14 +298,16 @@ export default function SpaceDetailPage() {
         </div>
       </div>
 
-      {/* AI Co-Pilot Drawer for Space */}
-      <SpaceAiCopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        space={space}
-        workspaceId={workspaceId}
-        existingTasks={tasks}
-      />
+      {/* AI Co-Pilot Drawer for Space (Always available via floating bottom-right button) */}
+      {space && (
+        <SpaceAiCopilotDrawer
+          isOpen={true}
+          onClose={() => {}}
+          space={space}
+          workspaceId={workspaceId}
+          existingTasks={tasks}
+        />
+      )}
 
       {/* Add Space Member Modal */}
       <AddSpaceMemberModal
@@ -294,7 +322,16 @@ export default function SpaceDetailPage() {
       {selectedTask && isDrawerOpen && (
         <TaskDetailDrawer
           task={selectedTask}
+          taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
           members={members}
+          isClosedSprint={Boolean(
+            selectedTask?.sprintId &&
+            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "CLOSED"
+          )}
+          isActiveSprint={Boolean(
+            selectedTask?.sprintId &&
+            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "ACTIVE"
+          )}
           onClose={() => {
             setSelectedTask(null);
             setIsDrawerOpen(false);
@@ -344,6 +381,18 @@ export default function SpaceDetailPage() {
         onClose={() => setIsEditOpen(false)}
         onUpdate={handleUpdateSpace}
         onDelete={handleDeleteSpace}
+      />
+
+      {/* Trash Modal (Soft-deleted tasks with restore option) */}
+      <SpaceTrashModal
+        isOpen={isTrashOpen}
+        spaceId={spaceId}
+        sprints={sprints}
+        onClose={() => setIsTrashOpen(false)}
+        onTasksRestored={() => {
+          fetchData(true);
+          window.dispatchEvent(new CustomEvent("space_tasks_updated"));
+        }}
       />
     </>
   );

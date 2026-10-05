@@ -12,13 +12,16 @@ interface SprintAccordionProps {
   allSpaceTasks?: Task[];
   members?: any[];
   isTaskOverdue: (task: Task) => boolean;
+  selectedTaskIds?: number[];
+  onToggleSelectTask?: (taskId: number) => void;
+  onToggleSelectAllSprint?: (taskIds: number[], select: boolean) => void;
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
   onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
   onSelectTask: (task: Task) => void;
   onUpdateStatus: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
-  onUpdateOwner: (taskId: number, ownerId?: number) => void;
+  onUpdateOwner: (taskId: number, ownerId?: number | null) => void;
   onDeleteTask: (taskId: number) => void;
   onMoveTask?: (taskId: number, targetSprintId: number | null) => void;
 }
@@ -35,6 +38,9 @@ export function SprintAccordion({
   allSpaceTasks,
   members = [],
   isTaskOverdue,
+  selectedTaskIds = [],
+  onToggleSelectTask,
+  onToggleSelectAllSprint,
   onEdit,
   onDelete,
   onCreateTask,
@@ -49,7 +55,18 @@ export function SprintAccordion({
 
   const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
   const isClosed = sprint.status === "CLOSED";
+  const isActive = sprint.status === "ACTIVE";
   const isFuture = sprint.status === "FUTURE";
+
+  // Only tasks that are allowed to be deleted (CLOSED: none, ACTIVE: only TODO, FUTURE: all)
+  const deletableTasks = tasks.filter((t) => {
+    if (isClosed) return false;
+    if (isActive) return t.status === "TODO";
+    return true;
+  });
+  const deletableTaskIds = deletableTasks.map((t) => t.id);
+  const isAllSelected = deletableTaskIds.length > 0 && deletableTaskIds.every((id) => selectedTaskIds.includes(id));
+  const isSomeSelected = deletableTaskIds.some((id) => selectedTaskIds.includes(id));
 
   return (
     <div
@@ -74,10 +91,23 @@ export function SprintAccordion({
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="p-1 hover:bg-[#E5E7EB] rounded-lg text-[#6B7280] transition-colors"
+            className="p-1 hover:bg-[#E5E7EB] rounded-lg text-[#6B7280] transition-colors cursor-pointer"
           >
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
+
+          {onToggleSelectAllSprint && deletableTasks.length > 0 && (
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = !isAllSelected && isSomeSelected;
+              }}
+              onChange={(e) => onToggleSelectAllSprint(deletableTaskIds, e.target.checked)}
+              className="w-4 h-4 rounded text-[#1A73E8] border-gray-300 focus:ring-[#1A73E8] cursor-pointer shrink-0"
+              title={isAllSelected ? "Bỏ chọn tất cả công việc trong Sprint" : "Chọn tất cả công việc có thể xóa trong Sprint"}
+            />
+          )}
 
           <h3 className="font-extrabold text-[#111827] text-sm font-sans truncate">
             {sprint.name}
@@ -104,7 +134,7 @@ export function SprintAccordion({
             <button
               onClick={() => onEdit(sprint)}
               title="Chỉnh sửa ngày / tên Sprint"
-              className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors"
+              className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors cursor-pointer"
             >
               <Edit3 className="w-4 h-4" />
             </button>
@@ -113,8 +143,8 @@ export function SprintAccordion({
           {isFuture && (
             <button
               onClick={() => onDelete(sprint.id)}
-              title="Xóa Sprint"
-              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+              title="Xóa Sprint (Chỉ áp dụng cho Sprint sắp tới)"
+              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -145,6 +175,9 @@ export function SprintAccordion({
                     members={members}
                     isOverdue={isTaskOverdue(task)}
                     isClosedSprint={isClosed}
+                    isActiveSprint={isActive}
+                    isSelected={selectedTaskIds.includes(task.id)}
+                    onToggleSelect={onToggleSelectTask}
                     onSelect={onSelectTask}
                     onUpdateStatus={onUpdateStatus}
                     onUpdatePriority={onUpdatePriority}

@@ -59,7 +59,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
         description?: string;
         status?: TaskStatus;
         priority?: TaskPriority;
-        ownerId?: number;
+        ownerId?: number | null;
         startDate?: string;
         dueDate?: string;
       }
@@ -147,6 +147,27 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
     [selectedTask, onTasksUpdated]
   );
 
+  // Batch Delete Tasks
+  const deleteTasksBatch = useCallback(
+    async (taskIds: number[]) => {
+      if (!taskIds || taskIds.length === 0) return;
+      try {
+        setLoading(true);
+        await taskService.deleteTasksBatch(taskIds);
+        if (selectedTask && taskIds.includes(selectedTask.id)) {
+          setSelectedTask(null);
+        }
+        if (onTasksUpdated) onTasksUpdated(true);
+      } catch (err) {
+        console.error('Failed to batch delete tasks:', err);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedTask, onTasksUpdated]
+  );
+
   return {
     selectedTask,
     setSelectedTask,
@@ -156,5 +177,6 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
     updateTask,
     updateTaskStatus,
     deleteTask,
+    deleteTasksBatch,
   };
 }

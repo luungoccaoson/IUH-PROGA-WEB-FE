@@ -7,7 +7,9 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface TaskDetailDrawerProps {
   task: Task | null;
+  taskNumber?: number;
   isClosedSprint?: boolean;
+  isActiveSprint?: boolean;
   members?: any[];
   onClose: () => void;
   onUpdate: (
@@ -17,7 +19,7 @@ interface TaskDetailDrawerProps {
       description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
-      ownerId?: number;
+      ownerId?: number | null;
       startDate?: string;
       dueDate?: string;
     }
@@ -31,7 +33,7 @@ const DEFAULT_MEMBERS = [
   { id: 5, name: "Hoa Tester" },
 ];
 
-export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isActiveSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -57,6 +59,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
   if (!task) return null;
 
   const isReadOnly = isClosedSprint;
+  const canDelete = !isClosedSprint && (!isActiveSprint || task.status === "TODO");
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +72,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
         description: description.trim() || undefined,
         status,
         priority,
-        ownerId: ownerId || undefined,
+        ownerId: ownerId ? Number(ownerId) : null,
         startDate: startDate || undefined,
         dueDate: dueDate || undefined,
       });
@@ -101,7 +104,7 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB]">
-              Task-{task.id}
+              Task-{taskNumber !== undefined ? taskNumber : task.id}
             </span>
             {isReadOnly && (
               <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
@@ -111,10 +114,10 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
           </div>
 
           <div className="flex items-center gap-2">
-            {!isReadOnly && (
+            {canDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                title="Xóa công việc"
+                title="Chuyển vào thùng rác"
                 className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
@@ -287,12 +290,12 @@ export function TaskDetailDrawer({ task, isClosedSprint = false, members, onClos
         </form>
       </div>
 
-      {/* Confirmation Dialog for Task Delete */}
+      {/* Confirmation Dialog for Task Soft Delete */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Xóa công việc"
-        message={`Bạn có chắc chắn muốn xóa công việc "Task-${task.id}: ${task.title}" không?`}
-        confirmText="Xóa công việc"
+        title="Chuyển vào thùng rác"
+        message={`Bạn có chắc chắn muốn chuyển công việc "Task-${taskNumber !== undefined ? taskNumber : task.id}: ${task.title}" vào thùng rác không? Bạn có thể khôi phục lại bất cứ lúc nào.`}
+        confirmText="Chuyển vào thùng rác"
         cancelText="Hủy"
         onConfirm={handleConfirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}

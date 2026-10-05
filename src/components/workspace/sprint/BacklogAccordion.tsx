@@ -10,11 +10,14 @@ interface BacklogAccordionProps {
   tasks: Task[];
   allSpaceTasks?: Task[];
   isTaskOverdue: (task: Task) => boolean;
+  selectedTaskIds?: number[];
+  onToggleSelectTask?: (taskId: number) => void;
+  onToggleSelectAllBacklog?: (taskIds: number[], select: boolean) => void;
   onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
   onSelectTask: (task: Task) => void;
   onUpdateStatus: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
-  onUpdateOwner: (taskId: number, ownerId?: number) => void;
+  onUpdateOwner: (taskId: number, ownerId?: number | null) => void;
   onDeleteTask: (taskId: number) => void;
   onMoveTask?: (taskId: number, targetSprintId: number | null) => void;
 }
@@ -23,6 +26,9 @@ export function BacklogAccordion({
   tasks,
   allSpaceTasks,
   isTaskOverdue,
+  selectedTaskIds = [],
+  onToggleSelectTask,
+  onToggleSelectAllBacklog,
   onCreateTask,
   onSelectTask,
   onUpdateStatus,
@@ -32,6 +38,10 @@ export function BacklogAccordion({
   onMoveTask,
 }: BacklogAccordionProps) {
   const [isOpen, setIsOpen] = useState(true);
+
+  const backlogTaskIds = tasks.map((t) => t.id);
+  const isAllSelected = tasks.length > 0 && tasks.every((t) => selectedTaskIds.includes(t.id));
+  const isSomeSelected = tasks.some((t) => selectedTaskIds.includes(t.id));
 
   return (
     <div
@@ -47,15 +57,27 @@ export function BacklogAccordion({
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-[#FAF9F6] border-b border-[#E5E7EB]">
-        <div
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 cursor-pointer select-none"
-        >
-          {isOpen ? (
-            <ChevronDown className="w-4 h-4 text-[#6B7280]" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1 hover:bg-[#E5E7EB] rounded-lg text-[#6B7280] transition-colors cursor-pointer"
+          >
+            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+
+          {onToggleSelectAllBacklog && tasks.length > 0 && (
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = !isAllSelected && isSomeSelected;
+              }}
+              onChange={(e) => onToggleSelectAllBacklog(backlogTaskIds, e.target.checked)}
+              className="w-4 h-4 rounded text-[#1A73E8] border-gray-300 focus:ring-[#1A73E8] cursor-pointer shrink-0"
+              title={isAllSelected ? "Bỏ chọn tất cả công việc trong Backlog" : "Chọn tất cả công việc trong Backlog"}
+            />
           )}
+
           <h3 className="font-extrabold text-sm text-[#111827] uppercase tracking-wider">
             Công việc tồn đọng (Backlog)
           </h3>
@@ -80,6 +102,8 @@ export function BacklogAccordion({
                     task={task}
                     taskIndex={globalIdx !== -1 ? globalIdx : taskIdx}
                     isOverdue={isTaskOverdue(task)}
+                    isSelected={selectedTaskIds.includes(task.id)}
+                    onToggleSelect={onToggleSelectTask}
                     onSelect={onSelectTask}
                     onUpdateStatus={onUpdateStatus}
                     onUpdatePriority={onUpdatePriority}
