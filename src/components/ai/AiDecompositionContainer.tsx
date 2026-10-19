@@ -723,6 +723,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           onScrollToWbs={() => {
             document.getElementById("wbs-result-table")?.scrollIntoView({ behavior: "smooth" });
           }}
+          configuredStartDate={startDate}
+          configuredEndDate={endDate}
         />
       </div>
 

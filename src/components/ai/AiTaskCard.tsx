@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Clock,
   Pencil,
@@ -8,7 +8,6 @@ import {
   ArrowRightLeft,
   GripVertical,
   UserCheck,
-  AlertTriangle,
 } from "lucide-react";
 import { DecomposedTaskItem } from "@/services/ai.service";
 
@@ -31,8 +30,6 @@ export function AiTaskCard({
   onDelete,
   onMoveSprint,
 }: AiTaskCardProps) {
-  const [hoveredRisk, setHoveredRisk] = useState(false);
-  const [openRisk, setOpenRisk] = useState(false);
 
   const getPriorityBadgeStyle = (priority: string) => {
     switch (priority) {
@@ -107,42 +104,28 @@ export function AiTaskCard({
         ) : null}
       </div>
 
-      {/* Compact Risk Warning Badge with Hover / Click Popover */}
-      {(task.priority === "URGENT" || task.riskWarning) && (
-        <div className="relative inline-block ml-6">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpenRisk(!openRisk);
-            }}
-            onMouseEnter={() => setHoveredRisk(true)}
-            onMouseLeave={() => setHoveredRisk(false)}
-            className="px-2 py-0.5 rounded-md bg-[#FFF0F0] text-[#D93025] border border-[#FADBD8] text-[10px] font-bold font-mono flex items-center gap-1 hover:bg-[#FCE8E6] transition-all cursor-pointer shadow-2xs"
-          >
-            <AlertTriangle className="w-3 h-3 text-[#D93025]" />
-            <span>⚠️ Cảnh báo rủi ro</span>
-          </button>
-
-          {/* Risk Detail Popover */}
-          {(hoveredRisk || openRisk) && (
-            <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#111827] text-white text-[11px] rounded-2xl shadow-xl z-30 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 border border-gray-700 pointer-events-auto">
-              <div className="flex items-center justify-between text-[#F87171] font-mono font-bold text-[10px] uppercase border-b border-gray-800 pb-1">
-                <span className="flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Nguyên nhân & Căn cứ Rủi ro
-                </span>
-              </div>
-              <p className="text-gray-200 text-xs leading-relaxed font-sans font-medium">
-                {task.riskWarning ||
-                  "Task có độ phức tạp kỹ thuật cao, cần chú ý kiểm soát mã hóa dữ liệu & kiểm thử kỹ lưỡng."}
-              </p>
-              <div className="text-[10px] text-[#60A5FA] font-mono font-semibold pt-1 border-t border-gray-800 flex items-center gap-1">
-                <span>🛡️ Tiêu chuẩn kiểm soát: OWASP & IEEE 12207</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Complexity Rationale Badge (Scrum & IEEE 12207 Estimation Basis) */}
+      <div className="pl-6 pt-0.5">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border ${
+            (task.estimatedDays || 2) <= 1
+              ? "bg-slate-50 text-slate-700 border-slate-200"
+              : (task.estimatedDays || 2) <= 2
+              ? "bg-blue-50 text-blue-700 border-blue-200"
+              : "bg-amber-50 text-amber-800 border-amber-200"
+          }`}
+          title={`Căn cứ định lượng Scrum & IEEE 12207:\n• Ước tính: ${task.estimatedDays || 2} ngày làm việc\n• Độ phức tạp: ${(task.estimatedDays || 2) <= 1 ? "Cơ bản (Cấu hình / DTO / Migrations / Docs)" : (task.estimatedDays || 2) <= 2 ? "Trung bình (Nghiệp vụ CRUD / Form UI / RESTful API)" : "Cao (Kiến trúc hệ thống / Bảo mật OAuth2 / Tích hợp WebSocket)"}`}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+          <span>
+            {(task.estimatedDays || 2) <= 1
+              ? "Độ phức tạp: Cơ bản (Cấu hình / DTO: ~1 ngày)"
+              : (task.estimatedDays || 2) <= 2
+              ? "Độ phức tạp: Trung bình (CRUD Service / UI: ~2 ngày)"
+              : `Độ phức tạp: Nòng cốt (${task.estimatedDays || 3} ngày)`}
+          </span>
+        </span>
+      </div>
 
       {/* Card Footer Controls (Move Sprint, Edit, Delete) */}
       <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">

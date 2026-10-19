@@ -17,6 +17,7 @@ import {
   Trash2,
   Briefcase,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { DecomposedTaskItem } from "@/services/ai.service";
 import { User } from "@/types";
@@ -76,6 +77,59 @@ export function AiAutoAssignModal({
     setManualOverrides({});
   }, [selectedSprint, unassignedOnly]);
 
+  // Workload and completion progress of members (Thầy yêu cầu: Phân chia dựa trên mức độ hoàn thành & số ngày còn lại của việc cũ)
+  const [memberWorkloads, setMemberWorkloads] = useState<
+    Record<number, { pendingTasks: number; pendingDays: number; finishDay: string }>
+  >({});
+
+  // Preset default workloads when space members change
+  useEffect(() => {
+    if (currentSpaceUsers.length > 0) {
+      setMemberWorkloads((prev) => {
+        const next = { ...prev };
+        currentSpaceUsers.forEach((u, idx) => {
+          if (!next[u.id]) {
+            // Preset realistic scenario per user request:
+            // Member 1: Finishes Friday (1 pending task, only 1.5 busy days remaining, frees up early)
+            // Member 2: Finishes Sunday (3 pending tasks, 4.0 busy days remaining, busy until weekend)
+            if (idx === 0) {
+              next[u.id] = { pendingTasks: 1, pendingDays: 1.5, finishDay: "Thứ Sáu" };
+            } else if (idx === 1) {
+              next[u.id] = { pendingTasks: 3, pendingDays: 4.0, finishDay: "Chủ Nhật" };
+            } else {
+              next[u.id] = {
+                pendingTasks: idx % 2 === 0 ? 1 : 2,
+                pendingDays: idx % 2 === 0 ? 1.5 : 3.0,
+                finishDay: idx % 2 === 0 ? "Thứ Sáu" : "Thứ Bảy",
+              };
+            }
+          }
+        });
+        return next;
+      });
+    }
+  }, [currentSpaceUsers]);
+
+  // Quick preset helper for changing member's completion day
+  const handleChangeMemberWorkload = (
+    userId: number,
+    preset: "FRIDAY" | "SUNDAY" | "WEDNESDAY" | "FREE"
+  ) => {
+    setMemberWorkloads((prev) => {
+      const next = { ...prev };
+      if (preset === "FRIDAY") {
+        next[userId] = { pendingTasks: 1, pendingDays: 1.5, finishDay: "Thứ Sáu" };
+      } else if (preset === "SUNDAY") {
+        next[userId] = { pendingTasks: 3, pendingDays: 4.0, finishDay: "Chủ Nhật" };
+      } else if (preset === "WEDNESDAY") {
+        next[userId] = { pendingTasks: 1, pendingDays: 0.5, finishDay: "Thứ Tư" };
+      } else {
+        next[userId] = { pendingTasks: 0, pendingDays: 0.0, finishDay: "Đã rảnh" };
+      }
+      return next;
+    });
+  };
+
   // Sprints list derived from tasks if not passed
   const sprintOptions = useMemo(() => {
     if (availableSprints.length > 0) return availableSprints;
@@ -101,7 +155,9 @@ export function AiAutoAssignModal({
       });
   }, [tasks, selectedSprint, unassignedOnly]);
 
-  // Calculate Auto Assignment Preview based on role matching & load balancing
+  // Calculate Auto Assignment Preview based on:
+  // 1. Role capability matching
+  // 2. Capacity & Completion Status: Members finishing earlier (e.g. Friday) get more tasks than those finishing later (e.g. Sunday)
   const autoAssignedPlan = useMemo(() => {
     if (currentSpaceUsers.length === 0 || filteredTasksWithIndex.length === 0) {
       return {
@@ -114,20 +170,43 @@ export function AiAutoAssignModal({
       caps: getMemberCapabilities(u),
     }));
 
-    const feList = categorized.filter((c) => c.caps.isFrontend);
-    const beList = categorized.filter((c) => c.caps.isBackend);
-    const qaList = categorized.filter((c) => c.caps.isQA);
-    const fsList = categorized.filter((c) => c.caps.isFullstack);
-    const mgmtList = categorized.filter((c) => c.caps.isManagement);
-    const devopsList = categorized.filter((c) => c.caps.isDevOps);
+    const feList = categorized.filter((c) => c.caps.isFrontend).map((c) => c.user);
+    const beList = categorized.filter((c) => c.caps.isBackend).map((c) => c.user);
+    const qaList = categorized.filter((c) => c.caps.isQA).map((c) => c.user);
+    const fsList = categorized.filter((c) => c.caps.isFullstack).map((c) => c.user);
+    const mgmtList = categorized.filter((c) => c.caps.isManagement).map((c) => c.user);
+    const devopsList = categorized.filter((c) => c.caps.isDevOps).map((c) => c.user);
 
-    let feIdx = 0;
-    let beIdx = 0;
-    let qaIdx = 0;
-    let fsIdx = 0;
-    let mgmtIdx = 0;
-    let devopsIdx = 0;
-    let genIdx = 0;
+    // Track accumulated load (pending days + newly assigned estimated days)
+    const currentAccumulatedDays: Record<number, number> = {};
+    const currentAssignedCounts: Record<number, number> = {};
+
+    currentSpaceUsers.forEach((u) => {
+      const w = memberWorkloads[u.id] || { pendingDays: 1.5, pendingTasks: 1, finishDay: "Thứ Sáu" };
+      currentAccumulatedDays[u.id] = w.pendingDays;
+      currentAssignedCounts[u.id] = 0;
+    });
+
+    // Helper: Pick candidate with lowest accumulated load (Least-Loaded Capacity Greedy)
+    const pickLeastLoaded = (candidates: User[]): User => {
+      const pool = candidates.length > 0 ? candidates : currentSpaceUsers;
+      let chosen = pool[0];
+      let minLoad = currentAccumulatedDays[chosen.id] ?? 999;
+
+      for (let i = 1; i < pool.length; i++) {
+        const u = pool[i];
+        const load = currentAccumulatedDays[u.id] ?? 999;
+        if (load < minLoad) {
+          minLoad = load;
+          chosen = u;
+        } else if (load === minLoad) {
+          if ((currentAssignedCounts[u.id] || 0) < (currentAssignedCounts[chosen.id] || 0)) {
+            chosen = u;
+          }
+        }
+      }
+      return chosen;
+    };
 
     const assignments = filteredTasksWithIndex.map(({ task, originalIndex }) => {
       // Check manual override first
@@ -135,6 +214,9 @@ export function AiAutoAssignModal({
       if (overrideId) {
         const found = currentSpaceUsers.find((u) => u.id === overrideId);
         if (found) {
+          const taskDays = task.estimatedDays || 2;
+          currentAccumulatedDays[found.id] = (currentAccumulatedDays[found.id] || 0) + taskDays;
+          currentAssignedCounts[found.id] = (currentAssignedCounts[found.id] || 0) + 1;
           return {
             taskIndex: originalIndex,
             assignedUser: found,
@@ -147,10 +229,11 @@ export function AiAutoAssignModal({
       const roleStr = (task.assignedRole || "").toLowerCase();
       const titleStr = (task.title || "").toLowerCase();
       const descStr = (task.description || "").toLowerCase();
+      const taskDays = task.estimatedDays || 2;
 
       let assigned: User | null = null;
       let cat: RoleCategory = "GENERAL";
-      let reason = "";
+      let matchedSkill = "";
 
       // 1. QA / Tester
       if (
@@ -161,10 +244,9 @@ export function AiAutoAssignModal({
         titleStr.includes("test")
       ) {
         cat = "QA";
+        matchedSkill = "QA / Kiểm thử";
         if (qaList.length > 0) {
-          assigned = qaList[qaIdx % qaList.length].user;
-          qaIdx++;
-          reason = `Phù hợp kỹ năng QA / Tester (${assigned.jobTitle || "QA"})`;
+          assigned = pickLeastLoaded(qaList);
         }
       }
       // 2. Management / BA / PO
@@ -178,10 +260,9 @@ export function AiAutoAssignModal({
         titleStr.includes("yêu cầu")
       ) {
         cat = "MANAGEMENT";
+        matchedSkill = "Quản lý / BA";
         if (mgmtList.length > 0) {
-          assigned = mgmtList[mgmtIdx % mgmtList.length].user;
-          mgmtIdx++;
-          reason = `Phù hợp kỹ năng Quản lý / BA (${assigned.jobTitle || "BA/PM"})`;
+          assigned = pickLeastLoaded(mgmtList);
         }
       }
       // 3. DevOps / System / Cloud
@@ -194,10 +275,9 @@ export function AiAutoAssignModal({
         titleStr.includes("ci/cd")
       ) {
         cat = "DEVOPS";
+        matchedSkill = "DevOps / Hạ tầng";
         if (devopsList.length > 0) {
-          assigned = devopsList[devopsIdx % devopsList.length].user;
-          devopsIdx++;
-          reason = `Phù hợp kỹ năng DevOps / Hạ tầng (${assigned.jobTitle || "DevOps"})`;
+          assigned = pickLeastLoaded(devopsList);
         }
       }
       // 4. Frontend / UI
@@ -210,15 +290,9 @@ export function AiAutoAssignModal({
         descStr.includes("react")
       ) {
         cat = "FRONTEND";
-        if (feList.length > 0) {
-          assigned = feList[feIdx % feList.length].user;
-          feIdx++;
-          reason = `Phù hợp chuyên môn Frontend UI (${assigned.jobTitle || "FE"})`;
-        } else if (fsList.length > 0) {
-          assigned = fsList[fsIdx % fsList.length].user;
-          fsIdx++;
-          reason = `Hỗ trợ Frontend bởi Fullstack Developer (${assigned.jobTitle || "Fullstack"})`;
-        }
+        matchedSkill = "Frontend UI";
+        const fePool = feList.length > 0 ? feList : fsList;
+        assigned = pickLeastLoaded(fePool);
       }
       // 5. Backend / Database / API
       else if (
@@ -231,23 +305,24 @@ export function AiAutoAssignModal({
         titleStr.includes("service")
       ) {
         cat = "BACKEND";
-        if (beList.length > 0) {
-          assigned = beList[beIdx % beList.length].user;
-          beIdx++;
-          reason = `Phù hợp chuyên môn Backend & API (${assigned.jobTitle || "BE"})`;
-        } else if (fsList.length > 0) {
-          assigned = fsList[fsIdx % fsList.length].user;
-          fsIdx++;
-          reason = `Hỗ trợ Backend bởi Fullstack Developer (${assigned.jobTitle || "Fullstack"})`;
-        }
+        matchedSkill = "Backend / API";
+        const bePool = beList.length > 0 ? beList : fsList;
+        assigned = pickLeastLoaded(bePool);
       }
 
-      // Fallback: round-robin across all available space members
+      // Fallback: pick the least loaded space member
       if (!assigned) {
-        assigned = currentSpaceUsers[genIdx % currentSpaceUsers.length];
-        genIdx++;
-        reason = `Phân bổ cân bằng tải trong Space (${assigned.jobTitle || "Thành viên"})`;
+        assigned = pickLeastLoaded(currentSpaceUsers);
       }
+
+      // Accumulate workload for chosen member
+      const userWorkload = memberWorkloads[assigned.id] || { finishDay: "Thứ Sáu", pendingDays: 1.5, pendingTasks: 1 };
+      currentAccumulatedDays[assigned.id] = (currentAccumulatedDays[assigned.id] || 0) + taskDays;
+      currentAssignedCounts[assigned.id] = (currentAssignedCounts[assigned.id] || 0) + 1;
+
+      const reason = userWorkload.pendingDays <= 2
+        ? `Ưu tiên do xong việc cũ sớm (${userWorkload.finishDay}, chỉ còn ${userWorkload.pendingDays}d dở dang) • ${matchedSkill || "Tối ưu năng lực"}`
+        : `Phân bổ cân bằng tải sau khi hoàn tất việc cũ (${userWorkload.finishDay}, bận ${userWorkload.pendingDays}d) • ${matchedSkill || "Cân đối"}`;
 
       return {
         taskIndex: originalIndex,
@@ -258,19 +333,31 @@ export function AiAutoAssignModal({
     });
 
     return { assignments };
-  }, [filteredTasksWithIndex, currentSpaceUsers, manualOverrides]);
+  }, [filteredTasksWithIndex, currentSpaceUsers, manualOverrides, memberWorkloads]);
 
-  // Group assigned tasks by member
+  // Group assigned tasks by member and compute workload analytics
   const memberStats = useMemo(() => {
     return currentSpaceUsers.map((m) => {
       const assigned = autoAssignedPlan.assignments.filter((a) => a.assignedUser.id === m.id);
+      const totalAssignedDays = assigned.reduce((sum, item) => {
+        const t = tasks[item.taskIndex];
+        return sum + (t?.estimatedDays || 2);
+      }, 0);
+      const workload = memberWorkloads[m.id] || {
+        pendingTasks: 1,
+        pendingDays: 1.5,
+        finishDay: "Thứ Sáu",
+      };
       return {
         member: m,
         count: assigned.length,
         items: assigned,
+        totalAssignedDays,
+        workload,
+        totalSprintLoadDays: workload.pendingDays + totalAssignedDays,
       };
     });
-  }, [currentSpaceUsers, autoAssignedPlan]);
+  }, [currentSpaceUsers, autoAssignedPlan, tasks, memberWorkloads]);
 
   // Apply assignments
   const handleApply = () => {
@@ -575,7 +662,7 @@ export function AiAutoAssignModal({
           </div>
         </div>
 
-        {/* 3 Metric Cards */}
+        {/* 3 Metric Cards with Capacity Strategy */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           {/* Card 1: Assigned Tasks */}
           <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
@@ -605,11 +692,132 @@ export function AiAutoAssignModal({
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-[11px] text-gray-500 font-mono block">Chiến lược</span>
-              <span className="text-xs font-bold text-gray-900">Cân bằng tải theo vai trò</span>
+              <span className="text-[11px] text-gray-500 font-mono block">Thuật toán phân chia</span>
+              <span className="text-xs font-bold text-gray-900">Năng lực theo tiến độ việc cũ</span>
             </div>
           </div>
         </div>
+
+        {/* WORKLOAD & COMPLETION STATUS CONTROLLER PANEL (Thầy yêu cầu: Phân chia theo mức độ hoàn thành & số ngày còn lại của từng thành viên) */}
+        {currentSpaceUsers.length > 0 && (
+          <div className="bg-indigo-50/40 border border-indigo-200/80 rounded-2xl p-3.5 space-y-2.5 shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">⚖️</span>
+                <h5 className="font-bold text-xs text-indigo-950">
+                  Năng Lực Khả Dụng & Mức Độ Hoàn Thành Việc Cũ Của Thành Viên:
+                </h5>
+              </div>
+              <span className="text-[10px] text-indigo-700 font-mono bg-indigo-100/70 px-2 py-0.5 rounded-full font-bold">
+                Tự động ưu tiên người xong sớm
+              </span>
+            </div>
+
+            <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+              💡 <strong>Nguyên lý điều phối:</strong> Thành viên xong việc cũ sớm hơn (ví dụ: Thứ Sáu) có nhiều ngày trống trong tuần nên AI tự động phân bổ nhiều task hơn. Thành viên bận đến Chủ Nhật sẽ nhận ít việc hơn để tránh quá tải.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-0.5">
+              {currentSpaceUsers.map((u) => {
+                const w = memberWorkloads[u.id] || { finishDay: "Thứ Sáu", pendingDays: 1.5, pendingTasks: 1 };
+                const stat = memberStats.find((s) => s.member.id === u.id);
+
+                return (
+                  <div
+                    key={u.id}
+                    className="p-2.5 bg-white border border-indigo-100 rounded-xl flex flex-col justify-between gap-2 shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
+                          {getInitials(u.fullName || u.username)}
+                        </div>
+                        <div className="truncate">
+                          <span className="text-xs font-bold text-slate-900 truncate block">
+                            {u.fullName || u.username}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono block">
+                            {u.jobTitle || "Thành viên"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Summary of Assigned vs Pending */}
+                      <div className="text-right shrink-0">
+                        <span className="text-[11px] font-bold text-blue-700 font-mono block">
+                          Nhận: {stat?.count || 0} tasks ({stat?.totalAssignedDays || 0}d)
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono block">
+                          Tải cũ: {w.pendingDays}d
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Selector Buttons for Completion Day */}
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-500 font-mono font-semibold shrink-0">
+                        Xong việc cũ:
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberWorkload(u.id, "FRIDAY")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                            w.finishDay === "Thứ Sáu"
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                          }`}
+                          title="Xong vào Thứ 6 (còn 1.5 ngày bận) -> Rảnh sớm, nhận nhiều việc"
+                        >
+                          Thứ Sáu (1.5d)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberWorkload(u.id, "SUNDAY")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                            w.finishDay === "Chủ Nhật"
+                              ? "bg-amber-600 text-white shadow-2xs"
+                              : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+                          }`}
+                          title="Bận đến Chủ Nhật (còn 4 ngày bận) -> Nhận ít việc hơn"
+                        >
+                          Chủ Nhật (4.0d)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberWorkload(u.id, "WEDNESDAY")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                            w.finishDay === "Thứ Tư"
+                              ? "bg-blue-600 text-white shadow-2xs"
+                              : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
+                          }`}
+                          title="Xong vào Thứ 4 (còn 0.5 ngày bận)"
+                        >
+                          Thứ Tư (0.5d)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberWorkload(u.id, "FREE")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                            w.finishDay === "Đã rảnh"
+                              ? "bg-purple-600 text-white shadow-2xs"
+                              : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                          }`}
+                          title="Đã rảnh 100% (0 ngày bận)"
+                        >
+                          Đã rảnh
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Main List Content */}
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
@@ -625,7 +833,7 @@ export function AiAutoAssignModal({
             </div>
           ) : viewMode === "BY_MEMBER" ? (
             /* VIEW BY MEMBER (ACCORDION) */
-            memberStats.map(({ member, count, items }) => {
+            memberStats.map(({ member, count, items, totalAssignedDays, workload, totalSprintLoadDays }) => {
               const isExpanded = expandedMemberId === member.id;
               const loadPercent = totalAssignedTasks > 0 ? (count / totalAssignedTasks) * 100 : 0;
 
@@ -657,16 +865,32 @@ export function AiAutoAssignModal({
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-500 font-mono block">
-                          {member.email}
-                        </span>
+                        {/* Member Completion Progress Badge */}
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                              workload.pendingDays <= 2
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            Xong việc cũ: {workload.finishDay} (còn {workload.pendingDays}d dở dang)
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            {member.email}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <span className="text-xs font-bold text-blue-700 font-mono block">
-                          +{count} tasks
+                          +{count} tasks (~{totalAssignedDays}d)
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-mono block">
+                          Tổng tải: {totalSprintLoadDays.toFixed(1)} ngày
                         </span>
                         <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden">
                           <div
@@ -766,8 +990,13 @@ export function AiAutoAssignModal({
                           {task.title}
                         </span>
                         <span className="text-[10px] text-gray-400 font-mono block">
-                          {task.sprint || "Sprint 1"} • Yêu cầu: {task.assignedRole || "Chưa xác định"}
+                          {task.sprint || "Sprint 1"} • Yêu cầu: {task.assignedRole || "Chưa xác định"} • {task.estimatedDays || 2} ngày
                         </span>
+                        {assigned?.reason && (
+                          <span className="text-[10px] text-indigo-600 font-medium block truncate max-w-md mt-0.5" title={assigned.reason}>
+                            ⚖️ {assigned.reason}
+                          </span>
+                        )}
                       </div>
                     </div>
 

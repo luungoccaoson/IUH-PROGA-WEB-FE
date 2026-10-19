@@ -27,6 +27,8 @@ interface AiChatWindowProps {
   onSendMessage: (text: string) => void;
   loading: boolean;
   onScrollToWbs?: () => void;
+  configuredStartDate?: string;
+  configuredEndDate?: string;
 }
 
 export function AiChatWindow({
@@ -34,6 +36,8 @@ export function AiChatWindow({
   onSendMessage,
   loading,
   onScrollToWbs,
+  configuredStartDate,
+  configuredEndDate,
 }: AiChatWindowProps) {
   const [inputText, setInputText] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -271,6 +275,8 @@ export function AiChatWindow({
                           textareaRef.current?.focus();
                         }}
                         onScrollToWbs={onScrollToWbs}
+                        configuredStartDate={configuredStartDate}
+                        configuredEndDate={configuredEndDate}
                       />
                     )}
                   </div>

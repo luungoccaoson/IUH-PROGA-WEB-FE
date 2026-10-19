@@ -18,6 +18,8 @@ interface AiMessageContentProps {
   onSendMessage?: (text: string) => void;
   onFillInput?: (text: string) => void;
   onScrollToWbs?: () => void;
+  configuredStartDate?: string;
+  configuredEndDate?: string;
 }
 
 interface SprintItem {
@@ -32,6 +34,8 @@ export function AiMessageContent({
   onSendMessage,
   onFillInput,
   onScrollToWbs,
+  configuredStartDate,
+  configuredEndDate,
 }: AiMessageContentProps) {
   // 1. If it's a User message, render clean formatted text
   if (isUser) {
@@ -111,10 +115,57 @@ export function AiMessageContent({
     });
 
     const totalSprints = sprintList.length > 0 ? sprintList.length : 3;
-    const now = new Date();
-    const startDateStr = now.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const endDate = new Date(now.getTime() + totalSprints * 14 * 24 * 60 * 60 * 1000);
-    const endDateStr = endDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+    // INTELLIGENT DATE PARSING:
+    // 1. Try to extract exact dates from text (e.g. "từ 19/10/2026 đến 30/11/2026" or "đến 30/11/2026")
+    let startDateStr = "";
+    let endDateStr = "";
+
+    const combinedText = `${estimatedScale} ${content}`;
+    const rangeMatch = combinedText.match(
+      /(?:từ\s*)?(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s*(?:đến|-)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i
+    );
+    if (rangeMatch) {
+      startDateStr = rangeMatch[1].replace(/-/g, "/");
+      endDateStr = rangeMatch[2].replace(/-/g, "/");
+    } else {
+      const endMatch = combinedText.match(/đến\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i);
+      if (endMatch) {
+        endDateStr = endMatch[1].replace(/-/g, "/");
+      }
+      const startMatch = combinedText.match(/từ\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i);
+      if (startMatch) {
+        startDateStr = startMatch[1].replace(/-/g, "/");
+      }
+    }
+
+    // 2. If not found in text, fallback to configured dates if available
+    if (!startDateStr && configuredStartDate) {
+      const parts = configuredStartDate.split("-");
+      if (parts.length === 3) {
+        startDateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+    if (!startDateStr) {
+      startDateStr = new Date().toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    if (!endDateStr && configuredEndDate) {
+      const parts = configuredEndDate.split("-");
+      if (parts.length === 3) {
+        endDateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+
+    // 3. Fallback: Parse total days (e.g. "tổng 42 ngày") or calculate 7 days per sprint (default 1 week/sprint)
+    if (!endDateStr) {
+      const daysMatch = combinedText.match(/(\d+)\s*ngày/i);
+      const totalDays = daysMatch ? parseInt(daysMatch[1], 10) : totalSprints * 7;
+      const [d, m, y] = startDateStr.split("/").map(Number);
+      const startD = new Date(y, m - 1, d);
+      const endD = new Date(startD.getTime() + (totalDays - 1) * 24 * 60 * 60 * 1000);
+      endDateStr = endD.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
 
     return (
       <div className="space-y-4 text-left font-sans w-full">
@@ -297,39 +348,37 @@ export function AiMessageContent({
     optLabel: string,
     qNum?: string
   ) => {
-    setSelectedOptionsMap((prev) => {
-      const newMap = { ...prev };
-      if (newMap[lineIdx]?.text === optText) {
-        // Toggle off if clicking the same option again
-        delete newMap[lineIdx];
-      } else {
-        // Select this option for this question line
-        newMap[lineIdx] = { label: optLabel, text: optText, qNum };
-      }
+    // 1. Compute newMap directly in event handler
+    const newMap = { ...selectedOptionsMap };
+    if (newMap[lineIdx]?.text === optText) {
+      // Toggle off if clicking the same option again
+      delete newMap[lineIdx];
+    } else {
+      // Select this option for this question line
+      newMap[lineIdx] = { label: optLabel, text: optText, qNum };
+    }
 
-      // Combine all selected answers across questions sequentially
-      const keys = Object.keys(newMap)
-        .map(Number)
-        .sort((a, b) => a - b);
+    // 2. Update local state
+    setSelectedOptionsMap(newMap);
 
-      if (keys.length === 0) {
-        if (onFillInput) onFillInput("");
-      } else {
-        const combined = keys
-          .map((k, i) => {
-            const item = newMap[k];
-            const prefix = item.qNum ? `Câu ${item.qNum}: ` : `Lựa chọn ${i + 1}: `;
-            return `${prefix}${item.text}`;
-          })
-          .join("\n\n");
+    // 3. Combine all selected answers across questions sequentially and update parent input
+    const keys = Object.keys(newMap)
+      .map(Number)
+      .sort((a, b) => a - b);
 
-        if (onFillInput) {
-          onFillInput(combined);
-        }
-      }
+    if (keys.length === 0) {
+      onFillInput?.("");
+    } else {
+      const combined = keys
+        .map((k, i) => {
+          const item = newMap[k];
+          const prefix = item.qNum ? `Câu ${item.qNum}: ` : `Lựa chọn ${i + 1}: `;
+          return `${prefix}${item.text}`;
+        })
+        .join("\n\n");
 
-      return newMap;
-    });
+      onFillInput?.(combined);
+    }
   };
 
   // 4. Default: Standard text with Clean Markdown and Multi-Question Option Parsing
