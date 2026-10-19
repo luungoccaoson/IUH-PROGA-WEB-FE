@@ -469,7 +469,6 @@ function renderOptionLine(
     <div key={lineIdx} className="space-y-1.5 pt-0.5">
       {prefix && (
         <div className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 pl-0.5">
-          <span className="text-amber-500">💡</span>
           <span>{renderFormattedText(prefix)}</span>
         </div>
       )}
@@ -490,11 +489,10 @@ function renderOptionLine(
             <div
               key={optIdx}
               onClick={() => onToggleOption(lineIdx, trimmedOpt, optionLabel, currentQuestionNum)}
-              className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer group shadow-2xs ${
-                isSelected
+              className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer group shadow-2xs ${isSelected
                   ? "bg-emerald-50 border-2 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
                   : "bg-slate-50/90 hover:bg-emerald-50/60 border-slate-200/90 hover:border-emerald-300"
-              }`}
+                }`}
               title={isSelected ? "Đang chọn (Bấm lại để hủy)" : "Bấm để chọn câu trả lời mẫu này"}
             >
               {/* Chấm tròn đổi thành icon check xanh nếu đang chọn */}
@@ -509,11 +507,10 @@ function renderOptionLine(
               <div className="text-xs leading-relaxed text-slate-800 flex-1">
                 {/* Bôi đậm nổi bật chữ Option A - B */}
                 <strong
-                  className={`font-extrabold px-2 py-0.5 rounded-md border shadow-2xs font-mono text-[11px] mr-1.5 inline-block ${
-                    isSelected
+                  className={`font-extrabold px-2 py-0.5 rounded-md border shadow-2xs font-mono text-[11px] mr-1.5 inline-block ${isSelected
                       ? "text-white bg-emerald-700 border-emerald-800"
                       : "text-slate-900 bg-white border-slate-300 text-emerald-800 group-hover:border-emerald-300"
-                  }`}
+                    }`}
                 >
                   {optionLabel}
                 </strong>
