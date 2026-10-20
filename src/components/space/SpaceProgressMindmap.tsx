@@ -27,6 +27,7 @@ import {
   FolderKanban,
 } from "lucide-react";
 import { Space, Task, Sprint, User } from "@/types";
+import { getTaskTransferredOrigin } from "@/hooks/useSprints";
 
 export interface SpaceMember {
   id?: number | { userId?: number };
@@ -81,6 +82,10 @@ export const getShortSprintName = (name?: string): string => {
   return trimmed;
 };
 
+// Giới hạn thu phóng theo yêu cầu (Tối thiểu 40% - Tối đa 100%)
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 1.0;
+
 export function SpaceProgressMindmap({
   space,
   tasks,
@@ -118,6 +123,7 @@ export function SpaceProgressMindmap({
 
   // Node Hover Tooltip States
   const [hoveredTaskId, setHoveredTaskId] = useState<number | null>(null);
+  const [hoveredNodeKey, setHoveredNodeKey] = useState<string | null>(null);
   const [hoveredSprintId, setHoveredSprintId] = useState<number | null>(null);
   const [hoveredSpace, setHoveredSpace] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<number | null>(null);
@@ -353,13 +359,27 @@ export function SpaceProgressMindmap({
     });
 
     sortedSprints.forEach((sp) => {
-      const spTasks = tasks.filter((t) => t.sprintId === sp.id);
+      const spStatus = (sp.status || "").toUpperCase();
+      const isClosed = spStatus === "CLOSED";
+
+      // Lấy danh sách tasks thuộc sprint này + tasks trễ hạn lưu vết từ sprint đã đóng này
+      const spTasks = tasks.filter((t) => {
+        if (t.sprintId === sp.id) return true;
+        if (isClosed) {
+          const transferred = getTaskTransferredOrigin(t);
+          return (
+            transferred.isTransferred &&
+            transferred.originSprintName?.toLowerCase().trim() ===
+            sp.name.toLowerCase().trim()
+          );
+        }
+        return false;
+      });
+
       const doneCount = spTasks.filter((t) => t.status === "DONE").length;
       const pct =
         spTasks.length > 0 ? Math.round((doneCount / spTasks.length) * 100) : 0;
 
-      const spStatus = (sp.status || "").toUpperCase();
-      const isClosed = spStatus === "CLOSED";
       const isActive = !isClosed && sp.id === activeSprintId;
       const is100Done = pct === 100 && spTasks.length > 0;
       const isClosedIncomplete = isClosed && !is100Done;
@@ -415,7 +435,7 @@ export function SpaceProgressMindmap({
 
   // Status visual attributes
   const getTaskVisualProps = useCallback(
-    (task: Task, isSprintActive: boolean) => {
+    (task: Task, isSprintActive: boolean, isGhostTransferred: boolean = false) => {
       const isOverdue =
         task.status !== "DONE" && task.dueDate && task.dueDate < today;
       const isBlocked = !!task.riskWarning;
@@ -430,7 +450,18 @@ export function SpaceProgressMindmap({
       let statusLabel = "Cần làm";
       let statusBadgeColor = "bg-gray-100 text-gray-700 border-gray-300";
 
-      if (isOverdue || isBlocked) {
+      if (isGhostTransferred) {
+        badge = (
+          <div
+            className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0"
+            title="Công việc trễ hạn từ sprint đã đóng (Lưu vết theo dõi)"
+          >
+            !
+          </div>
+        );
+        statusLabel = "Lưu vết trễ hạn";
+        statusBadgeColor = "bg-amber-100 text-amber-900 border-amber-300";
+      } else if (isOverdue || isBlocked) {
         badge = (
           <div
             className="w-4 h-4 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0"
@@ -468,7 +499,10 @@ export function SpaceProgressMindmap({
       let borderClass = "border border-gray-200 hover:border-gray-400";
       let bgClass = "bg-white hover:bg-slate-50";
 
-      if (isMine) {
+      if (isGhostTransferred) {
+        borderClass = "border-2 border-dashed border-amber-300";
+        bgClass = "bg-amber-50/70 hover:bg-amber-100/80";
+      } else if (isMine) {
         if (isSprintActive || task.status === "IN_PROGRESS") {
           borderClass =
             "border-2 border-[#2563EB] ring-2 ring-[#93C5FD] shadow-md animate-pulse";
@@ -479,12 +513,13 @@ export function SpaceProgressMindmap({
         }
       }
 
-      // Filter opacity
-      let isDimmed = false;
+      // Filter opacity: ghost tasks always visually dimmed
+      let isDimmed = isGhostTransferred;
       if (filterMode === "my_tasks" && !isMine) isDimmed = true;
       if (filterMode === "in_progress" && task.status !== "IN_PROGRESS")
         isDimmed = true;
-      if (filterMode === "risks" && !isOverdue && !isBlocked) isDimmed = true;
+      if (filterMode === "risks" && !isOverdue && !isBlocked && !isGhostTransferred)
+        isDimmed = true;
 
       return {
         badge,
@@ -516,7 +551,7 @@ export function SpaceProgressMindmap({
 
       const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
       setScale((prevScale) => {
-        const nextScale = Math.min(Math.max(prevScale * zoomFactor, 0.25), 2.2);
+        const nextScale = Math.min(Math.max(prevScale * zoomFactor, MIN_SCALE), MAX_SCALE);
 
         setPan((prevPan) => {
           const nextPanX =
@@ -606,7 +641,7 @@ export function SpaceProgressMindmap({
       const factor = currentDist / touchStartRef.current.dist;
       touchStartRef.current.dist = currentDist;
 
-      setScale((prev) => Math.min(Math.max(prev * factor, 0.25), 2.2));
+      setScale((prev) => Math.min(Math.max(prev * factor, MIN_SCALE), MAX_SCALE));
     }
   };
 
@@ -622,7 +657,7 @@ export function SpaceProgressMindmap({
     const centerY = container.clientHeight / 2;
 
     setScale((prev) => {
-      const next = Math.min(prev * 1.25, 2.2);
+      const next = Math.min(prev * 1.25, MAX_SCALE);
       setPan((p) => ({
         x: centerX - (centerX - p.x) * (next / prev),
         y: centerY - (centerY - p.y) * (next / prev),
@@ -638,7 +673,7 @@ export function SpaceProgressMindmap({
     const centerY = container.clientHeight / 2;
 
     setScale((prev) => {
-      const next = Math.max(prev / 1.25, 0.25);
+      const next = Math.max(prev / 1.25, MIN_SCALE);
       setPan((p) => ({
         x: centerX - (centerX - p.x) * (next / prev),
         y: centerY - (centerY - p.y) * (next / prev),
@@ -648,7 +683,7 @@ export function SpaceProgressMindmap({
   };
 
   const resetZoom = () => {
-    setScale(1);
+    setScale(MAX_SCALE);
     setPan({ x: 80, y: 70 });
   };
 
@@ -665,7 +700,7 @@ export function SpaceProgressMindmap({
 
     const scaleX = (containerWidth - 120) / contentWidth;
     const scaleY = (containerHeight - 120) / contentHeight;
-    const targetScale = Math.min(Math.max(Math.min(scaleX, scaleY), 0.35), 1.1);
+    const targetScale = Math.min(Math.max(Math.min(scaleX, scaleY), MIN_SCALE), MAX_SCALE);
 
     const targetPanX = Math.max(
       40,
@@ -764,11 +799,14 @@ export function SpaceProgressMindmap({
       }
 
       const modeToUse = targetMode || layoutMode;
-      const nextScale = targetScale !== undefined ? targetScale : (scaleRef.current || 1);
+      const clampedScale = targetScale !== undefined
+        ? Math.min(Math.max(targetScale, MIN_SCALE), MAX_SCALE)
+        : undefined;
+      const nextScale = clampedScale !== undefined ? clampedScale : (scaleRef.current || 1);
 
-      if (targetScale !== undefined) {
-        setScale(targetScale);
-        scaleRef.current = targetScale;
+      if (clampedScale !== undefined) {
+        setScale(clampedScale);
+        scaleRef.current = clampedScale;
       }
 
       const performCentering = () => {
@@ -923,22 +961,14 @@ export function SpaceProgressMindmap({
               {activeSprint && (
                 <button
                   onClick={() => centerOnActiveSprint(1)}
-                  title={`Bấm để chỉ thẳng vào ${activeSprint.name} (Thu phóng 100%)${activeSprint.goal ? ` • Mục tiêu: ${activeSprint.goal}` : ""}`}
+                  title={`Bấm để chỉ thẳng vào ${activeSprint.name} (Thu phóng 100%)`}
                   className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200 transition-all cursor-pointer group shadow-2xs shrink-0"
                 >
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping shrink-0" />
                   <span className="text-blue-500 font-medium">Sprint:</span>
-                  <span className="font-extrabold group-hover:underline truncate max-w-[170px]">
-                    {getShortSprintName(activeSprint.name)}
+                  <span className="font-extrabold group-hover:underline truncate max-w-[220px]" title={activeSprint.name}>
+                    {activeSprint.name}
                   </span>
-                  {activeSprint.goal && (
-                    <span
-                      className="font-semibold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full text-[10px] truncate max-w-[200px]"
-                      title={`Mục tiêu: ${activeSprint.goal}`}
-                    >
-                      🎯 {activeSprint.goal}
-                    </span>
-                  )}
                   <Navigation className="w-3 h-3 text-blue-600 shrink-0" />
                 </button>
               )}
@@ -953,8 +983,8 @@ export function SpaceProgressMindmap({
             <button
               onClick={() => handleLayoutModeChange("timeline")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${layoutMode === "timeline"
-                  ? "bg-[#1A73E8] text-white shadow-xs"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                ? "bg-[#1A73E8] text-white shadow-xs"
+                : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
                 }`}
             >
               Lộ trình ngang
@@ -962,8 +992,8 @@ export function SpaceProgressMindmap({
             <button
               onClick={() => handleLayoutModeChange("tree")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${layoutMode === "tree"
-                  ? "bg-[#1A73E8] text-white shadow-xs"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                ? "bg-[#1A73E8] text-white shadow-xs"
+                : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
                 }`}
             >
               Cây phân nhánh
@@ -1008,8 +1038,8 @@ export function SpaceProgressMindmap({
           <button
             onClick={() => setShowLegend(!showLegend)}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-2xs shrink-0 ${showLegend
-                ? "bg-amber-50 text-amber-900 border-amber-300 ring-2 ring-amber-200"
-                : "bg-[#F8FAFC] text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-black"
+              ? "bg-amber-50 text-amber-900 border-amber-300 ring-2 ring-amber-200"
+              : "bg-[#F8FAFC] text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-black"
               }`}
           >
             <HelpCircle className="w-3.5 h-3.5 text-gray-500" />
@@ -1195,14 +1225,6 @@ export function SpaceProgressMindmap({
                               <h4 className="font-extrabold text-sm truncate" title={group.title}>
                                 {group.shortTitle}
                               </h4>
-                              {group.sprint?.goal && (
-                                <span
-                                  className="text-[10px] font-medium text-blue-700 bg-blue-100/70 border border-blue-200/80 px-1.5 py-0.5 rounded-md truncate max-w-[160px] shrink-0"
-                                  title={`Mục tiêu: ${group.sprint.goal}`}
-                                >
-                                  🎯 {group.sprint.goal}
-                                </span>
-                              )}
                             </div>
                             <p className="text-[10px] opacity-75">
                               {group.isDone || group.percent === 100
@@ -1250,12 +1272,6 @@ export function SpaceProgressMindmap({
                                 {group.percent}%
                               </span>
                             </div>
-                            {group.sprint?.goal && (
-                              <div className="p-2 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-900 text-[11px] leading-snug">
-                                <span className="font-bold text-blue-700">🎯 Mục tiêu: </span>
-                                <span>{group.sprint.goal}</span>
-                              </div>
-                            )}
                             <div className="text-[11px] text-gray-600 space-y-1">
                               <p>
                                 Tiến độ:{" "}
@@ -1301,28 +1317,47 @@ export function SpaceProgressMindmap({
                           {/* Task Cards Column */}
                           <div className="w-full space-y-3 relative pl-4 border-l-2 border-dashed border-[#93C5FD]">
                             {group.tasks.map((task) => {
+                              const isGhost =
+                                Boolean(group.sprint?.id) &&
+                                task.sprintId !== group.sprint?.id;
                               const visual = getTaskVisualProps(
                                 task,
-                                group.isActive
+                                group.isActive,
+                                isGhost
                               );
                               const assignee = getAssigneeInfo(task);
-                              const isHovered = hoveredTaskId === task.id;
+                              const nodeKey = `${group.key}-${task.id}`;
+                              const isDirectHovered = hoveredNodeKey === nodeKey;
+                              const isLinkedHovered =
+                                hoveredTaskId === task.id && !isDirectHovered;
                               const isHighlighted =
                                 highlightedTaskId === task.id;
 
                               return (
                                 <div
-                                  id={`mindmap-task-${task.id}`}
-                                  key={task.id}
-                                  onClick={() => handleTaskNodeClick(task)}
-                                  onMouseEnter={() =>
-                                    setHoveredTaskId(task.id)
+                                  id={
+                                    isGhost
+                                      ? `mindmap-task-ghost-${group.key}-${task.id}`
+                                      : `mindmap-task-${task.id}`
                                   }
-                                  onMouseLeave={() => setHoveredTaskId(null)}
+                                  key={nodeKey}
+                                  onClick={() => handleTaskNodeClick(task)}
+                                  onMouseEnter={() => {
+                                    setHoveredTaskId(task.id);
+                                    setHoveredNodeKey(nodeKey);
+                                  }}
+                                  onMouseLeave={() => {
+                                    setHoveredTaskId(null);
+                                    setHoveredNodeKey(null);
+                                  }}
                                   className={`relative w-full p-3.5 rounded-2xl transition-all duration-200 cursor-pointer text-xs shadow-xs ${visual.bgClass
                                     } ${visual.borderClass} ${visual.isDimmed
-                                      ? "opacity-30 grayscale"
-                                      : "hover:scale-102 hover:shadow-md"
+                                      ? isLinkedHovered
+                                        ? "opacity-100 ring-2 ring-amber-400 scale-[1.02] shadow-md"
+                                        : "opacity-80 hover:opacity-100 hover:scale-102 hover:shadow-md"
+                                      : isLinkedHovered
+                                        ? "ring-2 ring-blue-400 scale-[1.02] shadow-md"
+                                        : "hover:scale-102 hover:shadow-md"
                                     } ${isHighlighted
                                       ? "ring-4 ring-blue-500 scale-105 shadow-xl"
                                       : ""
@@ -1337,6 +1372,11 @@ export function SpaceProgressMindmap({
                                         <span className="font-mono font-bold text-gray-500">
                                           #{task.id}
                                         </span>
+                                        {isGhost && (
+                                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-1.5 py-0.2 rounded text-[8px]">
+                                            LƯU VẾT TRỄ HẠN
+                                          </span>
+                                        )}
                                         {visual.isMine && (
                                           <span className="bg-blue-600 text-white font-extrabold px-1.5 py-0.2 rounded text-[9px]">
                                             CỦA BẠN
@@ -1371,7 +1411,7 @@ export function SpaceProgressMindmap({
                                   </div>
 
                                   {/* TASK HOVER POPUP: POSITIONED ABOVE TASK CARD */}
-                                  {isHovered && (
+                                  {isDirectHovered && (
                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[100] w-80 p-3.5 bg-white border-2 border-black rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] text-xs space-y-2 pointer-events-none animate-in fade-in zoom-in-95">
                                       <div className="flex items-center justify-between border-b pb-1 font-bold">
                                         <span className="font-mono text-[10px] bg-yellow-200 px-2 py-0.5 rounded border border-black/20">
@@ -1418,6 +1458,16 @@ export function SpaceProgressMindmap({
                                           {task.riskWarning}
                                         </div>
                                       )}
+                                      {(() => {
+                                        const match = task.description?.match(/\[(?:Chuyển từ|Tồn đọng từ):\s*([^\]\(\n]+)(?:\([^\)]+\))?\]/i);
+                                        if (!match || !match[1]) return null;
+                                        return (
+                                          <div className="p-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[10px] flex items-center gap-1.5 font-bold shadow-2xs">
+                                            <span>⚠️</span>
+                                            <span>Tồn đọng từ: {match[1].trim()}</span>
+                                          </div>
+                                        );
+                                      })()}
                                       <p className="text-[10px] text-blue-600 font-semibold text-center italic">
                                         Nhấp chuột để mở chi tiết công việc
                                       </p>
@@ -1578,14 +1628,6 @@ export function SpaceProgressMindmap({
                               <span className="font-extrabold text-xs truncate" title={group.title}>
                                 {group.shortTitle}
                               </span>
-                              {group.sprint?.goal && (
-                                <span
-                                  className="text-[9px] font-medium text-blue-700 bg-blue-100/70 border border-blue-200/80 px-1.5 py-0.5 rounded-md truncate max-w-[130px] shrink-0"
-                                  title={`Mục tiêu: ${group.sprint.goal}`}
-                                >
-                                  🎯 {group.sprint.goal}
-                                </span>
-                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -1618,12 +1660,6 @@ export function SpaceProgressMindmap({
                                   {group.percent}%
                                 </span>
                               </div>
-                              {group.sprint?.goal && (
-                                <div className="p-2 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-900 text-[11px] leading-snug">
-                                  <span className="font-bold text-blue-700">🎯 Mục tiêu: </span>
-                                  <span>{group.sprint.goal}</span>
-                                </div>
-                              )}
                               <div className="text-[11px] text-gray-600 space-y-1">
                                 <p>
                                   Tiến độ:{" "}
@@ -1659,26 +1695,47 @@ export function SpaceProgressMindmap({
                         {isExpanded && hasTasks && (
                           <div className="flex flex-col space-y-3 relative pl-6 border-l-2 border-dashed border-[#93C5FD]">
                             {group.tasks.map((task) => {
+                              const isGhost =
+                                Boolean(group.sprint?.id) &&
+                                task.sprintId !== group.sprint?.id;
                               const visual = getTaskVisualProps(
                                 task,
-                                group.isActive
+                                group.isActive,
+                                isGhost
                               );
                               const assignee = getAssigneeInfo(task);
-                              const isHovered = hoveredTaskId === task.id;
+                              const nodeKey = `${group.key}-${task.id}`;
+                              const isDirectHovered = hoveredNodeKey === nodeKey;
+                              const isLinkedHovered =
+                                hoveredTaskId === task.id && !isDirectHovered;
                               const isHighlighted =
                                 highlightedTaskId === task.id;
 
                               return (
                                 <div
-                                  id={`mindmap-task-${task.id}`}
-                                  key={task.id}
+                                  id={
+                                    isGhost
+                                      ? `mindmap-task-ghost-${group.key}-${task.id}`
+                                      : `mindmap-task-${task.id}`
+                                  }
+                                  key={nodeKey}
                                   onClick={() => handleTaskNodeClick(task)}
-                                  onMouseEnter={() => setHoveredTaskId(task.id)}
-                                  onMouseLeave={() => setHoveredTaskId(null)}
+                                  onMouseEnter={() => {
+                                    setHoveredTaskId(task.id);
+                                    setHoveredNodeKey(nodeKey);
+                                  }}
+                                  onMouseLeave={() => {
+                                    setHoveredTaskId(null);
+                                    setHoveredNodeKey(null);
+                                  }}
                                   className={`w-80 sm:w-96 p-3 rounded-xl border-2 text-xs font-medium cursor-pointer transition-all ${visual.bgClass
                                     } ${visual.borderClass} ${visual.isDimmed
-                                      ? "opacity-30 grayscale"
-                                      : "hover:scale-102 hover:shadow-md"
+                                      ? isLinkedHovered
+                                        ? "opacity-100 ring-2 ring-amber-400 scale-[1.02] shadow-md"
+                                        : "opacity-80 hover:opacity-100 hover:scale-102 hover:shadow-md"
+                                      : isLinkedHovered
+                                        ? "ring-2 ring-blue-400 scale-[1.02] shadow-md"
+                                        : "hover:scale-102 hover:shadow-md"
                                     } ${isHighlighted
                                       ? "ring-4 ring-blue-500 scale-105 shadow-xl"
                                       : ""
@@ -1692,6 +1749,11 @@ export function SpaceProgressMindmap({
                                       <span className="font-mono font-bold text-gray-500">
                                         #{task.id}
                                       </span>
+                                      {isGhost && (
+                                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-1.5 py-0.2 rounded text-[8px]">
+                                          LƯU VẾT TRỄ HẠN
+                                        </span>
+                                      )}
                                       {visual.isMine && (
                                         <span className="bg-blue-600 text-white font-extrabold px-1 py-0.2 rounded text-[8px]">
                                           VIỆC CỦA BẠN
@@ -1715,7 +1777,7 @@ export function SpaceProgressMindmap({
                                   <div className="shrink-0">{visual.badge}</div>
 
                                   {/* TASK HOVER POPUP IN TREE MODE: POSITIONED ABOVE TASK CARD */}
-                                  {isHovered && (
+                                  {isDirectHovered && (
                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-[100] w-80 p-3.5 bg-white border-2 border-black rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.2)] text-xs space-y-1.5 pointer-events-none animate-in fade-in zoom-in-95">
                                       <div className="flex items-center justify-between font-bold border-b pb-1">
                                         <span>#{task.id}</span>
@@ -1741,6 +1803,16 @@ export function SpaceProgressMindmap({
                                           <strong className="font-mono">{task.dueDate || "Chưa đặt"}</strong>
                                         </p>
                                       </div>
+                                      {(() => {
+                                        const match = task.description?.match(/\[(?:Chuyển từ|Tồn đọng từ):\s*([^\]\(\n]+)(?:\([^\)]+\))?\]/i);
+                                        if (!match || !match[1]) return null;
+                                        return (
+                                          <div className="p-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[10px] flex items-center gap-1.5 font-bold shadow-2xs">
+                                            <span>⚠️</span>
+                                            <span>Tồn đọng từ: {match[1].trim()}</span>
+                                          </div>
+                                        );
+                                      })()}
 
                                       {/* Pointer arrow pointing down to task card */}
                                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
@@ -1861,23 +1933,26 @@ export function SpaceProgressMindmap({
               {activeSprint && (
                 <button
                   onClick={() => centerOnActiveSprint(1)}
-                  className="w-full text-left p-2 rounded-xl bg-blue-50/90 hover:bg-blue-100 border border-blue-200/80 transition-all flex items-center justify-between gap-2 group cursor-pointer"
-                  title={`Bấm để chuyển nhanh tới ${activeSprint.name} (Thu phóng 100%)${activeSprint.goal ? ` • Mục tiêu: ${activeSprint.goal}` : ""}`}
+                  className="w-full text-left p-2.5 rounded-xl bg-blue-50/90 hover:bg-blue-100 border border-blue-200/80 transition-all flex items-center justify-between gap-2 group cursor-pointer relative"
+                  title={`Bấm để chuyển nhanh tới ${activeSprint.name} (Thu phóng 100%)`}
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="relative group/sprintTarget min-w-0 flex-1">
                     <div className="flex items-center gap-1 text-[9px] font-bold text-blue-700 uppercase tracking-wider">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping shrink-0" />
                       <span>Sprint đang diễn ra</span>
                     </div>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="font-extrabold text-xs text-blue-950 truncate group-hover:text-blue-700 transition-colors">
-                        {getShortSprintName(activeSprint.name)}
+                    <p className="font-extrabold text-xs text-blue-950 truncate group-hover/sprintTarget:text-blue-700 transition-colors pt-0.5">
+                      {activeSprint.name}
+                    </p>
+
+                    {/* Tooltip hiển thị tên Sprint đầy đủ đẹp mắt khi di chuột vào */}
+                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover/sprintTarget:flex flex-col gap-1 z-50 min-w-[220px] max-w-[280px] p-2.5 bg-gray-900 text-white rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
+                      <span className="text-[9px] font-mono font-bold text-blue-300 uppercase tracking-wider">
+                        Tên Sprint đầy đủ
+                      </span>
+                      <p className="font-bold text-white text-xs leading-snug break-words">
+                        {activeSprint.name}
                       </p>
-                      {activeSprint.goal && (
-                        <span className="text-[10px] text-blue-600 truncate font-medium shrink-0 max-w-[105px]" title={activeSprint.goal}>
-                          • 🎯 {activeSprint.goal}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
@@ -1920,10 +1995,10 @@ export function SpaceProgressMindmap({
                           }
                         }}
                         className={`px-1.5 py-0.5 rounded-xs border text-[8px] font-bold shrink-0 truncate max-w-[55px] transition-all cursor-pointer ${isAct
-                            ? "bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300 ring-offset-1 animate-pulse"
-                            : g.isDone
-                              ? "bg-emerald-400 border-emerald-600 text-emerald-950 hover:bg-emerald-500"
-                              : "bg-slate-200 border-slate-300 text-slate-700 hover:bg-slate-300"
+                          ? "bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300 ring-offset-1 animate-pulse"
+                          : g.isDone
+                            ? "bg-emerald-400 border-emerald-600 text-emerald-950 hover:bg-emerald-500"
+                            : "bg-slate-200 border-slate-300 text-slate-700 hover:bg-slate-300"
                           }`}
                         title={`Bấm để chuyển tới ${g.title}${isAct ? " (Thu phóng 100%)" : ""}`}
                       >

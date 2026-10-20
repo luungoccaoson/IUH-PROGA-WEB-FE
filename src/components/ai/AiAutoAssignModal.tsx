@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Sparkles,
   Users,
@@ -18,11 +18,157 @@ import {
   Briefcase,
   AlertCircle,
   Clock,
+  Calendar,
+  Terminal,
+  Monitor,
+  ShieldCheck,
+  Cloud,
+  FileText,
+  Flame,
 } from "lucide-react";
 import { DecomposedTaskItem } from "@/services/ai.service";
 import { User } from "@/types";
 import { getMemberCapabilities, RoleCategory } from "@/utils/roleAssignment";
 import { useAuthStore } from "@/stores/useAuthStore";
+
+// Reusable Searchable Member Picker Popover
+interface TaskMemberPickerProps {
+  currentUserId?: number;
+  users: User[];
+  onSelect: (userId: number) => void;
+  align?: "left" | "right";
+}
+
+function TaskMemberPicker({
+  currentUserId,
+  users,
+  onSelect,
+  align = "right",
+}: TaskMemberPickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedUser = users.find((u) => u.id === currentUserId);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase();
+    return users.filter(
+      (u) =>
+        (u.fullName || "").toLowerCase().includes(q) ||
+        (u.username || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  const getInitials = (name?: string) => {
+    if (!name || !name.trim()) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-xl text-xs font-semibold text-slate-800 shadow-2xs transition-all cursor-pointer min-w-[145px] max-w-[180px] justify-between"
+        title="Bấm để chọn hoặc tìm kiếm thành viên gán task"
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+            {selectedUser ? getInitials(selectedUser.fullName || selectedUser.username) : "?"}
+          </div>
+          <span className="truncate text-xs font-semibold text-slate-800">
+            {selectedUser ? selectedUser.fullName || selectedUser.username : "Chọn người"}
+          </span>
+        </div>
+        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute ${
+            align === "right" ? "right-0" : "left-0"
+          } top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150`}
+        >
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo tên..."
+              autoFocus
+              className="w-full pl-8 pr-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-slate-50/70"
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
+            {filtered.length === 0 ? (
+              <div className="p-3 text-center text-[11px] text-slate-400">
+                Không tìm thấy thành viên phù hợp
+              </div>
+            ) : (
+              filtered.map((u) => {
+                const isSelected = u.id === currentUserId;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(u.id);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50 text-blue-800 font-bold"
+                        : "hover:bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                        {getInitials(u.fullName || u.username)}
+                      </div>
+                      <div className="truncate">
+                        <span className="block truncate text-xs font-semibold">
+                          {u.fullName || u.username}
+                        </span>
+                        <span className="block truncate text-[10px] text-slate-400 font-mono">
+                          {u.jobTitle || "Thành viên"}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface AiAutoAssignModalProps {
   isOpen: boolean;
@@ -91,15 +237,18 @@ export function AiAutoAssignModal({
           if (!next[u.id]) {
             // Preset realistic scenario per user request:
             // Member 1: Finishes Friday (1 pending task, only 1.5 busy days remaining, frees up early)
-            // Member 2: Finishes Sunday (3 pending tasks, 4.0 busy days remaining, busy until weekend)
+            // Member 2: Finishes Saturday (2 pending tasks, 2.5 busy days remaining)
+            // Member 3: Finishes Sunday (3 pending tasks, 4.0 busy days remaining)
             if (idx === 0) {
               next[u.id] = { pendingTasks: 1, pendingDays: 1.5, finishDay: "Thứ Sáu" };
             } else if (idx === 1) {
+              next[u.id] = { pendingTasks: 2, pendingDays: 2.5, finishDay: "Thứ Bảy" };
+            } else if (idx === 2) {
               next[u.id] = { pendingTasks: 3, pendingDays: 4.0, finishDay: "Chủ Nhật" };
             } else {
               next[u.id] = {
                 pendingTasks: idx % 2 === 0 ? 1 : 2,
-                pendingDays: idx % 2 === 0 ? 1.5 : 3.0,
+                pendingDays: idx % 2 === 0 ? 1.5 : 2.5,
                 finishDay: idx % 2 === 0 ? "Thứ Sáu" : "Thứ Bảy",
               };
             }
@@ -113,12 +262,14 @@ export function AiAutoAssignModal({
   // Quick preset helper for changing member's completion day
   const handleChangeMemberWorkload = (
     userId: number,
-    preset: "FRIDAY" | "SUNDAY" | "WEDNESDAY" | "FREE"
+    preset: "FRIDAY" | "SATURDAY" | "SUNDAY" | "WEDNESDAY" | "FREE"
   ) => {
     setMemberWorkloads((prev) => {
       const next = { ...prev };
       if (preset === "FRIDAY") {
         next[userId] = { pendingTasks: 1, pendingDays: 1.5, finishDay: "Thứ Sáu" };
+      } else if (preset === "SATURDAY") {
+        next[userId] = { pendingTasks: 2, pendingDays: 2.5, finishDay: "Thứ Bảy" };
       } else if (preset === "SUNDAY") {
         next[userId] = { pendingTasks: 3, pendingDays: 4.0, finishDay: "Chủ Nhật" };
       } else if (preset === "WEDNESDAY") {
@@ -140,6 +291,66 @@ export function AiAutoAssignModal({
     return Array.from(sSet);
   }, [availableSprints, tasks]);
 
+  // Helper to categorize task role
+  const getTaskRoleCategory = (task: DecomposedTaskItem): RoleCategory => {
+    const roleStr = (task.assignedRole || "").toLowerCase();
+    const titleStr = (task.title || "").toLowerCase();
+    const descStr = (task.description || "").toLowerCase();
+
+    if (
+      roleStr.includes("qa") ||
+      roleStr.includes("tester") ||
+      roleStr.includes("qc") ||
+      titleStr.includes("kiểm thử") ||
+      titleStr.includes("test")
+    ) {
+      return "QA";
+    }
+    if (
+      roleStr.includes("pm") ||
+      roleStr.includes("ba") ||
+      roleStr.includes("quản lý") ||
+      roleStr.includes("business") ||
+      titleStr.includes("phân tích") ||
+      titleStr.includes("nghiệp vụ") ||
+      titleStr.includes("yêu cầu")
+    ) {
+      return "MANAGEMENT";
+    }
+    if (
+      roleStr.includes("devops") ||
+      roleStr.includes("system") ||
+      roleStr.includes("hạ tầng") ||
+      titleStr.includes("docker") ||
+      titleStr.includes("deploy") ||
+      titleStr.includes("ci/cd")
+    ) {
+      return "DEVOPS";
+    }
+    if (
+      roleStr.includes("frontend") ||
+      roleStr.includes("ui") ||
+      titleStr.includes("giao diện") ||
+      titleStr.includes("màn hình") ||
+      titleStr.includes("component") ||
+      descStr.includes("react")
+    ) {
+      return "FRONTEND";
+    }
+    if (
+      roleStr.includes("backend") ||
+      roleStr.includes("database") ||
+      roleStr.includes("api") ||
+      titleStr.includes("api") ||
+      titleStr.includes("csdl") ||
+      titleStr.includes("schema") ||
+      titleStr.includes("service")
+    ) {
+      return "BACKEND";
+    }
+    return "GENERAL";
+  };
+
   // Filter tasks based on selected sprint and unassigned filter
   const filteredTasksWithIndex = useMemo(() => {
     return tasks
@@ -156,12 +367,18 @@ export function AiAutoAssignModal({
   }, [tasks, selectedSprint, unassignedOnly]);
 
   // Calculate Auto Assignment Preview based on:
-  // 1. Role capability matching
-  // 2. Capacity & Completion Status: Members finishing earlier (e.g. Friday) get more tasks than those finishing later (e.g. Sunday)
+  // 1. Role capability matching (Backend, Frontend, QA, DevOps, BA)
+  // 2. Task Complexity (LPT - Longest Processing Time First: High complexity tasks 3d+ assigned first)
+  // 3. Workload of previous tasks: Members finishing earlier (e.g. Friday 1.5d vs Saturday 2.5d vs Sunday 4.0d)
   const autoAssignedPlan = useMemo(() => {
     if (currentSpaceUsers.length === 0 || filteredTasksWithIndex.length === 0) {
       return {
-        assignments: [] as { taskIndex: number; assignedUser: User; category: RoleCategory; reason: string }[],
+        assignments: [] as {
+          taskIndex: number;
+          assignedUser: User;
+          category: RoleCategory;
+          reason: string;
+        }[],
       };
     }
 
@@ -187,7 +404,7 @@ export function AiAutoAssignModal({
       currentAssignedCounts[u.id] = 0;
     });
 
-    // Helper: Pick candidate with lowest accumulated load (Least-Loaded Capacity Greedy)
+    // Helper: Pick candidate with lowest accumulated load
     const pickLeastLoaded = (candidates: User[]): User => {
       const pool = candidates.length > 0 ? candidates : currentSpaceUsers;
       let chosen = pool[0];
@@ -208,103 +425,57 @@ export function AiAutoAssignModal({
       return chosen;
     };
 
-    const assignments = filteredTasksWithIndex.map(({ task, originalIndex }) => {
+    // Sort tasks by estimatedDays descending (LPT)
+    // Tasks with more working days are scheduled first so members with earlier finish times take on larger tasks
+    const sortedTasks = [...filteredTasksWithIndex].sort((a, b) => {
+      const daysA = Math.max(1, Math.round(a.task.estimatedDays || 2));
+      const daysB = Math.max(1, Math.round(b.task.estimatedDays || 2));
+      return daysB - daysA;
+    });
+
+    const assignmentMap: Record<
+      number,
+      { assignedUser: User; category: RoleCategory; reason: string }
+    > = {};
+
+    sortedTasks.forEach(({ task, originalIndex }) => {
       // Check manual override first
       const overrideId = manualOverrides[originalIndex];
       if (overrideId) {
         const found = currentSpaceUsers.find((u) => u.id === overrideId);
         if (found) {
-          const taskDays = task.estimatedDays || 2;
+          const taskDays = Math.max(1, Math.round(task.estimatedDays || 2));
           currentAccumulatedDays[found.id] = (currentAccumulatedDays[found.id] || 0) + taskDays;
           currentAssignedCounts[found.id] = (currentAssignedCounts[found.id] || 0) + 1;
-          return {
-            taskIndex: originalIndex,
+          assignmentMap[originalIndex] = {
             assignedUser: found,
-            category: "GENERAL" as RoleCategory,
-            reason: `Đã chỉnh sửa thủ công: ${found.fullName || found.username}`,
+            category: getTaskRoleCategory(task),
+            reason: `Chỉnh sửa thủ công: ${found.fullName || found.username}`,
           };
+          return;
         }
       }
 
-      const roleStr = (task.assignedRole || "").toLowerCase();
-      const titleStr = (task.title || "").toLowerCase();
-      const descStr = (task.description || "").toLowerCase();
-      const taskDays = task.estimatedDays || 2;
+      const cat = getTaskRoleCategory(task);
+      const taskDays = Math.max(1, Math.round(task.estimatedDays || 2));
 
       let assigned: User | null = null;
-      let cat: RoleCategory = "GENERAL";
       let matchedSkill = "";
 
-      // 1. QA / Tester
-      if (
-        roleStr.includes("qa") ||
-        roleStr.includes("tester") ||
-        roleStr.includes("qc") ||
-        titleStr.includes("kiểm thử") ||
-        titleStr.includes("test")
-      ) {
-        cat = "QA";
+      if (cat === "QA") {
         matchedSkill = "QA / Kiểm thử";
-        if (qaList.length > 0) {
-          assigned = pickLeastLoaded(qaList);
-        }
-      }
-      // 2. Management / BA / PO
-      else if (
-        roleStr.includes("pm") ||
-        roleStr.includes("ba") ||
-        roleStr.includes("quản lý") ||
-        roleStr.includes("business") ||
-        titleStr.includes("phân tích") ||
-        titleStr.includes("nghiệp vụ") ||
-        titleStr.includes("yêu cầu")
-      ) {
-        cat = "MANAGEMENT";
+        if (qaList.length > 0) assigned = pickLeastLoaded(qaList);
+      } else if (cat === "MANAGEMENT") {
         matchedSkill = "Quản lý / BA";
-        if (mgmtList.length > 0) {
-          assigned = pickLeastLoaded(mgmtList);
-        }
-      }
-      // 3. DevOps / System / Cloud
-      else if (
-        roleStr.includes("devops") ||
-        roleStr.includes("system") ||
-        roleStr.includes("hạ tầng") ||
-        titleStr.includes("docker") ||
-        titleStr.includes("deploy") ||
-        titleStr.includes("ci/cd")
-      ) {
-        cat = "DEVOPS";
+        if (mgmtList.length > 0) assigned = pickLeastLoaded(mgmtList);
+      } else if (cat === "DEVOPS") {
         matchedSkill = "DevOps / Hạ tầng";
-        if (devopsList.length > 0) {
-          assigned = pickLeastLoaded(devopsList);
-        }
-      }
-      // 4. Frontend / UI
-      else if (
-        roleStr.includes("frontend") ||
-        roleStr.includes("ui") ||
-        titleStr.includes("giao diện") ||
-        titleStr.includes("màn hình") ||
-        titleStr.includes("component") ||
-        descStr.includes("react")
-      ) {
-        cat = "FRONTEND";
+        if (devopsList.length > 0) assigned = pickLeastLoaded(devopsList);
+      } else if (cat === "FRONTEND") {
         matchedSkill = "Frontend UI";
         const fePool = feList.length > 0 ? feList : fsList;
         assigned = pickLeastLoaded(fePool);
-      }
-      // 5. Backend / Database / API
-      else if (
-        roleStr.includes("backend") ||
-        roleStr.includes("database") ||
-        roleStr.includes("api") ||
-        titleStr.includes("api") ||
-        titleStr.includes("csdl") ||
-        titleStr.includes("schema") ||
-        titleStr.includes("service")
-      ) {
-        cat = "BACKEND";
+      } else if (cat === "BACKEND") {
         matchedSkill = "Backend / API";
         const bePool = beList.length > 0 ? beList : fsList;
         assigned = pickLeastLoaded(bePool);
@@ -316,21 +487,23 @@ export function AiAutoAssignModal({
       }
 
       // Accumulate workload for chosen member
-      const userWorkload = memberWorkloads[assigned.id] || { finishDay: "Thứ Sáu", pendingDays: 1.5, pendingTasks: 1 };
       currentAccumulatedDays[assigned.id] = (currentAccumulatedDays[assigned.id] || 0) + taskDays;
       currentAssignedCounts[assigned.id] = (currentAssignedCounts[assigned.id] || 0) + 1;
 
-      const reason = userWorkload.pendingDays <= 2
-        ? `Ưu tiên do xong việc cũ sớm (${userWorkload.finishDay}, chỉ còn ${userWorkload.pendingDays}d dở dang) • ${matchedSkill || "Tối ưu năng lực"}`
-        : `Phân bổ cân bằng tải sau khi hoàn tất việc cũ (${userWorkload.finishDay}, bận ${userWorkload.pendingDays}d) • ${matchedSkill || "Cân đối"}`;
-
-      return {
-        taskIndex: originalIndex,
+      assignmentMap[originalIndex] = {
         assignedUser: assigned,
         category: cat,
-        reason,
+        reason: `${matchedSkill || "Tối ưu năng lực"}`,
       };
     });
+
+    // Retain original order for consistent mapping
+    const assignments = filteredTasksWithIndex.map(({ originalIndex }) => ({
+      taskIndex: originalIndex,
+      assignedUser: assignmentMap[originalIndex]?.assignedUser || currentSpaceUsers[0],
+      category: assignmentMap[originalIndex]?.category || "GENERAL",
+      reason: assignmentMap[originalIndex]?.reason || "",
+    }));
 
     return { assignments };
   }, [filteredTasksWithIndex, currentSpaceUsers, manualOverrides, memberWorkloads]);
@@ -339,10 +512,20 @@ export function AiAutoAssignModal({
   const memberStats = useMemo(() => {
     return currentSpaceUsers.map((m) => {
       const assigned = autoAssignedPlan.assignments.filter((a) => a.assignedUser.id === m.id);
-      const totalAssignedDays = assigned.reduce((sum, item) => {
+      let totalAssignedDays = 0;
+      let highComplexityCount = 0;
+      let mediumComplexityCount = 0;
+      let lowComplexityCount = 0;
+
+      assigned.forEach((item) => {
         const t = tasks[item.taskIndex];
-        return sum + (t?.estimatedDays || 2);
-      }, 0);
+        const days = Math.max(1, Math.round(t?.estimatedDays || 2));
+        totalAssignedDays += days;
+        if (days >= 3) highComplexityCount++;
+        else if (days === 2) mediumComplexityCount++;
+        else lowComplexityCount++;
+      });
+
       const workload = memberWorkloads[m.id] || {
         pendingTasks: 1,
         pendingDays: 1.5,
@@ -355,9 +538,116 @@ export function AiAutoAssignModal({
         totalAssignedDays,
         workload,
         totalSprintLoadDays: workload.pendingDays + totalAssignedDays,
+        highComplexityCount,
+        mediumComplexityCount,
+        lowComplexityCount,
       };
     });
   }, [currentSpaceUsers, autoAssignedPlan, tasks, memberWorkloads]);
+
+  // Helper format Sprint badge hiển thị tên Sprint gọn gàng (rê chuột vào xem đầy đủ)
+  const getSprintShortBadge = (sprintName?: string) => {
+    if (!sprintName) return { shortName: "Sprint 1", fullName: "Sprint 1" };
+    const fullName = sprintName.trim();
+    // Bỏ phần "(Tuần X)" ở cuối nếu có để tên gọn gàng hơn mà vẫn giữ tên sprint
+    const cleanName = fullName.replace(/\s*\(Tuần\s*\d+\)\s*$/i, "").trim();
+    let shortName = cleanName;
+    if (shortName.length > 28) {
+      shortName = shortName.slice(0, 26).trim() + "...";
+    }
+
+    return {
+      shortName,
+      fullName,
+    };
+  };
+
+  // Helper hiển thị số ngày làm việc thực tế do AI tính trước đó (không chữ "Độ phức tạp", không số lẻ)
+  const getWorkDaysBadge = (days?: number) => {
+    const actualDays = Math.max(1, Math.round(days || 2));
+    if (actualDays >= 3) {
+      return {
+        label: `${actualDays} ngày`,
+        style: "bg-amber-50 text-amber-800 border-amber-200",
+      };
+    }
+    if (actualDays === 2) {
+      return {
+        label: `${actualDays} ngày`,
+        style: "bg-blue-50 text-blue-800 border-blue-200",
+      };
+    }
+    return {
+      label: `${actualDays} ngày`,
+      style: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    };
+  };
+
+  // Group tasks by role category for View BY_TASK
+  const roleGroups = useMemo(() => {
+    const order: {
+      cat: RoleCategory;
+      title: string;
+      badgeClass: string;
+      icon: React.ReactNode;
+    }[] = [
+      {
+        cat: "BACKEND",
+        title: "Backend & Cơ sở dữ liệu",
+        badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
+        icon: <Terminal className="w-4 h-4 text-amber-600" />,
+      },
+      {
+        cat: "FRONTEND",
+        title: "Frontend & Giao diện người dùng",
+        badgeClass: "bg-blue-100 text-blue-800 border-blue-200",
+        icon: <Monitor className="w-4 h-4 text-blue-600" />,
+      },
+      {
+        cat: "QA",
+        title: "Kiểm thử & Đảm bảo chất lượng (QA)",
+        badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+        icon: <ShieldCheck className="w-4 h-4 text-rose-600" />,
+      },
+      {
+        cat: "DEVOPS",
+        title: "DevOps & Hạ tầng triển khai",
+        badgeClass: "bg-purple-100 text-purple-800 border-purple-200",
+        icon: <Cloud className="w-4 h-4 text-purple-600" />,
+      },
+      {
+        cat: "MANAGEMENT",
+        title: "Quản lý & Phân tích nghiệp vụ (BA)",
+        badgeClass: "bg-slate-200 text-slate-800 border-slate-300",
+        icon: <FileText className="w-4 h-4 text-slate-600" />,
+      },
+      {
+        cat: "GENERAL",
+        title: "Nhiệm vụ chung & Khác",
+        badgeClass: "bg-gray-100 text-gray-800 border-gray-200",
+        icon: <Layers className="w-4 h-4 text-gray-600" />,
+      },
+    ];
+
+    return order
+      .map((g) => {
+        const groupTasks = filteredTasksWithIndex.filter(({ task, originalIndex }) => {
+          const assigned = autoAssignedPlan.assignments.find((a) => a.taskIndex === originalIndex);
+          const cat = assigned?.category || getTaskRoleCategory(task);
+          return cat === g.cat;
+        });
+        const totalDays = groupTasks.reduce(
+          (sum, { task }) => sum + Math.max(1, Math.round(task.estimatedDays || 2)),
+          0
+        );
+        return {
+          ...g,
+          tasks: groupTasks,
+          totalDays,
+        };
+      })
+      .filter((g) => g.tasks.length > 0);
+  }, [filteredTasksWithIndex, autoAssignedPlan]);
 
   // Apply assignments
   const handleApply = () => {
@@ -662,15 +952,15 @@ export function AiAutoAssignModal({
           </div>
         </div>
 
-        {/* 3 Metric Cards with Capacity Strategy */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+        {/* 2 Metric Cards (Đã bỏ Card 3 "Chiến lược cân bằng tải" theo góp ý của thầy) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
           {/* Card 1: Assigned Tasks */}
           <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center font-mono text-sm shrink-0">
               {totalAssignedTasks}
             </div>
             <div>
-              <span className="text-[11px] text-gray-500 font-mono block">Công việc được gán</span>
+              <span className="text-[11px] text-gray-500 font-mono block">Tổng công việc cần phân bổ</span>
               <span className="text-xs font-bold text-gray-900">{totalAssignedTasks} Tasks</span>
             </div>
           </div>
@@ -681,19 +971,8 @@ export function AiAutoAssignModal({
               {currentSpaceUsers.length}
             </div>
             <div>
-              <span className="text-[11px] text-gray-500 font-mono block">Thành viên tham gia</span>
+              <span className="text-[11px] text-gray-500 font-mono block">Thành viên tham gia Space</span>
               <span className="text-xs font-bold text-gray-900">{currentSpaceUsers.length} Người</span>
-            </div>
-          </div>
-
-          {/* Card 3: Strategy */}
-          <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-              <Cpu className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[11px] text-gray-500 font-mono block">Thuật toán phân chia</span>
-              <span className="text-xs font-bold text-gray-900">Năng lực theo tiến độ việc cũ</span>
             </div>
           </div>
         </div>
@@ -709,12 +988,12 @@ export function AiAutoAssignModal({
                 </h5>
               </div>
               <span className="text-[10px] text-indigo-700 font-mono bg-indigo-100/70 px-2 py-0.5 rounded-full font-bold">
-                Tự động ưu tiên người xong sớm
+                Tự động ưu tiên người rảnh sớm & cân đối độ phức tạp
               </span>
             </div>
 
             <p className="text-[11px] text-indigo-900/80 leading-relaxed">
-              💡 <strong>Nguyên lý điều phối:</strong> Thành viên xong việc cũ sớm hơn (ví dụ: Thứ Sáu) có nhiều ngày trống trong tuần nên AI tự động phân bổ nhiều task hơn. Thành viên bận đến Chủ Nhật sẽ nhận ít việc hơn để tránh quá tải.
+              💡 <strong>Nguyên lý điều phối:</strong> Ưu tiên thành viên có ngày hoàn thành việc cũ sớm hơn (ví dụ: Thứ Sáu chỉ còn 1.5d dở dang) nhận các việc có độ phức tạp cao hoặc nhận nhiều việc hơn. Thành viên bận đến Thứ Bảy (2.5d) hoặc Chủ Nhật (4.0d) sẽ nhận ít việc hoặc nhận việc có độ phức tạp thấp hơn để tổng tải công việc trong tuần được cân bằng đều.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-0.5">
@@ -748,8 +1027,27 @@ export function AiAutoAssignModal({
                           Nhận: {stat?.count || 0} tasks ({stat?.totalAssignedDays || 0}d)
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono block">
-                          Tải cũ: {w.pendingDays}d
+                          Tải cũ: {w.pendingDays}d ({w.finishDay})
                         </span>
+                        {stat && stat.count > 0 && (
+                          <div className="flex items-center gap-1 justify-end mt-0.5 text-[9px] font-bold font-mono">
+                            {stat.highComplexityCount > 0 && (
+                              <span className="text-rose-700 bg-rose-50 px-1 py-0.2 rounded border border-rose-200" title="Độ phức tạp cao (>= 3 ngày)">
+                                {stat.highComplexityCount} Cao
+                              </span>
+                            )}
+                            {stat.mediumComplexityCount > 0 && (
+                              <span className="text-amber-800 bg-amber-50 px-1 py-0.2 rounded border border-amber-200" title="Độ phức tạp vừa (2 ngày)">
+                                {stat.mediumComplexityCount} Vừa
+                              </span>
+                            )}
+                            {stat.lowComplexityCount > 0 && (
+                              <span className="text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200" title="Độ phức tạp thấp (1 ngày)">
+                                {stat.lowComplexityCount} Thấp
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -767,9 +1065,22 @@ export function AiAutoAssignModal({
                               ? "bg-emerald-600 text-white shadow-2xs"
                               : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
                           }`}
-                          title="Xong vào Thứ 6 (còn 1.5 ngày bận) -> Rảnh sớm, nhận nhiều việc"
+                          title="Xong vào Thứ 6 (còn 1.5 ngày bận) -> Rảnh sớm, nhận task phức tạp hoặc nhiều task hơn"
                         >
                           Thứ Sáu (1.5d)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangeMemberWorkload(u.id, "SATURDAY")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                            w.finishDay === "Thứ Bảy"
+                              ? "bg-amber-600 text-white shadow-2xs"
+                              : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+                          }`}
+                          title="Xong vào Thứ 7 (còn 2.5 ngày bận) -> Tải vừa phải"
+                        >
+                          Thứ Bảy (2.5d)
                         </button>
 
                         <button
@@ -777,8 +1088,8 @@ export function AiAutoAssignModal({
                           onClick={() => handleChangeMemberWorkload(u.id, "SUNDAY")}
                           className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
                             w.finishDay === "Chủ Nhật"
-                              ? "bg-amber-600 text-white shadow-2xs"
-                              : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+                              ? "bg-rose-600 text-white shadow-2xs"
+                              : "bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200"
                           }`}
                           title="Bận đến Chủ Nhật (còn 4 ngày bận) -> Nhận ít việc hơn"
                         >
@@ -917,6 +1228,8 @@ export function AiAutoAssignModal({
                           const t = tasks[taskIndex];
                           if (!t) return null;
                           const badge = getCategoryBadge(category);
+                          const sprintInfo = getSprintShortBadge(t.sprint);
+                          const workDaysBadge = getWorkDaysBadge(t.estimatedDays);
 
                           return (
                             <div
@@ -935,6 +1248,29 @@ export function AiAutoAssignModal({
                                 >
                                   {badge.label}
                                 </span>
+                                <div className="relative group/sprint shrink-0">
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[240px]"
+                                  >
+                                    <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
+                                    <span className="truncate">{sprintInfo.shortName}</span>
+                                  </span>
+                                  {/* Popup chi tiết Sprint ngay khi di chuột - cùng màu xanh trang nhã */}
+                                  <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/sprint:flex flex-col gap-0.5 z-50 min-w-[220px] max-w-[320px] p-2.5 bg-blue-50/95 text-blue-950 border border-blue-300 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
+                                    <div className="flex items-center gap-1 text-[10px] font-bold font-mono text-blue-700 uppercase pb-1 border-b border-blue-200">
+                                      <Calendar className="w-3 h-3 text-blue-600" /> Chi tiết Sprint
+                                    </div>
+                                    <p className="font-extrabold text-[11px] leading-snug text-blue-950 pt-0.5">
+                                      {sprintInfo.fullName}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span
+                                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border shrink-0 ${workDaysBadge.style}`}
+                                  title="Số ngày làm việc ước tính theo kế hoạch AI"
+                                >
+                                  ⏱️ {workDaysBadge.label}
+                                </span>
                               </div>
 
                               {/* Reassign dropdown */}
@@ -942,22 +1278,16 @@ export function AiAutoAssignModal({
                                 <span className="text-[10px] font-mono uppercase text-gray-400 font-bold">
                                   Gán cho:
                                 </span>
-                                <select
-                                  value={manualOverrides[taskIndex] || member.id}
-                                  onChange={(e) =>
+                                <TaskMemberPicker
+                                  currentUserId={manualOverrides[taskIndex] || member.id}
+                                  users={currentSpaceUsers}
+                                  onSelect={(userId) =>
                                     setManualOverrides((prev) => ({
                                       ...prev,
-                                      [taskIndex]: Number(e.target.value),
+                                      [taskIndex]: userId,
                                     }))
                                   }
-                                  className="bg-white border border-gray-300 rounded-lg px-2 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-500 cursor-pointer"
-                                >
-                                  {currentSpaceUsers.map((su) => (
-                                    <option key={su.id} value={su.id}>
-                                      {su.fullName || su.username} ({su.jobTitle || "Thành viên"})
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </div>
                             </div>
                           );
@@ -969,64 +1299,126 @@ export function AiAutoAssignModal({
               );
             })
           ) : (
-            /* VIEW BY TASK */
-            <div className="space-y-2">
-              {filteredTasksWithIndex.map(({ task, originalIndex }) => {
-                const assigned = autoAssignedPlan.assignments.find((a) => a.taskIndex === originalIndex);
-                const currentAssignedUser = assigned?.assignedUser;
-                const badge = getCategoryBadge(assigned?.category || "GENERAL");
-
-                return (
+            /* VIEW BY TASK (Phân nhóm trực quan theo VAI TRÒ CỦA CÔNG VIỆC theo góp ý của thầy) */
+            <div className="space-y-4">
+              {roleGroups.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-500 italic bg-gray-50 rounded-xl border border-gray-200">
+                  Không tìm thấy công việc nào phù hợp với bộ lọc hiện tại.
+                </div>
+              ) : (
+                roleGroups.map((group) => (
                   <div
-                    key={originalIndex}
-                    className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs hover:border-gray-300 transition-all"
+                    key={group.cat}
+                    className="border border-slate-200/90 rounded-2xl bg-slate-50/50 p-3 space-y-2.5 shadow-2xs"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
-                        Task-{originalIndex + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-gray-900 block truncate" title={task.title}>
-                          {task.title}
+                    {/* Role Group Header */}
+                    <div className="flex items-center justify-between pb-1 px-1">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-lg bg-white border border-slate-200 shadow-2xs">
+                          {group.icon}
+                        </div>
+                        <h4 className="font-extrabold text-xs text-slate-900 tracking-wide uppercase">
+                          {group.title}
+                        </h4>
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${group.badgeClass}`}
+                        >
+                          {group.tasks.length} công việc
                         </span>
-                        <span className="text-[10px] text-gray-400 font-mono block">
-                          {task.sprint || "Sprint 1"} • Yêu cầu: {task.assignedRole || "Chưa xác định"} • {task.estimatedDays || 2} ngày
-                        </span>
-                        {assigned?.reason && (
-                          <span className="text-[10px] text-indigo-600 font-medium block truncate max-w-md mt-0.5" title={assigned.reason}>
-                            ⚖️ {assigned.reason}
-                          </span>
-                        )}
                       </div>
+                      <span className="text-[11px] font-mono font-bold text-slate-500">
+                        Tổng: {group.totalDays} ngày
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded border shrink-0 ${badge.style}`}
-                      >
-                        {badge.label}
-                      </span>
+                    {/* Task items in this role group */}
+                    <div className="space-y-2">
+                      {group.tasks.map(({ task, originalIndex }) => {
+                        const assigned = autoAssignedPlan.assignments.find(
+                          (a) => a.taskIndex === originalIndex
+                        );
+                        const currentAssignedUser = assigned?.assignedUser;
+                        const sprintInfo = getSprintShortBadge(task.sprint);
+                        const workDaysBadge = getWorkDaysBadge(task.estimatedDays);
 
-                      <select
-                        value={currentAssignedUser ? currentAssignedUser.id : ""}
-                        onChange={(e) =>
-                          setManualOverrides((prev) => ({
-                            ...prev,
-                            [originalIndex]: Number(e.target.value),
-                          }))
-                        }
-                        className="bg-white border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-800 outline-none focus:border-blue-500 cursor-pointer"
-                      >
-                        {currentSpaceUsers.map((su) => (
-                          <option key={su.id} value={su.id}>
-                            {su.fullName || su.username} ({su.jobTitle || "Thành viên"})
-                          </option>
-                        ))}
-                      </select>
+                        return (
+                          <div
+                            key={originalIndex}
+                            className="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all"
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <span className="text-[11px] font-mono font-extrabold px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                                Task-{originalIndex + 1}
+                              </span>
+
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <span
+                                  className="text-xs font-bold text-slate-900 block truncate"
+                                  title={task.title}
+                                >
+                                  {task.title}
+                                </span>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Sprint Badge với popup chi tiết ngay khi di chuột */}
+                                  <div className="relative group/sprint shrink-0">
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[260px]"
+                                    >
+                                      <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
+                                      <span className="truncate">{sprintInfo.shortName}</span>
+                                    </span>
+                                    {/* Popup chi tiết Sprint ngay khi di chuột - cùng màu xanh trang nhã */}
+                                    <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/sprint:flex flex-col gap-0.5 z-50 min-w-[220px] max-w-[320px] p-2.5 bg-blue-50/95 text-blue-950 border border-blue-300 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
+                                      <div className="flex items-center gap-1 text-[10px] font-bold font-mono text-blue-700 uppercase pb-1 border-b border-blue-200">
+                                        <Calendar className="w-3 h-3 text-blue-600" /> Chi tiết Sprint
+                                      </div>
+                                      <p className="font-extrabold text-[11px] leading-snug text-blue-950 pt-0.5">
+                                        {sprintInfo.fullName}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Số ngày làm việc thực tế do AI tính trước đó (không chữ 'Độ phức tạp', không số lẻ) */}
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border ${workDaysBadge.style}`}
+                                    title="Số ngày làm việc ước tính theo kế hoạch AI"
+                                  >
+                                    <Clock className="w-3 h-3" />
+                                    {workDaysBadge.label}
+                                  </span>
+
+                                  {task.assignedRole && (
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      Yêu cầu: {task.assignedRole}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Searchable Member Picker (Gọn gàng, tìm kiếm bằng tên) */}
+                            <div className="shrink-0 flex items-center gap-2">
+                              <TaskMemberPicker
+                                currentUserId={
+                                  currentAssignedUser ? currentAssignedUser.id : undefined
+                                }
+                                users={currentSpaceUsers}
+                                onSelect={(userId) =>
+                                  setManualOverrides((prev) => ({
+                                    ...prev,
+                                    [originalIndex]: userId,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
           )}
         </div>

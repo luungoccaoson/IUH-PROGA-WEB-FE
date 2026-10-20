@@ -311,6 +311,9 @@ ${text.trim()}`;
         }
       });
 
+      // Theo dõi lịch trình của từng vai trò / người được gợi ý trong từng sprint để các task không bị trùng ngày bắt đầu
+      const memberSprintCursor = new Map<string, { start: string; due: string }>();
+
       for (const item of result.tasks) {
         const rawSprintName = item.sprint || `Sprint ${nextSprintNum}`;
         const { name: cleanSprintName, goal: sprintGoal } = parseSprintHeader(
@@ -354,13 +357,31 @@ ${text.trim()}`;
         const spStartStr = targetSprint?.startDate ? targetSprint.startDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
         const spEndStr = targetSprint?.endDate ? targetSprint.endDate.substring(0, 10) : addDays(spStartStr, 13);
 
+        const assigneeKey = (item.suggestedMemberName || item.assignedRole || "general").toLowerCase().trim();
+        const scheduleKey = `${targetSprint?.id || "sp"}-${assigneeKey}`;
+        const prevSchedule = memberSprintCursor.get(scheduleKey);
+
+        let taskStartStr = spStartStr;
+        if (prevSchedule) {
+          // Bắt buộc task sau phải bắt đầu SAU ngày bắt đầu của task trước (tối thiểu +1 ngày hoặc nối tiếp)
+          const nextCandidate = prevSchedule.due;
+          if (nextCandidate > prevSchedule.start && nextCandidate < spEndStr) {
+            taskStartStr = nextCandidate;
+          } else {
+            const minNext = addDays(prevSchedule.start, 1);
+            taskStartStr = minNext < spEndStr ? minNext : prevSchedule.start;
+          }
+        }
+
         const estDays = item.estimatedDays || 2;
-        let taskDueStr = addDays(spStartStr, Math.max(1, estDays));
+        let taskDueStr = addDays(taskStartStr, Math.max(1, estDays));
         if (taskDueStr > spEndStr) {
           taskDueStr = spEndStr;
         }
 
-        const taskStartIso = `${spStartStr}T08:00:00`;
+        memberSprintCursor.set(scheduleKey, { start: taskStartStr, due: taskDueStr });
+
+        const taskStartIso = `${taskStartStr}T08:00:00`;
         const taskDueIso = `${taskDueStr}T18:00:00`;
 
         const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
@@ -426,9 +447,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           onClick={() => setIsMinimized(false)}
           className="flex items-center gap-2 px-3.5 py-2.5 bg-[#111827] text-white hover:bg-black rounded-2xl shadow-2xl border border-gray-700 text-xs font-extrabold transition-all cursor-pointer animate-in zoom-in-95 hover:scale-105"
         >
-          <Bot className="w-4 h-4 text-[#10B981]" />
-          <span>AI Hỗ Trợ Space</span>
-          <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
+          {/* <Bot className="w-4 h-4 text-[#10B981]" /> */}
+          <span>AI phân rã task</span>
+          {/* <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" /> */}
         </button>
       </div>
     );

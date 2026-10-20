@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Plus, Layers, Sparkles, AlertTriangle, Trash2, CheckSquare, X } from "lucide-react";
-import { useSprints } from "@/hooks/useSprints";
+import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { SprintAccordion } from "./sprint/SprintAccordion";
@@ -58,6 +58,12 @@ export function SprintTaskList({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
+  const [selectedTaskReadOnly, setSelectedTaskReadOnly] = useState<boolean>(false);
+
+  const handleOpenTask = (task: Task, isReadOnly?: boolean) => {
+    handleSelectTask(task);
+    setSelectedTaskReadOnly(Boolean(isReadOnly));
+  };
 
   // Multi-task selection state for batch delete
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
@@ -239,7 +245,21 @@ export function SprintTaskList({
         {/* Sprints Accordions */}
         <div className="space-y-4">
           {sprints.map((sprint) => {
-            const sprintTasks = tasks.filter((t) => t.sprintId === sprint.id);
+            const isClosed = sprint.status === "CLOSED";
+            // Lấy các task thuộc Sprint, bao gồm cả các task trễ hạn lưu vết từ sprint đã đóng này
+            const sprintTasks = tasks.filter((t) => {
+              if (t.sprintId === sprint.id) return true;
+              if (isClosed) {
+                const transferred = getTaskTransferredOrigin(t);
+                return (
+                  transferred.isTransferred &&
+                  transferred.originSprintName?.toLowerCase().trim() ===
+                    sprint.name.toLowerCase().trim()
+                );
+              }
+              return false;
+            });
+
             return (
               <SprintAccordion
                 key={sprint.id}
@@ -254,7 +274,9 @@ export function SprintTaskList({
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
                 onCreateTask={createTask}
-                onSelectTask={handleSelectTask}
+                onSelectTask={(task, forceReadOnly) =>
+                  handleOpenTask(task, forceReadOnly || isClosed)
+                }
                 onUpdateStatus={updateTaskStatus}
                 onUpdatePriority={handleUpdatePriority}
                 onUpdateOwner={handleUpdateOwner}
@@ -365,16 +387,21 @@ export function SprintTaskList({
         task={selectedTask}
         taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
         isClosedSprint={Boolean(
-          selectedTask?.sprintId &&
-          sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-          "CLOSED",
+          selectedTaskReadOnly ||
+          (selectedTask?.sprintId &&
+            sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
+            "CLOSED")
         )}
         isActiveSprint={Boolean(
+          !selectedTaskReadOnly &&
           selectedTask?.sprintId &&
           sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-          "ACTIVE",
+          "ACTIVE"
         )}
-        onClose={() => setSelectedTask(null)}
+        onClose={() => {
+          setSelectedTask(null);
+          setSelectedTaskReadOnly(false);
+        }}
         onUpdate={updateTask}
         onDelete={deleteTask}
       />
