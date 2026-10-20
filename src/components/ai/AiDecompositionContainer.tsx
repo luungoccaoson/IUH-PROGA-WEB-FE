@@ -672,7 +672,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   return (
     <div className="space-y-6">
       {/* Restored Session Notification Banner */}
-      {restoredSessionBanner && (messages.length > 0 || result) && (
+      {/* {restoredSessionBanner && (messages.length > 0 || result) && (
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900 animate-in fade-in duration-300">
           <span className="font-semibold flex items-center gap-2">
             <span>💾 Đã tự động khôi phục phiên đàm thoại & Bảng Task WBS từ bộ nhớ tạm.</span>
@@ -692,7 +692,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* 1. Header Banner & Target Mode Selection */}
       <AiHeaderBanner
@@ -723,6 +723,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           onScrollToWbs={() => {
             document.getElementById("wbs-result-table")?.scrollIntoView({ behavior: "smooth" });
           }}
+          configuredStartDate={startDate}
+          configuredEndDate={endDate}
         />
       </div>
 
@@ -759,6 +761,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             endDate={endDate}
             sprintCustomDays={sprintCustomDays}
             onUpdateSprintDays={(sprint, days) => setSprintCustomDays((prev) => ({ ...prev, [sprint]: days }))}
+            messages={messages}
           />
         </div>
       )}

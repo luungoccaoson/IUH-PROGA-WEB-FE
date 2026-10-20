@@ -47,6 +47,7 @@ interface AiDecomposedResultsProps {
   endDate?: string;
   sprintCustomDays?: Record<string, number>;
   onUpdateSprintDays?: (sprintName: string, days: number) => void;
+  messages?: import("@/services/ai.service").AiChatMessageResponse[];
 }
 
 export function AiDecomposedResults({
@@ -72,6 +73,7 @@ export function AiDecomposedResults({
   endDate,
   sprintCustomDays,
   onUpdateSprintDays,
+  messages = [],
 }: AiDecomposedResultsProps) {
   const router = useRouter();
 
@@ -128,6 +130,51 @@ export function AiDecomposedResults({
       setLocalSprintDays((prev) => ({ ...prev, [sprintName]: days }));
     }
   };
+
+  // Yêu cầu: Tự động nhận diện Sprint 2 tuần (14 ngày) từ bản kế hoạch demo plan
+  useEffect(() => {
+    if (availableSprints.length === 0) return;
+
+    // Gather all plan text from previous assistant messages
+    const planText = (messages || [])
+      .filter((m) => m.senderType === "ASSISTANT" && m.messageContent)
+      .map((m) => m.messageContent)
+      .join("\n");
+
+    availableSprints.forEach((sp) => {
+      if (!activeSprintDays[sp]) {
+        let detectedDays = 7; // Mặc định 1 tuần
+
+        // Check if sprint title itself mentions 2 tuần / 14 ngày
+        const lowerSp = sp.toLowerCase();
+        if (
+          lowerSp.includes("2 tuần") ||
+          lowerSp.includes("14 ngày") ||
+          lowerSp.includes("2w") ||
+          lowerSp.includes("2 weeks")
+        ) {
+          detectedDays = 14;
+        } else {
+          // Check plan text for Sprint number (e.g. "Sprint 2" with "(2 tuần)")
+          const spNumMatch = sp.match(/Sprint\s*(\d+)/i);
+          if (spNumMatch) {
+            const num = spNumMatch[1];
+            const regex = new RegExp(
+              `Sprint\\s*${num}[^:\\n]*\\([^)]*(?:2\\s*tuần|14\\s*ngày)[^)]*\\)|Sprint\\s*${num}[^:\\n]*:[^\\n]*(?:2\\s*tuần|14\\s*ngày)`,
+              "i"
+            );
+            if (regex.test(planText)) {
+              detectedDays = 14;
+            }
+          }
+        }
+
+        if (detectedDays !== 7) {
+          handleSetSprintDays(sp, detectedDays);
+        }
+      }
+    });
+  }, [availableSprints, messages]);
 
   const addDays = (baseDate: string, days: number): string => {
     const d = new Date(baseDate);
@@ -359,17 +406,18 @@ export function AiDecomposedResults({
           </div>
         </div>
 
-        {/* Action Buttons: Auto Assign & Import */}
+        {/* Action Buttons: Unified AI Chat, Auto Assign & Import */}
         <div className="flex flex-wrap items-center gap-2.5 text-left md:text-right shrink-0">
-          {/* <button
+          {/* Nút Chat AI cố định 1 chỗ tại thanh công cụ */}
+          <button
             type="button"
-            onClick={() => setIsAutoAssignOpen(true)}
-            disabled={result.tasks.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-            title="Tự động phân bổ công việc cho thành viên theo vai trò (Backend, Frontend, QA...)"
+            onClick={() => handleOpenChatBox("ALL")}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+            title="Đàm thoại với AI để thêm, sửa, đổi thời gian hoặc sắp xếp lại các Sprint"
           >
-            <span>Tự Động Phân Công</span>
-          </button> */}
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>Chat Tinh Chỉnh</span>
+          </button>
 
           <button
             type="button"
@@ -497,45 +545,73 @@ export function AiDecomposedResults({
           const sprintStartStr = addDays(baseStart, currentOffsetDays);
           const sprintEndStr = addDays(sprintStartStr, thisSprintDays - 1);
           const dateRangeStr = `${formatDateVN(sprintStartStr)} ➔ ${formatDateVN(sprintEndStr)} (${thisSprintDays} ngày)`;
+          const shortSprintTitle = sprintName.includes(":") ? sprintName.split(":")[0].trim() : sprintName;
+          const nextSprintShortTitle =
+            groupIdx < availableSprints.length - 1
+              ? availableSprints[groupIdx + 1].includes(":")
+                ? availableSprints[groupIdx + 1].split(":")[0].trim()
+                : availableSprints[groupIdx + 1]
+              : "";
 
           return (
-            <AiSprintGroup
-              key={groupIdx}
-              sprintName={sprintName}
-              groupIdx={groupIdx}
-              taskList={taskList}
-              isChatBoxOpen={isChatBoxOpen}
-              targetSprintScope={targetSprintScope}
-              isDragOver={isDragOver}
-              existingTaskCount={existingTaskCount}
-              availableSprints={availableSprints}
-              dateRangeStr={dateRangeStr}
-              sprintDays={thisSprintDays}
-              onChangeDays={(days) => handleSetSprintDays(sprintName, days)}
-              onOpenChatBox={handleOpenChatBox}
-              onOpenAddTask={(sprint) => setAddingToSprint(sprint)}
-              onOpenEditTask={(index) => setEditingIndex(index)}
-              onDeleteTask={handleDeleteTask}
-              onMoveSprint={handleMoveSprint}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOverSprint(sprintName);
-              }}
-              onDragLeave={() => setDragOverSprint(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOverSprint(null);
-                const indexStr = e.dataTransfer.getData("aiTaskIndex");
-                if (indexStr !== undefined && indexStr !== "") {
-                  const taskIdx = parseInt(indexStr, 10);
-                  handleMoveSprint(taskIdx, sprintName);
-                }
-              }}
-            />
+            <React.Fragment key={groupIdx}>
+              <AiSprintGroup
+                sprintName={sprintName}
+                groupIdx={groupIdx}
+                taskList={taskList}
+                isChatBoxOpen={isChatBoxOpen}
+                targetSprintScope={targetSprintScope}
+                isDragOver={isDragOver}
+                existingTaskCount={existingTaskCount}
+                availableSprints={availableSprints}
+                dateRangeStr={dateRangeStr}
+                sprintDays={thisSprintDays}
+                onChangeDays={(days) => handleSetSprintDays(sprintName, days)}
+                onOpenChatBox={handleOpenChatBox}
+                onOpenAddTask={(sprint) => setAddingToSprint(sprint)}
+                onOpenEditTask={(index) => setEditingIndex(index)}
+                onDeleteTask={handleDeleteTask}
+                onMoveSprint={handleMoveSprint}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverSprint(sprintName);
+                }}
+                onDragLeave={() => setDragOverSprint(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverSprint(null);
+                  const indexStr = e.dataTransfer.getData("aiTaskIndex");
+                  if (indexStr !== undefined && indexStr !== "") {
+                    const taskIdx = parseInt(indexStr, 10);
+                    handleMoveSprint(taskIdx, sprintName);
+                  }
+                }}
+              />
+
+              {/* Đường phân cách ranh giới rõ ràng giữa các Sprint (Milestone Timeline Divider) */}
+              {groupIdx < availableSprints.length - 1 && (
+                <div className="relative flex items-center justify-center my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t-2 border-dashed border-indigo-200" />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
       </div>
+
+      {/* Floating Action Button (FAB) cố định góc dưới bên phải màn hình */}
+      <button
+        type="button"
+        onClick={() => handleOpenChatBox("ALL")}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-600 text-white rounded-full shadow-2xl hover:shadow-indigo-500/40 font-bold text-xs cursor-pointer hover:scale-105 active:scale-95 transition-all border border-indigo-300/40 group"
+        title="Bấm để mở trợ lý Chat AI tinh chỉnh WBS bất cứ lúc nào"
+      >
+        <Sparkles className="w-4 h-4 text-amber-300" />
+        {/* <span>Chat Tinh Chỉnh</span> */}
+      </button>
 
       {/* EDIT TASK MODAL */}
       <AiTaskEditModal

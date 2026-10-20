@@ -68,17 +68,10 @@ export const taskService = {
     }
   },
 
-  assignTasksBatch: async (assignments: { taskId: number; ownerId: number }[]): Promise<void> => {
-    try {
-      await apiClient.post<ApiResponse<void>>('/tasks/batch-assign', { assignments });
-    } catch (err) {
-      // Fallback sequentially/concurrently if needed
-      await Promise.all(
-        assignments.map((item) =>
-          apiClient.put(`/tasks/${item.taskId}`, { ownerId: item.ownerId }).catch(() => null)
-        )
-      );
-    }
+  assignTasksBatch: async (
+    assignments: { taskId: number; ownerId: number; startDate?: string; dueDate?: string }[]
+  ): Promise<void> => {
+    await apiClient.post<ApiResponse<void>>('/tasks/batch-assign', { assignments });
   },
 
   getDeletedTasksBySpace: async (spaceId: number): Promise<Task[]> => {
