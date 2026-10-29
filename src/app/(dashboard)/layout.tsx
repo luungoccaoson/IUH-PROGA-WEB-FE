@@ -343,7 +343,7 @@ export default function DashboardLayout({
                     ];
                     const color = colors[space.id % colors.length] || colors[0];
                     const targetWsId = space.workspaceId || activeWorkspaceId;
-                    const isActive = pathname.includes(`/spaces/${space.id}`);
+                    const isActive = activeSpaceId === space.id;
 
                     return (
                       <Link
@@ -370,15 +370,6 @@ export default function DashboardLayout({
                       Chưa có Space nào.
                     </p>
                   )}
-
-                  <div className="pt-2 border-t border-[#E5E7EB]/50 mt-1">
-                    <a
-                      href="#"
-                      className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-bold text-[#4B5563] hover:text-[#111827]"
-                    >
-                      <span>🔍 Bộ lọc</span>
-                    </a>
-                  </div>
                 </div>
               </div>
             </div>

@@ -428,7 +428,7 @@ export function TaskRowItem({
                   > = {
                     TODO: "Cần làm",
                     IN_PROGRESS: "Đang làm",
-                    DONE: "Hoàn thành",
+                    DONE: isPM ? "Hoàn thành" : "Nộp chờ duyệt",
                   };
                   const stInfo = taskStatusMap[st];
                   const isAutoRouteToReview = st === "DONE" && !isPM;
@@ -495,7 +495,9 @@ export function TaskRowItem({
               const isAssignDisabled =
                 isReadOnly ||
                 task.status === "DONE" ||
-                (!isCoordinator && !isUnassigned);
+                (!isCoordinator &&
+                  !isUnassigned &&
+                  (!isMyTask || task.status !== "TODO"));
               const assignedMember = members.find((m) => {
                 const mId = m.id?.userId || m.userId || m.id;
                 return mId === task.ownerId || mId === task.assignee?.id;
@@ -567,7 +569,7 @@ export function TaskRowItem({
                           <div className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0 border border-gray-200">
                             <User className="w-3 h-3" />
                           </div>
-                          <span className="truncate">Chưa gán</span>
+                          <span className="truncate">Chưa gán (Bỏ nhận việc)</span>
                         </div>
                         {!task.ownerId && !task.assignee?.id && (
                           <Check className="w-3.5 h-3.5 shrink-0" />

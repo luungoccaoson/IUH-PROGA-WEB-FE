@@ -139,10 +139,11 @@ export function SpaceHeader({
           <button
             type="button"
             onClick={() => {
-              if (typeof window !== "undefined") {
+              if (onOpenCopilot) {
+                onOpenCopilot();
+              } else if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("toggle_space_ai_copilot"));
               }
-              if (onOpenCopilot) onOpenCopilot();
             }}
             className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 rounded-xl text-xs font-bold text-[#4B5563] hover:text-[#111827] transition-all shadow-2xs cursor-pointer"
             title="Mở bảng Trợ lý AI (Phân tích tiến độ, gợi ý việc làm & tổng hợp duyệt)"
@@ -164,9 +165,10 @@ export function SpaceHeader({
             </button>
           )}
 
-          {/* Trash Button (Soft-Deleted Tasks) - Chỉ dành cho PM */}
-          {isOwner && onOpenTrash && (
+          {/* Trash Button (Soft-Deleted Tasks) - Hiển thị cho tất cả thành viên trong Space */}
+          {onOpenTrash && (
             <button
+              type="button"
               onClick={onOpenTrash}
               className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-red-50 hover:border-red-200 rounded-xl text-xs font-bold text-[#4B5563] hover:text-[#DC2626] transition-colors shadow-2xs cursor-pointer"
               title="Thùng rác công việc"
