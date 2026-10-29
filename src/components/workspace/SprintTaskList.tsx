@@ -17,14 +17,21 @@ import { AutoAssignModal } from "@/components/space/AutoAssignModal";
 interface SprintTaskListProps {
   spaceId: number;
   members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
 export function SprintTaskList({
   spaceId,
   members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   onDrawerStateChange,
 }: SprintTaskListProps) {
+  const isCoordinator = isPM || isAssistant;
   const {
     sprints,
     tasks,
@@ -213,25 +220,37 @@ export function SprintTaskList({
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Auto Assign Tasks by Role button */}
-            {members && members.length > 0 && (
-              <button
-                onClick={() => setIsAutoAssignOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer hover:shadow-md"
-                title="Tự động phân công công việc theo vai trò chuyên môn (FE, BE, Fullstack, QA, DevOps) & Cân bằng tải"
-              >
-                {/* <Sparkles className="w-4 h-4" /> */}
-                TỰ ĐỘNG PHÂN CÔNG
-              </button>
-            )}
+            {isCoordinator ? (
+              <>
+                {isAssistant && !isPM && (
+                  <span className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold hidden lg:inline-flex items-center gap-1.5">
+                    🤝 Trợ lý Điều phối: Phân công, chỉnh hạn &amp; sắp xếp Sprint (PM duyệt DONE)
+                  </span>
+                )}
+                {/* Auto Assign Tasks by Role button - PM & Assistant */}
+                {members && members.length > 0 && (
+                  <button
+                    onClick={() => setIsAutoAssignOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer hover:shadow-md"
+                    title="Tự động phân công công việc theo vai trò chuyên môn (FE, BE, Fullstack, QA, DevOps) & Cân bằng tải"
+                  >
+                    TỰ ĐỘNG PHÂN CÔNG
+                  </button>
+                )}
 
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              TẠO SPRINT MỚI
-            </button>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  TẠO SPRINT MỚI
+                </button>
+              </>
+            ) : (
+              <div className="px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold flex items-center gap-2">
+                <span>💡 Quyền Thành viên: Tạo Task mới, tự nhận Task trống &amp; cập nhật tiến độ cá nhân</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -267,13 +286,21 @@ export function SprintTaskList({
                 tasks={sprintTasks}
                 allSpaceTasks={orderedSpaceTasks}
                 members={members}
+                isPM={isPM}
+                isAssistant={isAssistant}
+                currentUserId={currentUserId}
                 isTaskOverdue={isTaskOverdue}
                 selectedTaskIds={selectedTaskIds}
-                onToggleSelectTask={handleToggleSelectTask}
-                onToggleSelectAllSprint={handleToggleSelectAll}
+                onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
+                onToggleSelectAllSprint={isPM ? handleToggleSelectAll : undefined}
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
-                onCreateTask={createTask}
+                onCreateTask={(data) =>
+                  createTask({
+                    ...data,
+                    ownerId: !isCoordinator && currentUserId ? currentUserId : undefined,
+                  })
+                }
                 onSelectTask={(task, forceReadOnly) =>
                   handleOpenTask(task, forceReadOnly || isClosed)
                 }
@@ -290,11 +317,20 @@ export function SprintTaskList({
           <BacklogAccordion
             tasks={backlogTasks}
             allSpaceTasks={orderedSpaceTasks}
+            members={members}
+            isPM={isPM}
+            isAssistant={isAssistant}
+            currentUserId={currentUserId}
             isTaskOverdue={isTaskOverdue}
             selectedTaskIds={selectedTaskIds}
-            onToggleSelectTask={handleToggleSelectTask}
-            onToggleSelectAllBacklog={handleToggleSelectAll}
-            onCreateTask={createTask}
+            onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
+            onToggleSelectAllBacklog={isPM ? handleToggleSelectAll : undefined}
+            onCreateTask={(data) =>
+              createTask({
+                ...data,
+                ownerId: !isCoordinator && currentUserId ? currentUserId : undefined,
+              })
+            }
             onSelectTask={setSelectedTask}
             onUpdateStatus={updateTaskStatus}
             onUpdatePriority={handleUpdatePriority}
@@ -386,6 +422,10 @@ export function SprintTaskList({
       <TaskDetailDrawer
         task={selectedTask}
         taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+        isPM={isPM}
+        isAssistant={isAssistant}
+        currentUserId={currentUserId}
+        members={members}
         isClosedSprint={Boolean(
           selectedTaskReadOnly ||
           (selectedTask?.sprintId &&

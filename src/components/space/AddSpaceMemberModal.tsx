@@ -23,6 +23,7 @@ export function AddSpaceMemberModal({
 }: AddSpaceMemberModalProps) {
   const [memberDetails, setMemberDetails] = useState<User[]>([]);
   const [spaceMemberIds, setSpaceMemberIds] = useState<number[]>([]);
+  const [selectedRoleMap, setSelectedRoleMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(false);
   const [addingUserId, setAddingUserId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,7 +67,8 @@ export function AddSpaceMemberModal({
   const handleAddMember = async (userId: number) => {
     try {
       setAddingUserId(userId);
-      await workspaceService.addMemberToSpace(spaceId, userId);
+      // Mặc định 100% thành viên khi mới thêm vào Space sẽ mang vai trò MEMBER (roleId = 3)
+      await workspaceService.addMemberToSpace(spaceId, userId, 3);
       setSpaceMemberIds((prev) => [...prev, userId]);
       if (onMemberAdded) onMemberAdded();
     } catch (err) {
@@ -89,13 +91,13 @@ export function AddSpaceMemberModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 font-sans">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#E5E7EB]">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-[#E5E7EB]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-[#1A73E8]" />
             <h3 className="font-extrabold text-[#111827] text-base">
-              Thêm Thành Viên Vào Space
+              Thêm Thành Viên &amp; Phân Quyền Space
             </h3>
           </div>
           <button
@@ -131,13 +133,14 @@ export function AddSpaceMemberModal({
           ) : (
             filteredUsers.map((u) => {
               const isAlreadyInSpace = spaceMemberIds.includes(u.id);
+              const selectedRole = selectedRoleMap[u.id] || 3;
 
               return (
                 <div
                   key={u.id}
-                  className="p-3 flex items-center justify-between hover:bg-white transition-colors text-xs"
+                  className="p-3 flex items-center justify-between gap-2 hover:bg-white transition-colors text-xs"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-xs flex items-center justify-center border border-[#D2E3FC] shrink-0">
                       {(u.fullName || u.email).substring(0, 2).toUpperCase()}
                     </div>
@@ -147,7 +150,7 @@ export function AddSpaceMemberModal({
                       </p>
                       <p className="text-[10px] text-[#6B7280] flex items-center gap-1 truncate">
                         <ShieldCheck className="w-3 h-3 text-[#10B981] shrink-0" />
-                        {u.email}
+                        {u.jobTitle || u.email}
                       </p>
                     </div>
                   </div>
@@ -158,13 +161,18 @@ export function AddSpaceMemberModal({
                       Đã ở trong Space
                     </span>
                   ) : (
-                    <button
-                      onClick={() => handleAddMember(u.id)}
-                      disabled={addingUserId === u.id}
-                      className="px-3 py-1 bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold text-[11px] rounded-lg transition-colors shadow-2xs shrink-0 disabled:opacity-50"
-                    >
-                      {addingUserId === u.id ? "Đang thêm..." : "+ Thêm vào Space"}
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-mono font-bold">
+                        Mặc định: MEMBER
+                      </span>
+                      <button
+                        onClick={() => handleAddMember(u.id)}
+                        disabled={addingUserId === u.id}
+                        className="px-3 py-1 bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold text-[11px] rounded-lg transition-colors shadow-2xs shrink-0 disabled:opacity-50 cursor-pointer"
+                      >
+                        {addingUserId === u.id ? "Đang thêm..." : "+ Thêm"}
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -176,7 +184,7 @@ export function AddSpaceMemberModal({
         <div className="pt-2 border-t border-[#E5E7EB] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-[#111827] text-white font-bold text-xs rounded-xl shadow-2xs hover:bg-gray-800 transition-colors"
+            className="px-4 py-2 bg-[#111827] text-white font-bold text-xs rounded-xl shadow-2xs hover:bg-gray-800 transition-colors cursor-pointer"
           >
             Hoàn tất
           </button>

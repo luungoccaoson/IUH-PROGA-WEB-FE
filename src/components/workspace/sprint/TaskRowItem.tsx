@@ -10,6 +10,9 @@ interface TaskRowItemProps {
   task: Task;
   taskIndex?: number;
   members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   isOverdue?: boolean;
   isClosedSprint?: boolean;
   isActiveSprint?: boolean;
@@ -26,6 +29,7 @@ interface TaskRowItemProps {
 const taskStatusMap: Record<TaskStatus, { label: string; bg: string; text: string }> = {
   TODO: { label: "Cần làm", bg: "bg-gray-100", text: "text-gray-700" },
   IN_PROGRESS: { label: "Đang làm", bg: "bg-[#E8F0FE]", text: "text-[#1A73E8]" },
+  IN_REVIEW: { label: "Chờ duyệt", bg: "bg-[#FEF3C7]", text: "text-[#B45309]" },
   DONE: { label: "Đã xong", bg: "bg-[#E6F4EA]", text: "text-[#137333]" },
 };
 
@@ -33,6 +37,9 @@ export function TaskRowItem({
   task,
   taskIndex,
   members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   isOverdue = false,
   isClosedSprint = false,
   isActiveSprint = false,
@@ -45,8 +52,16 @@ export function TaskRowItem({
   onUpdateOwner,
   onDelete,
 }: TaskRowItemProps) {
-  const isReadOnly = isClosedSprint || isGhostTransferred;
-  const canDelete = !isClosedSprint && !isGhostTransferred && (!isActiveSprint || task.status === "TODO");
+  const isCoordinator = isPM || isAssistant;
+  const taskOwnerId = task.ownerId || task.assignee?.id;
+  const isMyTask = Boolean(currentUserId && taskOwnerId === currentUserId);
+  const isUnassigned = !taskOwnerId;
+  const isOtherMemberTask = !isCoordinator && !isUnassigned && !isMyTask;
+
+  const isReadOnly = isClosedSprint || isGhostTransferred || isOtherMemberTask;
+  const canEditTaskFields = !isReadOnly && (isCoordinator || isMyTask);
+  const canDragAcrossSprints = isCoordinator && !isClosedSprint && !isGhostTransferred;
+  const canDelete = isPM && !isClosedSprint && !isGhostTransferred && (!isActiveSprint || task.status === "TODO");
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
 
   // Popover States
@@ -113,9 +128,9 @@ export function TaskRowItem({
   return (
     <>
       <div
-        draggable={!isReadOnly}
+        draggable={canDragAcrossSprints}
         onDragStart={(e) => {
-          if (isReadOnly) return;
+          if (!canDragAcrossSprints) return;
           e.dataTransfer.setData("taskId", task.id.toString());
           e.dataTransfer.setData("sourceSprintId", (task.sprintId || "backlog").toString());
         }}
@@ -123,12 +138,14 @@ export function TaskRowItem({
           ? "bg-[#E8F0FE]/60 border-l-2 border-l-[#1A73E8]"
           : isReadOnly
             ? "bg-gray-50/70 cursor-default"
-            : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+            : canDragAcrossSprints
+              ? "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+              : "bg-white hover:bg-[#F9FAFB] cursor-pointer"
           }`}
       >
-        {/* Left side: Checkbox + Task Code & Title */}
+        {/* Left side: Checkbox (PM only) + Task Code & Title */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {onToggleSelect && !isGhostTransferred && (
+          {isPM && onToggleSelect && !isGhostTransferred && (
             <input
               type="checkbox"
               disabled={!canDelete}
@@ -214,14 +231,14 @@ export function TaskRowItem({
           {/* PRIORITY POPOVER SELECTOR */}
           <div className="relative" ref={priorityRef}>
             <button
-              disabled={isReadOnly}
+              disabled={!canEditTaskFields}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!isReadOnly) setShowPriorityPopover(!showPriorityPopover);
+                if (canEditTaskFields) setShowPriorityPopover(!showPriorityPopover);
               }}
-              className={`flex items-center gap-1 rounded p-1 hover:bg-[#E5E7EB] transition-colors ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
+              className={`flex items-center gap-1 rounded p-1 hover:bg-[#E5E7EB] transition-colors ${!canEditTaskFields ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                 }`}
-              title={`Độ ưu tiên: ${task.priority}`}
+              title={!canEditTaskFields && !isPM ? "Chỉ PM hoặc người phụ trách công việc này mới được đổi độ ưu tiên" : `Độ ưu tiên: ${task.priority}`}
             >
               {renderPriorityIcon(task.priority)}
             </button>
@@ -258,36 +275,73 @@ export function TaskRowItem({
             )}
           </div>
 
-          {/* STATUS POPOVER SELECTOR (3 States: TODO, IN_PROGRESS, DONE) */}
-          <div className="relative" ref={statusRef}>
+          {/* STATUS POPOVER SELECTOR (4 States: TODO, IN_PROGRESS, IN_REVIEW, DONE) */}
+          <div className="relative flex items-center gap-1.5" ref={statusRef}>
+            {isPM && task.status === "IN_REVIEW" && !isClosedSprint && !isGhostTransferred && onUpdateStatus && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateStatus(task.id, "DONE");
+                }}
+                className="px-2 py-0.5 rounded bg-[#137333] hover:bg-[#0d5324] text-white font-mono text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                title="PM nghiệm thu và duyệt công việc sang ĐÃ XONG (DONE)"
+              >
+                <Check className="w-3 h-3" />
+                <span>Duyệt Done</span>
+              </button>
+            )}
             <button
-              disabled={isReadOnly}
+              disabled={!canEditTaskFields}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!isReadOnly) setShowStatusPopover(!showStatusPopover);
+                if (canEditTaskFields) setShowStatusPopover(!showStatusPopover);
               }}
-              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${statusObj.bg} ${statusObj.text} ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:opacity-80"
+              title={!canEditTaskFields && !isPM ? "Chỉ PM hoặc người phụ trách công việc này mới được cập nhật trạng thái" : undefined}
+              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${statusObj.bg} ${statusObj.text} ${!canEditTaskFields ? "cursor-not-allowed opacity-75" : "cursor-pointer hover:opacity-80"
                 }`}
             >
               {statusObj.label}
             </button>
 
             {showStatusPopover && (
-              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-32 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
-                {(["TODO", "IN_PROGRESS", "DONE"] as TaskStatus[]).map((st) => {
+              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-44 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+                {(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as TaskStatus[]).map((st) => {
                   const isSelected = task.status === st;
                   const stInfo = taskStatusMap[st];
+                  // Khi MEMBER / ASSISTANT chọn "Đã xong (DONE)", tự động đẩy vào "Chờ duyệt (IN_REVIEW)"
+                  const isAutoRouteToReview = st === "DONE" && !isPM;
                   return (
                     <button
                       key={st}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isAutoRouteToReview) {
+                          if (onUpdateStatus) onUpdateStatus(task.id, "IN_REVIEW");
+                          setShowStatusPopover(false);
+                          return;
+                        }
+                        if (st === "DONE" && isPM) {
+                          const isAssignedToOther = Boolean(taskOwnerId && taskOwnerId !== currentUserId);
+                          if (isAssignedToOther && task.status !== "IN_REVIEW" && task.status !== "DONE") {
+                            alert("⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'Chờ duyệt / IN REVIEW'). PM chỉ duyệt sang 'Đã xong' đối với công việc đang ở trạng thái 'Chờ duyệt'!");
+                            setShowStatusPopover(false);
+                            return;
+                          }
+                        }
                         if (onUpdateStatus) onUpdateStatus(task.id, st);
                         setShowStatusPopover(false);
                       }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-mono text-[10px] font-bold ${stInfo.bg} ${stInfo.text}`}
+                      title={
+                        isAutoRouteToReview
+                          ? "Báo cáo hoàn thành công việc: Hệ thống sẽ chuyển qua cột 'Chờ duyệt (In Review)' để PM kiểm tra và duyệt"
+                          : undefined
+                      }
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-mono text-[10px] font-bold cursor-pointer ${stInfo.bg} ${stInfo.text}`}
                     >
-                      <span>{stInfo.label}</span>
+                      <span>
+                        {stInfo.label} {isAutoRouteToReview ? "(→ Chờ PM duyệt)" : ""}
+                      </span>
                       {isSelected && <Check className="w-3 h-3" />}
                     </button>
                   );
@@ -296,10 +350,25 @@ export function TaskRowItem({
             )}
           </div>
 
+          {/* Quick Self-Assign Button for MEMBER on Unassigned Tasks */}
+          {!isCoordinator && isUnassigned && !isClosedSprint && !isGhostTransferred && currentUserId && onUpdateOwner && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateOwner(task.id, currentUserId);
+              }}
+              className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 font-mono text-[10px] font-bold transition-all cursor-pointer shrink-0 shadow-2xs"
+              title="Tự nhận (Self-assign) công việc này về cho bạn"
+            >
+              + Nhận việc
+            </button>
+          )}
+
           {/* ASSIGNEE POPOVER SELECTOR */}
           <div className="relative" ref={assigneeRef}>
             {(() => {
-              const isAssignDisabled = isReadOnly || task.status === "DONE";
+              const isAssignDisabled = isReadOnly || task.status === "DONE" || (!isCoordinator && !isUnassigned);
               const assignedMember = members.find((m) => {
                 const mId = m.id?.userId || m.userId || m.id;
                 return mId === task.ownerId || mId === task.assignee?.id;
@@ -367,32 +436,38 @@ export function TaskRowItem({
                       </button>
 
                       {/* Member List Choices */}
-                      {members.map((m) => {
-                        const mId = m.id?.userId || m.userId || m.id;
-                        const mName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${mId}`;
-                        const isSelected = task.ownerId === mId || task.assignee?.id === mId;
+                      {members
+                        .filter((m) => {
+                          if (isCoordinator) return true;
+                          const mId = m.id?.userId || m.userId || m.id;
+                          return mId === currentUserId;
+                        })
+                        .map((m) => {
+                          const mId = m.id?.userId || m.userId || m.id;
+                          const mName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${mId}`;
+                          const isSelected = task.ownerId === mId || task.assignee?.id === mId;
 
-                        return (
-                          <button
-                            key={mId}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onUpdateOwner) onUpdateOwner(task.id, mId);
-                              setShowAssigneePopover(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
-                              }`}
-                          >
-                            <div className="flex items-center gap-2 truncate pr-2">
-                              <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
-                                {getInitials(mName)}
+                          return (
+                            <button
+                              key={mId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onUpdateOwner) onUpdateOwner(task.id, mId);
+                                setShowAssigneePopover(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
+                                  {getInitials(mName)}
+                                </div>
+                                <span className="truncate">{mName} {mId === currentUserId ? "(Tôi)" : ""}</span>
                               </div>
-                              <span className="truncate">{mName}</span>
-                            </div>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-[#111827] shrink-0" />}
-                          </button>
-                        );
-                      })}
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[#111827] shrink-0" />}
+                            </button>
+                          );
+                        })}
                     </div>
                   )}
                 </>

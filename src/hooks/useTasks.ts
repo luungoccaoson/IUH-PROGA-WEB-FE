@@ -27,7 +27,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
 
   // Inline Quick Create Task
   const createTask = useCallback(
-    async (data: { title: string; sprintId?: number | null }) => {
+    async (data: { title: string; sprintId?: number | null; ownerId?: number }) => {
       try {
         setLoading(true);
         const newTask = await taskService.createTask({
@@ -36,6 +36,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
           title: data.title.trim(),
           status: 'TODO',
           priority: 'MEDIUM',
+          ownerId: data.ownerId,
         });
         if (onTasksUpdated) onTasksUpdated(true);
         return newTask;

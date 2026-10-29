@@ -79,6 +79,10 @@ export const workspaceService = {
     await apiClient.post(`/spaces/${spaceId}/members?userId=${userId}&roleId=${roleId}`);
   },
 
+  updateSpaceMemberRole: async (spaceId: number, userId: number, roleId: number): Promise<void> => {
+    await apiClient.put(`/spaces/${spaceId}/members/${userId}/role?roleId=${roleId}`);
+  },
+
   removeMemberFromSpace: async (spaceId: number, userId: number): Promise<void> => {
     await apiClient.delete(`/spaces/${spaceId}/members/${userId}`);
   },

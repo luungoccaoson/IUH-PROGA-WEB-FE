@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Trash2, Calendar, AlignLeft, Check, Lock, AlertTriangle } from "lucide-react";
+import { X, Trash2, Calendar, AlignLeft, Check, Lock, AlertTriangle, UserCheck } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { getTaskTransferredOrigin } from "@/hooks/useSprints";
@@ -11,6 +11,9 @@ interface TaskDetailDrawerProps {
   taskNumber?: number;
   isClosedSprint?: boolean;
   isActiveSprint?: boolean;
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   members?: any[];
   onClose: () => void;
   onUpdate: (
@@ -34,7 +37,19 @@ const DEFAULT_MEMBERS = [
   { id: 5, name: "Hoa Tester" },
 ];
 
-export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isActiveSprint = false, members, onClose, onUpdate, onDelete }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({
+  task,
+  taskNumber,
+  isClosedSprint = false,
+  isActiveSprint = false,
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
+  members,
+  onClose,
+  onUpdate,
+  onDelete,
+}: TaskDetailDrawerProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -59,19 +74,63 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
 
   if (!task) return null;
 
-  const isReadOnly = isClosedSprint;
-  const canDelete = !isClosedSprint && (!isActiveSprint || task.status === "TODO");
+  const isCoordinator = isPM || isAssistant;
+  const taskOwnerId = task.ownerId || task.assignee?.id;
+  const isMyTask = Boolean(currentUserId && taskOwnerId === currentUserId);
+  const isUnassigned = !taskOwnerId;
+  const isOtherMemberTask = !isCoordinator && !isUnassigned && !isMyTask;
+
+  const isReadOnly = isClosedSprint || isOtherMemberTask;
+  const canDelete = isPM && !isClosedSprint && (!isActiveSprint || task.status === "TODO");
+
+  const handleSelfAssign = async () => {
+    if (!currentUserId || isClosedSprint) return;
+    try {
+      setIsSubmitting(true);
+      await onUpdate(task.id, {
+        title: title.trim() || task.title,
+        description: description.trim() || task.description,
+        status: task.status,
+        priority: task.priority,
+        ownerId: currentUserId,
+        startDate: startDate || undefined,
+        dueDate: dueDate || undefined,
+      });
+      setOwnerId(currentUserId);
+    } catch (err) {
+      alert("Không thể nhận công việc này!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    let finalStatus: TaskStatus = status;
+
+    // Nghiệp vụ 1: Nếu MEMBER hoặc ASSISTANT chọn "Đã xong (DONE)",
+    // hệ thống tự động đưa qua cột "Chờ PM duyệt (IN_REVIEW)" để PM biết họ đã làm xong
+    if (status === "DONE" && !isPM) {
+      finalStatus = "IN_REVIEW";
+    }
+
+    // Nghiệp vụ 2: PM không đơn phương bấm DONE đối với task của thành viên khác khi chưa qua cột IN_REVIEW
+    if (finalStatus === "DONE" && isPM) {
+      const isAssignedToOther = Boolean(taskOwnerId && taskOwnerId !== currentUserId);
+      if (isAssignedToOther && task.status !== "IN_REVIEW" && task.status !== "DONE") {
+        alert("⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'Chờ duyệt / IN REVIEW'). PM chỉ duyệt sang 'Đã xong' đối với các công việc đang ở trạng thái 'Chờ duyệt'!");
+        return;
+      }
+    }
 
     try {
       setIsSubmitting(true);
       await onUpdate(task.id, {
         title: title.trim(),
         description: description.trim() || undefined,
-        status,
+        status: finalStatus,
         priority,
         ownerId: ownerId ? Number(ownerId) : null,
         startDate: startDate || undefined,
@@ -137,6 +196,105 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
 
         {/* Content body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+          {/* IN_REVIEW Approval Banner for PM or Pending Notice for Member */}
+          {!isClosedSprint && task.status === "IN_REVIEW" && (
+            isPM ? (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2.5 text-xs text-amber-950 shadow-2xs">
+                <div className="space-y-0.5">
+                  <p className="font-extrabold text-[11px] uppercase tracking-wide flex items-center gap-1.5 text-amber-900">
+                    <span>📋 Công việc đang chờ PM nghiệm thu (IN REVIEW)</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Thành viên phụ trách đã báo cáo hoàn thành công việc này. Vui lòng kiểm tra chất lượng và bấm duyệt:
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      try {
+                        setIsSubmitting(true);
+                        await onUpdate(task.id, { status: "DONE" });
+                        onClose();
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="flex-1 py-1.5 px-3 bg-[#137333] hover:bg-[#0d5324] text-white font-bold text-[11px] rounded-xl transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    ✓ Duyệt hoàn thành (DONE)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      try {
+                        setIsSubmitting(true);
+                        await onUpdate(task.id, { status: "IN_PROGRESS" });
+                        onClose();
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="py-1.5 px-3 bg-white hover:bg-gray-100 text-gray-800 border border-amber-300 font-bold text-[11px] rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    ↩ Yêu cầu sửa lại
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+                <div className="space-y-0.5">
+                  <p className="font-extrabold text-[11px] text-amber-950 uppercase tracking-wide">
+                    ⏳ Đang chờ PM kiểm tra &amp; duyệt (IN REVIEW)
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Bạn đã báo cáo hoàn thành công việc này. Công việc sẽ tự động chuyển sang <strong>Đã xong (DONE)</strong> ngay khi PM nghiệm thu đạt yêu cầu.
+                  </p>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* RBAC Self-Assign Banner for Unassigned Tasks */}
+          {!isClosedSprint && !isPM && isUnassigned && currentUserId && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2 text-xs text-blue-900 shadow-2xs">
+              <div className="space-y-0.5">
+                <p className="font-extrabold text-[11px] text-blue-950 uppercase tracking-wide flex items-center gap-1">
+                  <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                  Công việc chưa có người phụ trách
+                </p>
+                <p className="text-[11px] text-blue-800">
+                  Bạn có thể tự nhận (Self-assign) công việc này để bắt đầu thực hiện.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSelfAssign}
+                className="px-3 py-1.5 bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold text-[11px] rounded-xl shrink-0 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                ✋ Nhận việc ngay
+              </button>
+            </div>
+          )}
+
+          {/* RBAC Read-Only Notice for Another Member's Task */}
+          {!isClosedSprint && isOtherMemberTask && (
+            <div className="bg-gray-100 border border-gray-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-gray-700">
+              <Lock className="w-4 h-4 text-gray-500 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold text-[11px] text-gray-900 uppercase tracking-wide">
+                  Chế độ chỉ xem (Phân quyền MEMBER)
+                </p>
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  Công việc này đang thuộc về thành viên khác. Bạn chỉ được chỉnh sửa các công việc do chính mình phụ trách hoặc tự nhận các công việc chưa có người làm.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Overdue Rollover Notice */}
           {(() => {
             const transferred = getTaskTransferredOrigin(task);
@@ -173,7 +331,7 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
 
           {/* Quick Settings Grid (Status, Priority, Assignee) */}
           <div className="grid grid-cols-2 gap-3 bg-[#F9FAFB] p-3.5 rounded-2xl border border-[#E5E7EB]">
-            {/* Status Selector (3 States) */}
+            {/* Status Selector (4 States: TODO, IN_PROGRESS, IN_REVIEW, DONE) */}
             <div className="space-y-1">
               <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px]">
                 Trạng thái
@@ -181,12 +339,22 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
               <select
                 disabled={isReadOnly}
                 value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                onChange={(e) => {
+                  const chosen = e.target.value as TaskStatus;
+                  if (chosen === "DONE" && !isPM) {
+                    setStatus("IN_REVIEW");
+                    return;
+                  }
+                  setStatus(chosen);
+                }}
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="TODO">Cần làm</option>
                 <option value="IN_PROGRESS">Đang làm</option>
-                <option value="DONE">Đã xong</option>
+                <option value="IN_REVIEW">Chờ PM duyệt (In Review)</option>
+                <option value="DONE">
+                  {!isPM ? "Đã xong (→ Chờ PM duyệt)" : "Đã xong (PM duyệt)"}
+                </option>
               </select>
             </div>
 
@@ -214,22 +382,28 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
                 Người thực hiện (Assignee)
               </label>
               <select
-                disabled={isReadOnly}
+                disabled={isReadOnly || (!isCoordinator && !isUnassigned && !isMyTask)}
                 value={ownerId || ""}
                 onChange={(e) => setOwnerId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="">-- Chưa gán người thực hiện --</option>
                 {members && members.length > 0
-                  ? members.map((m) => {
-                    const uId = m.id?.userId || m.userId || m.id;
-                    const uName = m.user?.fullName || m.user?.email || m.fullName || m.name || `Thành viên #${uId}`;
-                    return (
-                      <option key={uId} value={uId}>
-                        {uName}
-                      </option>
-                    );
-                  })
+                  ? members
+                      .filter((m) => {
+                        if (isCoordinator) return true;
+                        const uId = m.id?.userId || m.userId || m.id;
+                        return uId === currentUserId || uId === ownerId;
+                      })
+                      .map((m) => {
+                        const uId = m.id?.userId || m.userId || m.id;
+                        const uName = m.user?.fullName || m.user?.email || m.fullName || m.name || `Thành viên #${uId}`;
+                        return (
+                          <option key={uId} value={uId}>
+                            {uName} {uId === currentUserId ? "(Tôi)" : ""}
+                          </option>
+                        );
+                      })
                   : DEFAULT_MEMBERS.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}

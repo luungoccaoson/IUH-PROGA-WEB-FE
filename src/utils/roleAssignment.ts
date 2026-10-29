@@ -458,3 +458,288 @@ export function autoAssignTasks(
     totalAssigned: assignments.length,
   };
 }
+
+/**
+ * ============================================================================
+ * SPACE-LEVEL RBAC (ROLE-BASED ACCESS CONTROL) & GOVERNANCE MATRIX
+ * Mô hình 3 Vai trò đơn giản, dễ hiểu cho Khóa luận:
+ * - PM (roleId = 2): Người tạo Space (Lead PM) hoặc PM phụ theo mảng (PM Backend / PM Frontend).
+ *   Toàn quyền cài đặt Space, quản lý thành viên, xóa dữ liệu, và DUYỆT CUỐI CÙNG (Chốt DONE).
+ * - ASSISTANT (roleId = 4): Trợ lý điều phối (BA / Scrum Master).
+ *   Hỗ trợ chạy AI phân rã nháp, sửa deadline, gán việc, sắp xếp Kanban (TODO <-> IN_PROGRESS),
+ *   nhưng KHÔNG có quyền bấm Duyệt DONE và KHÔNG có quyền xóa Space/Sprint/Task.
+ * - MEMBER (roleId = 3): Mặc định khi được thêm vào Space.
+ *   Tạo task mới, tự nhận việc trống (+ Nhận việc), làm việc (TODO -> IN_PROGRESS), chờ PM duyệt DONE.
+ * ============================================================================
+ */
+export type SpaceRoleType = "PM" | "ASSISTANT" | "MEMBER";
+
+export interface SpaceMemberPermissions {
+  can_manage_space_and_members: boolean; // Cài đặt Space, Thêm/Xóa thành viên, Quản lý Thùng rác, Xóa Sprint/Task (Chỉ PM)
+  can_approve_tasks_to_done: boolean; // Chốt duyệt công việc hoàn thành sang trạng thái ĐÃ XONG - DONE (Chỉ PM)
+  can_coordinate_and_ai_draft: boolean; // Dùng AI phân rã nháp, Tự động phân công, Tạo/Sửa Sprint, Sửa Deadline & Sắp xếp Kanban (PM + ASSISTANT)
+  can_create_and_self_assign: boolean; // Tạo task mới và Tự nhận việc chưa có người làm (PM + ASSISTANT + MEMBER)
+  can_execute_own_tasks: boolean; // Cập nhật tiến độ công việc cá nhân TODO -> IN_PROGRESS (PM + ASSISTANT + MEMBER)
+  can_view_risk_dashboard: boolean; // Xem Tổng quan, Mindmap, Timeline & Cảnh báo trễ hạn (Tất cả)
+}
+
+export interface RoleRecommendation {
+  recommendedRole: SpaceRoleType;
+  recommendedRoleId: number; // 2 = PM, 4 = ASSISTANT, 3 = MEMBER
+  roleBadgeLabel: string; // VD: "Lead PM (Người tạo)", "PM Backend", "PM Frontend", "ASSISTANT (Điều phối)", "MEMBER"
+  standardizedJobTitle: string;
+  primaryDomains: string[];
+  reason: string;
+}
+
+export function roleIdToSpaceRole(roleId?: number, isCreatorOrOwner?: boolean): SpaceRoleType {
+  if (isCreatorOrOwner || roleId === 2) return "PM";
+  if (roleId === 4) return "ASSISTANT";
+  return "MEMBER";
+}
+
+export function spaceRoleToRoleId(role: SpaceRoleType): number {
+  if (role === "PM") return 2;
+  if (role === "ASSISTANT") return 4;
+  return 3;
+}
+
+/**
+ * Chuẩn hóa chức danh kỹ thuật (standardized_job_title), lĩnh vực chuyên môn (primary_domains)
+ * và Tư vấn / Đề xuất vai trò hợp lý trong Space ("Role & Permission Consultant Agent")
+ */
+export function recommendSpaceRoleForMember(
+  user: User,
+  isCreatorOrOwner: boolean = false
+): RoleRecommendation {
+  const text = normalizeText(`${user.jobTitle || ""} ${user.bio || ""}`);
+  const domains: string[] = [];
+
+  const hasBackend =
+    text.includes("backend") ||
+    text.includes("back-end") ||
+    text.includes("java") ||
+    text.includes("spring") ||
+    text.includes("microservice");
+  const hasFrontend =
+    text.includes("frontend") ||
+    text.includes("front-end") ||
+    text.includes("react") ||
+    text.includes("next") ||
+    text.includes("ui");
+  const hasFullstack = text.includes("fullstack") || text.includes("full-stack") || text.includes("full stack");
+  const hasAI =
+    text.includes("ai") ||
+    text.includes("llm") ||
+    text.includes("rag") ||
+    text.includes("agent") ||
+    text.includes("vector");
+  const hasDB =
+    text.includes("database") ||
+    text.includes("csdl") ||
+    text.includes("kien truc du lieu") ||
+    text.includes("postgres") ||
+    text.includes("sql");
+  const hasMobile =
+    text.includes("mobile") ||
+    text.includes("react native") ||
+    text.includes("expo") ||
+    text.includes("android") ||
+    text.includes("ios");
+  const hasDevOps =
+    text.includes("devops") ||
+    text.includes("docker") ||
+    text.includes("cloud") ||
+    text.includes("ci/cd") ||
+    text.includes("ha tang");
+  const hasQA =
+    text.includes("qa") ||
+    text.includes("qc") ||
+    text.includes("test") ||
+    text.includes("kiem thu");
+  const hasBAOrCoord =
+    text.includes("ba") ||
+    text.includes("business analyst") ||
+    text.includes("phan tich") ||
+    text.includes("scrum master") ||
+    text.includes("dieu phoi") ||
+    text.includes("tro ly") ||
+    text.includes("bien ban") ||
+    text.includes("tai lieu");
+  const hasLeadOrPM =
+    text.includes("pm") ||
+    text.includes("project manager") ||
+    text.includes("quan ly") ||
+    text.includes("tech lead") ||
+    text.includes("lead") ||
+    text.includes("architect") ||
+    text.includes("kien truc");
+
+  if (hasFrontend || hasFullstack) domains.push("Frontend");
+  if (hasBackend || hasFullstack) domains.push("Backend");
+  if (hasAI) domains.push("AI");
+  if (hasDB) domains.push("Database");
+  if (hasMobile) domains.push("Mobile");
+  if (hasDevOps) domains.push("DevOps");
+  if (hasQA) domains.push("QA/Testing");
+  if (hasBAOrCoord || hasLeadOrPM || isCreatorOrOwner) domains.push("Project Management");
+
+  if (domains.length === 0) {
+    domains.push("Software Engineering");
+  }
+
+  // 1. Chuẩn hóa Job Title kỹ thuật rõ ràng, chuyên nghiệp
+  let standardizedJobTitle = user.jobTitle?.trim() || "";
+  if (!standardizedJobTitle || standardizedJobTitle.length < 3) {
+    if (isCreatorOrOwner) {
+      standardizedJobTitle = hasBackend ? "Lead PM / Tech Lead (Backend & DevOps)" : "Lead Project Manager (PM)";
+    } else if (hasBAOrCoord) {
+      standardizedJobTitle = "Business Analyst & Project Coordinator";
+    } else if (hasFullstack && hasAI) {
+      standardizedJobTitle = "Fullstack & AI Specialist";
+    } else if (hasFullstack) {
+      standardizedJobTitle = "Fullstack Developer";
+    } else if (hasBackend && hasDevOps) {
+      standardizedJobTitle = "Backend & DevOps Engineer";
+    } else if (hasBackend) {
+      standardizedJobTitle = "Backend Developer";
+    } else if (hasFrontend) {
+      standardizedJobTitle = "Frontend Developer";
+    } else if (hasQA) {
+      standardizedJobTitle = "QA Tester / QC Engineer";
+    } else {
+      standardizedJobTitle = "Software Developer";
+    }
+  }
+
+  // 2. Tư vấn vai trò phù hợp trong Space
+  if (isCreatorOrOwner) {
+    return {
+      recommendedRole: "PM",
+      recommendedRoleId: 2,
+      roleBadgeLabel: "Lead PM (Người tạo)",
+      standardizedJobTitle,
+      primaryDomains: domains,
+      reason: "Người khởi tạo Space / Chủ sở hữu Workspace mặc định giữ quyền Lead PM điều phối tổng thể và duyệt task.",
+    };
+  }
+
+  // Ưu tiên gợi ý ASSISTANT cho BA / Scrum Master / Điều phối / QA kiêm tài liệu
+  if (hasBAOrCoord) {
+    return {
+      recommendedRole: "ASSISTANT",
+      recommendedRoleId: 4,
+      roleBadgeLabel: "ASSISTANT (Trợ lý điều phối)",
+      standardizedJobTitle,
+      primaryDomains: domains,
+      reason: "Có kỹ năng phân tích nghiệp vụ (BA/Scrum), phù hợp làm ASSISTANT hỗ trợ nạp tài liệu AI phân rã nháp, sửa deadline và sắp xếp Kanban.",
+    };
+  }
+
+  // Gợi ý PM phụ theo mảng chuyên môn cho Tech Lead / Senior / Kiến trúc sư / Quản lý
+  if (hasLeadOrPM || (hasFullstack && (hasAI || hasDB)) || (hasBackend && hasDevOps)) {
+    const subDomain =
+      hasBackend && !hasFrontend
+        ? "PM Backend"
+        : hasFrontend && !hasBackend
+        ? "PM Frontend"
+        : hasAI
+        ? "PM Kỹ thuật (Fullstack & AI)"
+        : "PM Phụ trách Kỹ thuật";
+    return {
+      recommendedRole: "PM",
+      recommendedRoleId: 2,
+      roleBadgeLabel: subDomain,
+      standardizedJobTitle,
+      primaryDomains: domains,
+      reason: `Có kinh nghiệm chuyên sâu (${domains.slice(0, 3).join(", ")}), đề xuất làm ${subDomain} để phụ giúp Lead PM duyệt chất lượng code mảng này.`,
+    };
+  }
+
+  // Còn lại mặc định là MEMBER thực thi
+  return {
+    recommendedRole: "MEMBER",
+    recommendedRoleId: 3,
+    roleBadgeLabel: "MEMBER (Thực thi)",
+    standardizedJobTitle,
+    primaryDomains: domains,
+    reason: "Thành viên thực thi mặc định: Tự nhận task trống, cập nhật tiến độ (TODO -> IN_PROGRESS) và báo cáo cho PM duyệt.",
+  };
+}
+
+export function standardizeMemberProfile(user: User, role: SpaceRoleType, isCreatorOrOwner = false): {
+  standardizedJobTitle: string;
+  primaryDomains: string[];
+  roleBadgeLabel: string;
+} {
+  const rec = recommendSpaceRoleForMember(user, isCreatorOrOwner);
+  let badge = "MEMBER (Thực thi)";
+  if (isCreatorOrOwner) {
+    badge = "Lead PM (Người tạo)";
+  } else if (role === "PM") {
+    if (rec.primaryDomains.includes("Backend") && !rec.primaryDomains.includes("Frontend")) {
+      badge = "PM Backend";
+    } else if (rec.primaryDomains.includes("Frontend") && !rec.primaryDomains.includes("Backend")) {
+      badge = "PM Frontend";
+    } else if (rec.primaryDomains.includes("AI")) {
+      badge = "PM Kỹ thuật & AI";
+    } else {
+      badge = "PM Phụ (Co-PM)";
+    }
+  } else if (role === "ASSISTANT") {
+    badge = "ASSISTANT (Trợ lý điều phối)";
+  }
+
+  return {
+    standardizedJobTitle: rec.standardizedJobTitle,
+    primaryDomains: rec.primaryDomains,
+    roleBadgeLabel: badge,
+  };
+}
+
+/**
+ * Xuất ma trận 6 quyền hạn đơn giản, rõ ràng theo 3 vai trò PM | ASSISTANT | MEMBER
+ */
+export function getSpacePermissionsByRole(role: SpaceRoleType): SpaceMemberPermissions {
+  const isPM = role === "PM";
+  const isAssistant = role === "ASSISTANT";
+  return {
+    can_manage_space_and_members: isPM,
+    can_approve_tasks_to_done: isPM,
+    can_coordinate_and_ai_draft: isPM || isAssistant,
+    can_create_and_self_assign: true,
+    can_execute_own_tasks: true,
+    can_view_risk_dashboard: true,
+  };
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có quyền chỉnh sửa / kéo thả một Task cụ thể hay không:
+ * - PM & ASSISTANT: Có quyền điều phối deadline, độ ưu tiên, gán việc và kéo thả (nhưng chỉ PM được chốt DONE).
+ * - MEMBER: Chỉ được chỉnh sửa / đổi trạng thái (TODO <-> IN_PROGRESS) trên Task của chính mình.
+ */
+export function canUserEditTask(
+  task: Task,
+  currentUserId?: number,
+  isPM: boolean = false,
+  isAssistant: boolean = false
+): boolean {
+  if (isPM || isAssistant) return true;
+  if (!currentUserId) return false;
+  const taskOwnerId = task.ownerId || task.assignee?.id;
+  return taskOwnerId === currentUserId;
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có thể tự nhận (Self-assign) một Task chưa có người làm hay không
+ */
+export function canUserSelfAssignTask(
+  task: Task,
+  currentUserId?: number,
+  isClosedSprint: boolean = false
+): boolean {
+  if (isClosedSprint || !currentUserId) return false;
+  const taskOwnerId = task.ownerId || task.assignee?.id;
+  return !taskOwnerId;
+}
+
