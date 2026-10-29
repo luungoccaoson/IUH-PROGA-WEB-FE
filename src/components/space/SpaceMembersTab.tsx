@@ -179,6 +179,9 @@ export function SpaceMembersTab({
       await workspaceService.removeMemberFromSpace(spaceId, deletingUserId);
       setSpaceMembers((prev) => prev.filter((m) => m.id !== deletingUserId));
       setDeletingUserId(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("space_tasks_updated"));
+      }
       if (onRoleUpdated) onRoleUpdated();
     } catch (err) {
       alert("Không thể xóa thành viên khỏi Space!");

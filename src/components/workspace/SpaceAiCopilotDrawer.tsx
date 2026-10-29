@@ -50,6 +50,8 @@ interface SpaceAiCopilotDrawerProps {
   currentUser?: User | null;
   members?: User[];
   isTaskDrawerOpen?: boolean;
+  isMinimized?: boolean;
+  onToggleMinimize?: (minimized: boolean) => void;
 }
 
 export function SpaceAiCopilotDrawer({
@@ -62,6 +64,8 @@ export function SpaceAiCopilotDrawer({
   currentUser,
   members = [],
   isTaskDrawerOpen = false,
+  isMinimized: propMinimized,
+  onToggleMinimize,
 }: SpaceAiCopilotDrawerProps) {
   const isPM = spaceRole === "PM";
   const isAssistant = spaceRole === "ASSISTANT";
@@ -79,7 +83,22 @@ export function SpaceAiCopilotDrawer({
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
   const [isImported, setIsImported] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(true);
+  const [internalMinimized, setInternalMinimized] = useState(
+    propMinimized !== undefined ? propMinimized : true
+  );
+
+  useEffect(() => {
+    if (propMinimized !== undefined) {
+      setInternalMinimized(propMinimized);
+    }
+  }, [propMinimized]);
+
+  const isMinimized = propMinimized !== undefined ? propMinimized : internalMinimized;
+
+  const updateMinimized = (val: boolean) => {
+    setInternalMinimized(val);
+    if (onToggleMinimize) onToggleMinimize(val);
+  };
   const [spaceSprints, setSpaceSprints] = useState<Sprint[]>([]);
   const [expandedMemberRiskId, setExpandedMemberRiskId] = useState<number | null>(null);
 
@@ -87,6 +106,76 @@ export function SpaceAiCopilotDrawer({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+
+  // Window Size & Resizing State (Smooth Drag to Resize with Min/Max Boundaries)
+  const [drawerSize, setDrawerSize] = useState({ width: 1050, height: 680 });
+  const [resizingDirection, setResizingDirection] = useState<string | null>(null);
+  const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number }>({
+    x: 0,
+    y: 0,
+    w: 1050,
+    h: 680,
+  });
+
+  const handleResizeStart = (
+    e: React.MouseEvent,
+    direction: "top" | "left" | "top-left"
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setResizingDirection(direction);
+    resizeStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: drawerSize.width,
+      h: drawerSize.height,
+    };
+  };
+
+  useEffect(() => {
+    if (!resizingDirection) return;
+
+    document.body.style.userSelect = "none";
+    let animId: number;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      animId = requestAnimationFrame(() => {
+        const deltaX = e.clientX - resizeStartRef.current.x;
+        const deltaY = e.clientY - resizeStartRef.current.y;
+
+        const minW = 580;
+        const minH = 460;
+        const maxW = Math.max(minW, Math.floor(window.innerWidth * 0.95));
+        const maxH = Math.max(minH, Math.floor(window.innerHeight * 0.92));
+
+        let nextW = resizeStartRef.current.w;
+        let nextH = resizeStartRef.current.h;
+
+        if (resizingDirection.includes("left")) {
+          nextW = Math.min(maxW, Math.max(minW, resizeStartRef.current.w - deltaX));
+        }
+        if (resizingDirection.includes("top")) {
+          nextH = Math.min(maxH, Math.max(minH, resizeStartRef.current.h - deltaY));
+        }
+
+        setDrawerSize({ width: nextW, height: nextH });
+      });
+    };
+
+    const handleMouseUp = () => {
+      setResizingDirection(null);
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+    };
+  }, [resizingDirection]);
 
   const STORAGE_KEY = `proga_ai_space_copilot_${space.id}`;
 
@@ -98,16 +187,17 @@ export function SpaceAiCopilotDrawer({
     }).catch((e) => console.warn("Could not load sprints for AI copilot:", e));
   }, [space.id]);
 
-  // Lắng nghe sự kiện mở/đóng từ thanh SpaceHeader phía trên
+  // Lắng nghe sự kiện mở/đóng từ bên ngoài nếu component tự quản lý trạng thái (uncontrolled)
   useEffect(() => {
+    if (propMinimized !== undefined) return;
     const handleToggle = () => {
-      setIsMinimized((prev) => !prev);
+      setInternalMinimized((prev) => !prev);
     };
     window.addEventListener("toggle_space_ai_copilot", handleToggle);
     return () => {
       window.removeEventListener("toggle_space_ai_copilot", handleToggle);
     };
-  }, []);
+  }, [propMinimized]);
 
   // Header Drag Handler
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
@@ -509,7 +599,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     patch: {
       status?: Task["status"];
       priority?: Task["priority"];
-      ownerId?: number;
+      ownerId?: number | null;
       dueDate?: string;
       description?: string;
     }
@@ -527,7 +617,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         description: patch.description !== undefined ? patch.description : (task.description ?? ""),
         status: patch.status || task.status,
         priority: patch.priority || task.priority,
-        ownerId: patch.ownerId !== undefined ? patch.ownerId : task.ownerId,
+        ownerId: patch.ownerId !== undefined ? (patch.ownerId ?? null) : task.ownerId,
         startDate: task.startDate,
         dueDate: patch.dueDate ? formatIso(patch.dueDate) : task.dueDate,
       });
@@ -610,13 +700,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   if (!isOpen || !space) return null;
 
   if (isMinimized) {
-    // Tự động ẩn nút nổi ở góc dưới khi bảng chi tiết Task (TaskDetailDrawer) đang mở để không bao giờ che nút Lưu / Hoàn tác
-    if (isTaskDrawerOpen) return null;
-
     return (
-      <div className="fixed bottom-4 right-4 z-30 font-sans">
+      <div
+        className={`fixed bottom-4 ${
+          isTaskDrawerOpen ? "right-[425px]" : "right-4"
+        } z-30 font-sans transition-all duration-300`}
+      >
         <button
-          onClick={() => setIsMinimized(false)}
+          type="button"
+          onClick={() => updateMinimized(false)}
           className="flex items-center gap-2 px-3.5 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 text-[#4B5563] hover:text-[#111827] rounded-xl shadow-lg text-xs font-bold transition-all cursor-pointer animate-in zoom-in-95"
           title="Mở bảng Trợ lý AI"
         >
@@ -633,9 +725,34 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
 
   return (
     <div
-      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      className="fixed bottom-4 right-4 z-[9999] w-full sm:w-[1050px] max-w-[95vw] h-[680px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300"
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        width: `${drawerSize.width}px`,
+        height: `${drawerSize.height}px`,
+      }}
+      className="fixed bottom-4 right-4 z-[9999] max-w-[96vw] max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300 group/drawer"
     >
+      {/* Resize Handle: Mép trên (Top) */}
+      <div
+        onMouseDown={(e) => handleResizeStart(e, "top")}
+        className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-50 hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors"
+        title="Kéo mép trên để thay đổi chiều cao cửa sổ"
+      />
+
+      {/* Resize Handle: Mép trái (Left) */}
+      <div
+        onMouseDown={(e) => handleResizeStart(e, "left")}
+        className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-50 hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors"
+        title="Kéo mép trái để thay đổi chiều rộng cửa sổ"
+      />
+
+      {/* Resize Handle: Góc trên - trái (Top-Left Corner) */}
+      <div
+        onMouseDown={(e) => handleResizeStart(e, "top-left")}
+        className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize z-50 hover:bg-blue-500/30 active:bg-blue-500/50 rounded-tl-2xl transition-colors"
+        title="Kéo góc trên-trái để thay đổi kích thước cả 2 chiều"
+      />
+
       {/* Draggable Header with Role-Aware AI Mode Switcher */}
       <div
         onMouseDown={handleHeaderMouseDown}
@@ -728,7 +845,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           )}
 
           <button
-            onClick={() => setIsMinimized(true)}
+            type="button"
+            onClick={() => {
+              updateMinimized(true);
+              onClose();
+            }}
             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
             title="Thu nhỏ"
           >
@@ -830,10 +951,34 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           <span className="font-mono text-[10px] font-bold text-[#6B7280]">
                             Task-{t.id}
                           </span>
-                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold">
-                            {t.priority}
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border ${
+                              t.priority === "URGENT"
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : t.priority === "HIGH"
+                                ? "bg-orange-50 text-orange-700 border-orange-200"
+                                : t.priority === "MEDIUM"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                          >
+                            {t.priority === "URGENT"
+                              ? "Khẩn cấp"
+                              : t.priority === "HIGH"
+                              ? "Cao"
+                              : t.priority === "MEDIUM"
+                              ? "Trung bình"
+                              : "Thấp"}
                           </span>
-                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono text-[10px] font-bold">
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border ${
+                              t.status === "TODO"
+                                ? "bg-gray-100 text-gray-700 border-gray-200"
+                                : t.status === "IN_PROGRESS"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                          >
                             {t.status === "TODO"
                               ? "Cần làm"
                               : t.status === "IN_PROGRESS"
@@ -845,6 +990,28 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Nút Bỏ nhận việc: CHỈ cho phép khi công việc ở trạng thái CẦN LÀM (TODO) */}
+                        {t.status === "TODO" && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === t.id}
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Bạn có chắc muốn bỏ nhận công việc này để thành viên khác nhận?"
+                                )
+                              ) {
+                                handleQuickTaskUpdate(t, { ownerId: null });
+                              }
+                            }}
+                            className="px-2 py-1.5 rounded-xl bg-white hover:bg-red-50 text-gray-500 hover:text-red-600 border border-gray-200 font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Bỏ nhận công việc này"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Bỏ nhận</span>
+                          </button>
+                        )}
+
                         {t.status === "TODO" && (
                           <button
                             type="button"

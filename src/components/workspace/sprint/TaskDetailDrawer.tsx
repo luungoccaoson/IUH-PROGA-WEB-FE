@@ -556,22 +556,19 @@ export function TaskDetailDrawer({
                     ? "Công việc đã được PM duyệt hoàn thành (DONE) và không thể chuyển trạng thái"
                     : undefined
                 }
-                onChange={(e) => {
-                  const chosen = e.target.value as TaskStatus;
-                  if (chosen === "DONE" && !isPM) {
-                    setStatus("IN_REVIEW");
-                    return;
-                  }
-                  setStatus(chosen);
-                }}
+                onChange={(e) => setStatus(e.target.value as TaskStatus)}
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
                 <option value="TODO">Cần làm</option>
                 <option value="IN_PROGRESS">Đang làm</option>
-                <option value="IN_REVIEW" hidden>
-                  Chờ duyệt
-                </option>
-                <option value="DONE">Hoàn thành</option>
+                {isPM ? (
+                  <>
+                    <option value="IN_REVIEW">Chờ duyệt</option>
+                    <option value="DONE">Đã xong (Nghiệm thu)</option>
+                  </>
+                ) : (
+                  <option value="IN_REVIEW">Hoàn thành (Nộp chờ duyệt)</option>
+                )}
               </select>
             </div>
 
@@ -600,7 +597,10 @@ export function TaskDetailDrawer({
               </label>
               <select
                 disabled={
-                  isReadOnly || (!isCoordinator && !isUnassigned && !isMyTask)
+                  isReadOnly ||
+                  (!isCoordinator &&
+                    !isUnassigned &&
+                    (!isMyTask || task.status !== "TODO"))
                 }
                 value={ownerId || ""}
                 onChange={(e) =>

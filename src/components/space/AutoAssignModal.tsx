@@ -707,7 +707,7 @@ export function AutoAssignModal({
             </div>
           </div>
 
-          <div className="lg:col-span-2 p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          {/* <div className="lg:col-span-2 p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-wrap items-center justify-between gap-2 text-[11px]">
             <div className="space-y-0.5">
               <p className="font-mono font-extrabold text-[#111827] uppercase text-[10px]">
                 3 Tiêu chí Tự động Phân công của hệ thống:
@@ -733,7 +733,7 @@ export function AutoAssignModal({
                 </span>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Content Body: Preview distribution */}

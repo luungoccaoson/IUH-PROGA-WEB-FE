@@ -22,6 +22,10 @@ import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import {
+  parseTaskDescriptionWithChecklist,
+  serializeTaskDescriptionWithChecklist,
+} from "@/utils/aiTaskAssistant";
 
 interface SprintKanbanBoardProps {
   spaceId: number;
@@ -94,7 +98,12 @@ export function SprintKanbanBoard({
     deleteTask,
   } = useTasks(spaceId, reload);
 
-  // Undo Toast state when reverting a task from IN_REVIEW to IN_PROGRESS
+  // Dialog yêu cầu chỉnh sửa khi PM hoặc Assistant trả task từ IN_REVIEW về IN_PROGRESS
+  const [revertModalTask, setRevertModalTask] = useState<Task | null>(null);
+  const [revertReason, setRevertReason] = useState("");
+  const [reverting, setReverting] = useState(false);
+
+  // Undo Toast state khi đã xác nhận hoàn tác
   const [revertUndoToast, setRevertUndoToast] = useState<{
     taskId: number;
     taskTitle: string;
@@ -107,18 +116,66 @@ export function SprintKanbanBoard({
     };
   }, []);
 
-  const triggerRevertTaskWithUndo = (taskToRevert: Task) => {
-    updateTaskStatus(taskToRevert.id, "IN_PROGRESS");
-    if (revertUndoTimerRef.current) {
-      clearTimeout(revertUndoTimerRef.current);
+  const openRevertModal = (taskToRevert: Task) => {
+    setRevertModalTask(taskToRevert);
+    setRevertReason("");
+  };
+
+  const handleConfirmRevert = async () => {
+    if (!revertModalTask) return;
+    setReverting(true);
+    try {
+      const parsed = parseTaskDescriptionWithChecklist(revertModalTask.description);
+      let newBase = parsed.baseDescription || "";
+      if (revertReason.trim()) {
+        const note = `\n\n> ⚠️ **Yêu cầu chỉnh sửa (${isPM ? "Trưởng dự án (PM)" : "Trợ lý (Assistant)"} - ${new Date().toLocaleDateString("vi-VN")}):** ${revertReason.trim()}`;
+        newBase = newBase ? `${newBase}${note}` : note.trim();
+      }
+      const updatedDescription = serializeTaskDescriptionWithChecklist(
+        newBase,
+        parsed.checklist,
+        parsed.aiRationale,
+        { assistantVerified: false, createdByUserId: parsed.createdByUserId }
+      );
+
+      await updateTask(revertModalTask.id, {
+        status: "IN_PROGRESS",
+        description: updatedDescription,
+      });
+
+      if (revertUndoTimerRef.current) {
+        clearTimeout(revertUndoTimerRef.current);
+      }
+      revertUndoTimerRef.current = setTimeout(() => {
+        setRevertUndoToast(null);
+      }, 8000);
+      setRevertUndoToast({
+        taskId: revertModalTask.id,
+        taskTitle: revertModalTask.title,
+      });
+
+      setRevertModalTask(null);
+      setRevertReason("");
+    } catch (err) {
+      alert("Không thể chuyển trạng thái công việc. Vui lòng thử lại!");
+    } finally {
+      setReverting(false);
     }
-    revertUndoTimerRef.current = setTimeout(() => {
-      setRevertUndoToast(null);
-    }, 8000);
-    setRevertUndoToast({
-      taskId: taskToRevert.id,
-      taskTitle: taskToRevert.title,
-    });
+  };
+
+  const handleAssistantVerifyTask = async (task: Task) => {
+    try {
+      const parsed = parseTaskDescriptionWithChecklist(task.description);
+      const updatedDescription = serializeTaskDescriptionWithChecklist(
+        parsed.baseDescription,
+        parsed.checklist,
+        parsed.aiRationale,
+        { assistantVerified: true, createdByUserId: parsed.createdByUserId }
+      );
+      await updateTask(task.id, { description: updatedDescription });
+    } catch (err) {
+      alert("Không thể cập nhật xác nhận đạt. Vui lòng thử lại!");
+    }
   };
 
   const handleUndoRevert = () => {
@@ -300,15 +357,21 @@ export function SprintKanbanBoard({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* AI Co-Pilot Drawer Button */}
-            {/* <button
-              onClick={() => setIsCopilotOpen(true)}
-              className="px-3.5 py-2 bg-gradient-to-r from-[#111827] to-[#1F2937] hover:from-black hover:to-[#111827] text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer border border-gray-700"
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* AI Co-Pilot Drawer Button on Kanban */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("toggle_space_ai_copilot"));
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 rounded-xl text-xs font-bold text-[#4B5563] hover:text-[#111827] transition-all shadow-2xs cursor-pointer shrink-0"
+              title="Mở bảng Trợ lý AI (Phân tích tiến độ, gợi ý việc làm & tổng hợp duyệt)"
             >
-              <Sparkles className="w-4 h-4 text-[#A7F3D0] animate-pulse" />
-              <span>🤖 AI Co-Pilot Phân Rã & Đánh Giá Rủi Ro</span>
-            </button> */}
+              <Sparkles className="w-3.5 h-3.5 text-[#111827]" />
+              <span>{isPM ? "Trợ lý AI Dự án" : "Trợ lý AI Cá nhân"}</span>
+            </button>
 
             {/* Sprint Filter Dropdown */}
             <div className="flex items-center gap-2 bg-[#F9FAFB] border border-[#E5E7EB] p-1.5 rounded-xl">
@@ -416,7 +479,7 @@ export function SprintKanbanBoard({
                       draggedTask.status === "IN_REVIEW" &&
                       col.key === "IN_PROGRESS"
                     ) {
-                      triggerRevertTaskWithUndo(draggedTask);
+                      openRevertModal(draggedTask);
                       return;
                     }
                     if (col.key === "DONE") {
@@ -452,7 +515,7 @@ export function SprintKanbanBoard({
                       draggedTask.status === "IN_REVIEW" &&
                       col.key === "IN_PROGRESS"
                     ) {
-                      triggerRevertTaskWithUndo(draggedTask);
+                      openRevertModal(draggedTask);
                       return;
                     }
                     updateTaskStatus(taskId, col.key);
@@ -624,7 +687,7 @@ export function SprintKanbanBoard({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  triggerRevertTaskWithUndo(task);
+                                  openRevertModal(task);
                                 }}
                                 className="py-1 px-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                 title="Yêu cầu thành viên chỉnh sửa lại (Chuyển về ĐANG LÀM)"
@@ -634,20 +697,47 @@ export function SprintKanbanBoard({
                               </button>
                             </div>
                           ) : isAssistant ? (
-                            <div className="pt-0.5">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  triggerRevertTaskWithUndo(task);
-                                }}
-                                className="w-full py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                                title="Duyệt trả lại cho thành viên chỉnh sửa (Chuyển về ĐANG LÀM)"
-                              >
-                                <RotateCcw className="w-3 h-3" />
-                                <span>Trả lại (Yêu cầu sửa)</span>
-                              </button>
-                            </div>
+                            (() => {
+                              const parsedDesc = parseTaskDescriptionWithChecklist(task.description);
+                              return (
+                                <div className="flex items-center gap-1.5 pt-0.5">
+                                  {parsedDesc.assistantVerified ? (
+                                    <span
+                                      className="flex-1 py-1 px-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300 font-mono text-[10px] font-extrabold flex items-center justify-center gap-1"
+                                      title="Trợ lý đã kiểm tra & xác nhận đạt"
+                                    >
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                      <span>Đã xác nhận đạt</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAssistantVerifyTask(task);
+                                      }}
+                                      className="flex-1 py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs hover:shadow"
+                                      title="Trợ lý xác nhận công việc đạt tiêu chuẩn trước khi PM nghiệm thu"
+                                    >
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                      <span>Xác nhận đạt</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openRevertModal(task);
+                                    }}
+                                    className="py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Duyệt trả lại cho thành viên chỉnh sửa (Chuyển về ĐANG LÀM)"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    <span>Sửa lại</span>
+                                  </button>
+                                </div>
+                              );
+                            })()
                           ) : (
                             <div className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10px] font-bold flex items-center justify-center gap-1">
                               <Eye className="w-3 h-3 text-amber-600" />
@@ -682,12 +772,41 @@ export function SprintKanbanBoard({
                           <div className="flex items-center gap-1.5">
                             {renderPriorityIcon(task.priority)}
                             <span className="text-[10px] font-mono font-semibold text-[#6B7280]">
-                              {task.priority}
+                              {task.priority === "URGENT"
+                                ? "Khẩn cấp"
+                                : task.priority === "HIGH"
+                                ? "Cao"
+                                : task.priority === "MEDIUM"
+                                ? "Trung bình"
+                                : "Thấp"}
                             </span>
                           </div>
 
                           {/* Avatar Circle or Quick Self-Assign for Unassigned Task */}
                           <div className="flex items-center gap-1.5">
+                            {/* Member can unassign their own task only when in TODO (CẦN LÀM) */}
+                            {isMyTask &&
+                              !isClosedSprint &&
+                              !isGhost &&
+                              task.status === "TODO" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (
+                                      confirm(
+                                        "Bạn có chắc muốn bỏ nhận công việc này để chuyển lại cho thành viên khác?"
+                                      )
+                                    ) {
+                                      updateTask(task.id, { ownerId: null });
+                                    }
+                                  }}
+                                  className="text-[9px] font-mono text-gray-400 hover:text-red-600 underline cursor-pointer"
+                                  title="Bỏ nhận công việc này"
+                                >
+                                  Bỏ nhận
+                                </button>
+                              )}
                             {!isPM &&
                               isUnassigned &&
                               !isClosedSprint &&
@@ -750,6 +869,81 @@ export function SprintKanbanBoard({
           })}
         </div>
       </div>
+
+      {/* Modal Yêu cầu Chỉnh sửa (Revert with Reason) */}
+      {revertModalTask && (
+        <div className="fixed inset-0 z-[10001] bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md p-5 space-y-4 font-sans animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-[#111827]">
+                    Yêu cầu Chỉnh sửa Công việc
+                  </h3>
+                  <p className="text-[11px] text-[#6B7280]">
+                    Chuyển từ &quot;Chờ duyệt&quot; về &quot;Đang làm&quot;
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRevertModalTask(null)}
+                className="p-1 text-gray-400 hover:text-gray-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1">
+              <span className="font-mono text-[10px] font-bold text-gray-600">
+                Task-{taskNumberMap.get(revertModalTask.id) ?? revertModalTask.id}
+              </span>
+              <p className="text-xs font-bold text-gray-900 line-clamp-2">
+                {revertModalTask.title}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>Lý do / Hạng mục cần chỉnh sửa:</span>
+                <span className="text-[10px] text-gray-400 font-normal">
+                  (Sẽ gửi đến thành viên phụ trách)
+                </span>
+              </label>
+              <textarea
+                value={revertReason}
+                onChange={(e) => setRevertReason(e.target.value)}
+                placeholder="VD: Cần bổ sung thêm test case cho API, giao diện chưa khớp theo thiết kế, v.v..."
+                rows={3}
+                className="w-full text-xs p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] focus:border-transparent resize-none placeholder:text-gray-400 text-gray-800"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRevertModalTask(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={reverting}
+                onClick={handleConfirmRevert}
+                className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-xs hover:shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{reverting ? "Đang xử lý..." : "Xác nhận yêu cầu sửa"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Undo Toast when PM or Assistant Reverts a Task from IN_REVIEW to IN_PROGRESS */}
       {revertUndoToast && (
