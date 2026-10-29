@@ -23,8 +23,29 @@ export const sprintService = {
     startDate?: string;
     endDate?: string;
   }): Promise<Sprint> => {
-    const response = await apiClient.post<ApiResponse<Sprint>>('/sprints', data);
-    return response.data.data;
+    const rawName = (data.name || "Sprint Mới").trim();
+    const safeName = rawName.length > 95 ? rawName.substring(0, 95).trim() : rawName;
+    const payload = {
+      ...data,
+      spaceId: Number(data.spaceId),
+      name: safeName,
+    };
+
+    let lastError: any;
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      try {
+        const response = await apiClient.post<ApiResponse<Sprint>>('/sprints', payload);
+        return response.data.data;
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.response?.data?.message || err?.message || "").toLowerCase();
+        if (msg.includes("duplicate key") || msg.includes("pkey") || err?.response?.status === 400) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
   },
 
   updateSprint: async (

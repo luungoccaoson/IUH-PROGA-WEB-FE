@@ -1,14 +1,44 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Bot, Sparkles, RefreshCw, GripHorizontal } from "lucide-react";
+import {
+  X,
+  Bot,
+  Sparkles,
+  RefreshCw,
+  GripHorizontal,
+  CheckCircle2,
+  AlertTriangle,
+  UserCheck,
+  ListTodo,
+  FileText,
+  ShieldCheck,
+  Play,
+  Check,
+  RotateCcw,
+  BarChart3,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+} from "lucide-react";
 import { workspaceService } from "@/services/workspace.service";
 import { sprintService } from "@/services/sprint.service";
 import { taskService } from "@/services/task.service";
 import { aiService, AiChatMessageResponse, TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
 import { AiChatWindow } from "../ai/AiChatWindow";
 import { AiDecomposedResults } from "../ai/AiDecomposedResults";
-import { Space, Task, Sprint } from "@/types";
+import { Space, Task, Sprint, User } from "@/types";
+import { SpaceRoleType } from "@/utils/roleAssignment";
+import {
+  evaluateTaskForAcceptance,
+  recommendUnassignedTasksForMember,
+  analyzeProjectAndMemberRisks,
+  parseTaskDescriptionWithChecklist,
+  serializeTaskDescriptionWithChecklist,
+} from "@/utils/aiTaskAssistant";
+
+type CopilotMode = "personal" | "risk" | "acceptance" | "decompose";
 
 interface SpaceAiCopilotDrawerProps {
   isOpen: boolean;
@@ -16,6 +46,10 @@ interface SpaceAiCopilotDrawerProps {
   space: Space;
   workspaceId: number;
   existingTasks?: Task[];
+  spaceRole?: SpaceRoleType;
+  currentUser?: User | null;
+  members?: User[];
+  isTaskDrawerOpen?: boolean;
 }
 
 export function SpaceAiCopilotDrawer({
@@ -24,7 +58,20 @@ export function SpaceAiCopilotDrawer({
   space,
   workspaceId,
   existingTasks = [],
+  spaceRole = "PM",
+  currentUser,
+  members = [],
+  isTaskDrawerOpen = false,
 }: SpaceAiCopilotDrawerProps) {
+  const isPM = spaceRole === "PM";
+  const isAssistant = spaceRole === "ASSISTANT";
+  const isCoordinator = spaceRole === "PM" || spaceRole === "ASSISTANT";
+
+  const [activeMode, setActiveMode] = useState<CopilotMode>(
+    spaceRole === "MEMBER" ? "personal" : "risk"
+  );
+  const [actionLoadingId, setActionLoadingId] = useState<number | string | null>(null);
+  const [batchApproving, setBatchApproving] = useState(false);
   const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
@@ -34,6 +81,7 @@ export function SpaceAiCopilotDrawer({
   const [isImported, setIsImported] = useState(false);
   const [isMinimized, setIsMinimized] = useState(true);
   const [spaceSprints, setSpaceSprints] = useState<Sprint[]>([]);
+  const [expandedMemberRiskId, setExpandedMemberRiskId] = useState<number | null>(null);
 
   // Position Dragging State
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -49,6 +97,17 @@ export function SpaceAiCopilotDrawer({
       setSpaceSprints(sprints);
     }).catch((e) => console.warn("Could not load sprints for AI copilot:", e));
   }, [space.id]);
+
+  // Lắng nghe sự kiện mở/đóng từ thanh SpaceHeader phía trên
+  useEffect(() => {
+    const handleToggle = () => {
+      setIsMinimized((prev) => !prev);
+    };
+    window.addEventListener("toggle_space_ai_copilot", handleToggle);
+    return () => {
+      window.removeEventListener("toggle_space_ai_copilot", handleToggle);
+    };
+  }, []);
 
   // Header Drag Handler
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
@@ -438,18 +497,135 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     } catch (e) { }
   };
 
+  useEffect(() => {
+    if (spaceRole === "MEMBER") {
+      setActiveMode("personal");
+    }
+  }, [spaceRole]);
+
+  // Quick Task Update helper for Personal AI, Risk AI & Acceptance AI
+  const handleQuickTaskUpdate = async (
+    task: Task,
+    patch: {
+      status?: Task["status"];
+      priority?: Task["priority"];
+      ownerId?: number;
+      dueDate?: string;
+      description?: string;
+    }
+  ) => {
+    try {
+      setActionLoadingId(task.id);
+      const formatIso = (d?: string) => {
+        if (!d) return undefined;
+        return d.includes("T") ? d : `${d}T23:59:59`;
+      };
+      await taskService.updateTask(task.id, {
+        spaceId: task.spaceId || space.id,
+        sprintId: task.sprintId ?? null,
+        title: task.title,
+        description: patch.description !== undefined ? patch.description : (task.description ?? ""),
+        status: patch.status || task.status,
+        priority: patch.priority || task.priority,
+        ownerId: patch.ownerId !== undefined ? patch.ownerId : task.ownerId,
+        startDate: task.startDate,
+        dueDate: patch.dueDate ? formatIso(patch.dueDate) : task.dueDate,
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("space_tasks_updated"));
+      }
+    } catch (err) {
+      alert("Không thể cập nhật công việc. Vui lòng thử lại!");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Assistant confirms task verification
+  const handleAssistantVerifyTask = async (task: Task) => {
+    const parsed = parseTaskDescriptionWithChecklist(task.description);
+    const updatedDesc = serializeTaskDescriptionWithChecklist(
+      parsed.baseDescription,
+      parsed.checklist,
+      parsed.aiRationale,
+      { assistantVerified: true, createdByUserId: parsed.createdByUserId }
+    );
+    await handleQuickTaskUpdate(task, { description: updatedDesc });
+  };
+
+  // Evaluate all IN_REVIEW tasks for Acceptance Tab
+  const inReviewTasks = existingTasks.filter((t) => !t.isDeleted && t.status === "IN_REVIEW");
+  const evaluatedInReview = inReviewTasks.map((t) => ({
+    task: t,
+    evalResult: evaluateTaskForAcceptance(t),
+  }));
+  const readyForApproveTasks = evaluatedInReview.filter((item) => item.evalResult.readyForApproval);
+
+  const handleBatchApprovePassedTasks = async () => {
+    if (!isPM || readyForApproveTasks.length === 0) return;
+    try {
+      setBatchApproving(true);
+      for (const item of readyForApproveTasks) {
+        const t = item.task;
+        await taskService.updateTask(t.id, {
+          spaceId: t.spaceId || space.id,
+          sprintId: t.sprintId ?? null,
+          title: t.title,
+          description: t.description ?? "",
+          status: "DONE",
+          priority: t.priority,
+          ownerId: t.ownerId,
+          startDate: t.startDate,
+          dueDate: t.dueDate,
+        });
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("space_tasks_updated"));
+      }
+    } catch (err) {
+      alert("Có lỗi khi duyệt hàng loạt!");
+    } finally {
+      setBatchApproving(false);
+    }
+  };
+
+  // Step 3: Risk & Progress Analysis across project and members
+  const riskAnalysis = analyzeProjectAndMemberRisks(existingTasks, members);
+
+  // Personal AI recommendations for current user
+  const skillMatchedUnassigned = recommendUnassignedTasksForMember(existingTasks, currentUser);
+  const myActiveTasks = existingTasks
+    .filter(
+      (t) =>
+        !t.isDeleted &&
+        t.status !== "DONE" &&
+        currentUser?.id &&
+        (t.ownerId === currentUser.id || t.assignee?.id === currentUser.id)
+    )
+    .sort((a, b) => {
+      const pWeight: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+      return (pWeight[b.priority] || 1) - (pWeight[a.priority] || 1);
+    });
+
   if (!isOpen || !space) return null;
 
   if (isMinimized) {
+    // Tự động ẩn nút nổi ở góc dưới khi bảng chi tiết Task (TaskDetailDrawer) đang mở để không bao giờ che nút Lưu / Hoàn tác
+    if (isTaskDrawerOpen) return null;
+
     return (
-      <div className="fixed bottom-4 right-4 z-[9999] font-sans">
+      <div className="fixed bottom-4 right-4 z-30 font-sans">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 px-3.5 py-2.5 bg-[#111827] text-white hover:bg-black rounded-2xl shadow-2xl border border-gray-700 text-xs font-extrabold transition-all cursor-pointer animate-in zoom-in-95 hover:scale-105"
+          className="flex items-center gap-2 px-3.5 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 text-[#4B5563] hover:text-[#111827] rounded-xl shadow-lg text-xs font-bold transition-all cursor-pointer animate-in zoom-in-95"
+          title="Mở bảng Trợ lý AI"
         >
-          {/* <Bot className="w-4 h-4 text-[#10B981]" /> */}
-          <span>AI phân rã task</span>
-          {/* <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" /> */}
+          <Sparkles className="w-4 h-4 text-[#111827]" />
+          <span>
+            {spaceRole === "MEMBER"
+              ? "Trợ lý AI Cá nhân"
+              : `Trợ lý AI Dự án${inReviewTasks.length > 0 ? ` (${inReviewTasks.length} chờ duyệt)` : ""}`}
+          </span>
         </button>
       </div>
     );
@@ -458,102 +634,712 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   return (
     <div
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      className="fixed bottom-4 right-4 z-[9999] w-full sm:w-[1100px] max-w-[95vw] h-[700px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300"
+      className="fixed bottom-4 right-4 z-[9999] w-full sm:w-[1050px] max-w-[95vw] h-[680px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300"
     >
-      {/* Draggable Header */}
+      {/* Draggable Header with Role-Aware AI Mode Switcher */}
       <div
         onMouseDown={handleHeaderMouseDown}
-        className="p-3.5 bg-[#111827] text-white flex items-center justify-between border-b border-gray-800 shrink-0 cursor-grab active:cursor-grabbing select-none"
-        title="Kéo giữ để di chuyển cửa sổ AI Co-Pilot tới vị trí bất kỳ"
+        className="p-3 bg-[#111827] text-white flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 shrink-0 cursor-grab active:cursor-grabbing select-none"
+        title="Kéo giữ để di chuyển cửa sổ AI Co-Pilot"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <GripHorizontal className="w-4 h-4 text-gray-400 shrink-0" />
-          <div className="w-8 h-8 rounded-xl bg-[#10B981] text-white flex items-center justify-center font-bold shrink-0">
-            <Bot className="w-4.5 h-4.5" />
+          <div className="w-7 h-7 rounded-xl bg-[#10B981] text-white flex items-center justify-center font-bold shrink-0">
+            <Bot className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-xs font-extrabold flex items-center gap-2">
-              <span>AI Phân Rã Task</span>
+              <span>Multi-AI Co-Pilot</span>
+              <span className="px-2 py-0.5 rounded bg-white/15 text-[10px] font-mono text-[#A7F3D0]">
+                {spaceRole}
+              </span>
             </h3>
-            <p className="text-[10px] text-gray-300">
-              Dự án: <span className="font-bold text-[#A7F3D0]">{space.name}</span>
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Mode Tabs inside Header */}
+        <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl flex-wrap">
           <button
-            onClick={handleNewSession}
-            className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[11px] font-bold text-white transition-all cursor-pointer"
-            title="Bắt đầu đàm thoại mới cho Space này"
+            type="button"
+            onClick={() => setActiveMode("personal")}
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeMode === "personal"
+                ? "bg-white text-[#111827] shadow-2xs"
+                : "text-gray-300 hover:text-white"
+            }`}
           >
-            <RefreshCw className="w-3 h-3 text-[#FBBF24]" />
-            <span>Tạo Phiên Mới</span>
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Việc của tôi ({myActiveTasks.length})</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveMode("risk")}
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeMode === "risk"
+                ? "bg-white text-[#111827] shadow-2xs"
+                : "text-gray-300 hover:text-white"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-[#38BDF8]" />
+            <span>Tiến độ &amp; Rủi ro</span>
+          </button>
+
+          {isCoordinator && (
+            <button
+              type="button"
+              onClick={() => setActiveMode("acceptance")}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeMode === "acceptance"
+                  ? "bg-white text-[#111827] shadow-2xs"
+                  : "text-gray-300 hover:text-white"
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
+              <span>Tổng hợp &amp; Duyệt ({inReviewTasks.length})</span>
+            </button>
+          )}
+
+          {isCoordinator && (
+            <button
+              type="button"
+              onClick={() => setActiveMode("decompose")}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeMode === "decompose"
+                  ? "bg-white text-[#111827] shadow-2xs"
+                  : "text-gray-300 hover:text-white"
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-[#FBBF24]" />
+              <span>Phân rã Task</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {activeMode === "decompose" && (
+            <button
+              onClick={handleNewSession}
+              className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[11px] font-bold text-white transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3 text-[#FBBF24]" />
+              <span>Phiên mới</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsMinimized(true)}
             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
-            title="Thu nhỏ cửa sổ"
+            title="Thu nhỏ"
           >
             <X className="w-4 h-4" />
-            {/* <span className="text-sm font-extrabold font-mono leading-none">−</span> */}
           </button>
-
-          {/* <button
-            onClick={onClose}
-            className="p-1 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
-            title="Đóng AI Co-Pilot"
-          >
-            <X className="w-4 h-4" />
-          </button> */}
         </div>
       </div>
 
       {/* Drawer Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-[#FAFAFA]">
-        {/* Context Info Banner */}
-        <div className="p-3 bg-[#F0F7FF] border border-[#D2E3FC] rounded-xl text-xs text-[#1A73E8] space-y-1">
-          <p className="font-bold flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4" />
-            <span>AI Co-Pilot đang hoạt động trực tiếp trong Space "{space.name}"</span>
-          </p>
-          <p className="text-[11px] text-[#3C4043] leading-relaxed">
-            Tự động nối tiếp các Sprint tương lai (Sprint N+1), đánh giá rủi ro cho công việc chưa thực hiện và KHÔNG đụng vào Sprint đang diễn ra.
-          </p>
-        </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#FAFAFA]">
+        {/* ====================================================================
+            MODE 1: VIỆC CỦA TÔI (Gợi ý nhận việc khớp kỹ năng & Ưu tiên cá nhân)
+            ==================================================================== */}
+        {activeMode === "personal" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-in fade-in duration-150">
+            {/* Left Column: Unassigned Tasks Matching Member's Skills */}
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-2">
+                <h4 className="text-xs font-extrabold text-[#111827] flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-[#1A73E8]" />
+                  <span>Gợi ý việc trống đúng chuyên môn ({skillMatchedUnassigned.length})</span>
+                </h4>
+                <span className="text-[10px] font-mono text-[#6B7280]">
+                  {currentUser?.jobTitle || "Member"}
+                </span>
+              </div>
 
-        {/* Chat Window */}
-        <AiChatWindow
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          loading={loading}
-        />
+              {skillMatchedUnassigned.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#9CA3AF] italic">
+                  Không còn công việc trống nào trong Space.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                  {skillMatchedUnassigned.map((item) => (
+                    <div
+                      key={item.task.id}
+                      className="p-3 rounded-xl border border-[#E5E7EB] hover:border-[#1A73E8] bg-[#F9FAFB] flex items-center justify-between gap-3 transition-all"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border border-[#E5E7EB] text-[#6B7280]">
+                            Task-{item.task.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-[#E6F4EA] text-[#137333] font-mono text-[10px] font-bold">
+                            Phù hợp {item.matchScore}%
+                          </span>
+                          <span className="text-[10px] text-[#6B7280] font-mono">
+                            {item.matchReason}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-[#111827] truncate">
+                          {item.task.title}
+                        </p>
+                      </div>
 
-        {/* Decomposed Tasks Results Canvas */}
-        {result && (
-          <div className="pt-4 border-t border-[#E5E7EB] space-y-3">
-            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#111827]">
-              📋 Kết Quả Phân Rã Task Mới Nối Tiếp
-            </h4>
-            <AiDecomposedResults
-              result={result}
-              targetMode="EXISTING_SPACE"
-              selectedSpace={space}
-              newSpaceName=""
-              workspaceId={workspaceId}
-              selectedSpaceId={space.id}
-              createdSpaceId={null}
-              onImportTasks={handleImportTasks}
-              importing={importing}
-              importSuccess={importSuccess}
-              isImported={isImported}
-              members={[]}
-              onUpdateTasks={handleUpdateTasks}
-              existingTaskCount={totalExistingTaskCount}
-              existingSprintsSummary={existingSprintsSummary}
-              startDate={space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0]}
+                      {currentUser?.id && (
+                        <button
+                          type="button"
+                          disabled={actionLoadingId === item.task.id}
+                          onClick={() =>
+                            handleQuickTaskUpdate(item.task, { ownerId: currentUser.id })
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] text-white font-mono text-[10px] font-bold shrink-0 cursor-pointer"
+                        >
+                          {actionLoadingId === item.task.id ? "..." : "+ Nhận việc"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Member's Priority Work Queue */}
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-2">
+                <h4 className="text-xs font-extrabold text-[#111827] flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-[#137333]" />
+                  <span>Thứ tự ưu tiên việc của tôi ({myActiveTasks.length})</span>
+                </h4>
+              </div>
+
+              {myActiveTasks.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#9CA3AF] italic">
+                  Bạn chưa có công việc nào đang mở.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                  {myActiveTasks.map((t, idx) => (
+                    <div
+                      key={t.id}
+                      className="p-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded bg-[#111827] text-white font-mono text-[10px] font-bold">
+                            #{idx + 1}
+                          </span>
+                          <span className="font-mono text-[10px] font-bold text-[#6B7280]">
+                            Task-{t.id}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold">
+                            {t.priority}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono text-[10px] font-bold">
+                            {t.status === "TODO"
+                              ? "Cần làm"
+                              : t.status === "IN_PROGRESS"
+                              ? "Đang làm"
+                              : "Chờ duyệt"}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-[#111827] truncate">{t.title}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {t.status === "TODO" && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === t.id}
+                            onClick={() => handleQuickTaskUpdate(t, { status: "IN_PROGRESS" })}
+                            className="px-2.5 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] text-white font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Play className="w-3 h-3" />
+                            <span>Bắt đầu</span>
+                          </button>
+                        )}
+                        {t.status === "IN_PROGRESS" && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === t.id}
+                            onClick={() =>
+                              handleQuickTaskUpdate(t, {
+                                status: isPM ? "DONE" : "IN_REVIEW",
+                              })
+                            }
+                            className="px-2.5 py-1.5 rounded-xl bg-[#137333] hover:bg-[#0d5324] text-white font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Hoàn thành</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================================
+            MODE 2: BƯỚC 3 - AI ĐÁNH GIÁ TIẾN ĐỘ, RỦI RO & ĐỀ XUẤT ĐIỀU PHỐI
+            ==================================================================== */}
+        {activeMode === "risk" && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Project Health Summary Row */}
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
+                    Đánh giá Tiến độ &amp; Rủi ro Dự án
+                  </h4>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold border ${
+                      riskAnalysis.riskLevel === "HIGH"
+                        ? "bg-red-50 text-red-700 border-red-200"
+                        : riskAnalysis.riskLevel === "MEDIUM"
+                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                        : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
+                    }`}
+                  >
+                    {riskAnalysis.riskLevel === "HIGH"
+                      ? "🔴 "
+                      : riskAnalysis.riskLevel === "MEDIUM"
+                      ? "🟡 "
+                      : "🟢 "}
+                    {riskAnalysis.riskLabel}
+                  </span>
+                </div>
+                <p className="text-xs text-[#4B5563]">{riskAnalysis.riskSummary}</p>
+              </div>
+
+              <div className="flex items-center gap-3 text-center font-mono text-xs">
+                <div className="px-3 py-1.5 rounded-xl bg-[#E6F4EA] text-[#137333] border border-[#CEE7D4]">
+                  <p className="text-[10px] font-semibold">Đã xong</p>
+                  <p className="font-extrabold">{riskAnalysis.doneTasks}/{riskAnalysis.totalTasks}</p>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
+                  <p className="text-[10px] font-semibold">Chờ duyệt</p>
+                  <p className="font-extrabold">{riskAnalysis.inReviewTasks}</p>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200">
+                  <p className="text-[10px] font-semibold">Trễ hạn</p>
+                  <p className="font-extrabold">{riskAnalysis.overdueTasks}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 1: DANH SÁCH ĐIỂM NGHẼN & RỦI RO CỤ THỂ (Rủi ro ở đâu & Tại sao rủi ro?) */}
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
+                    Danh sách Điểm nghẽn &amp; Công việc Rủi ro ({riskAnalysis.riskItems.length})
+                  </h4>
+                </div>
+                <span className="text-[11px] text-[#6B7280]">
+                  Chỉ rõ công việc nào đang chậm trễ và nguyên nhân rủi ro
+                </span>
+              </div>
+
+              {riskAnalysis.riskItems.length === 0 ? (
+                <div className="p-4 rounded-xl border border-dashed border-[#CEE7D4] bg-[#E6F4EA]/40 text-center text-xs text-[#137333] font-medium flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Không có công việc nào bị trễ hạn hoặc có nguy cơ cao trong dự án.</span>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {riskAnalysis.riskItems.map((item) => {
+                    const sprint = spaceSprints.find((sp) => sp.id === item.task.sprintId);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] hover:bg-white transition-colors flex flex-wrap items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">
+                              Task-{item.task.id}
+                            </span>
+                            <span className="font-bold text-[#111827] truncate max-w-[360px]" title={item.task.title}>
+                              {item.task.title}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded font-mono text-[10px] font-extrabold border ${item.riskBadgeClass}`}>
+                              {item.riskBadge}
+                            </span>
+                            {sprint && (
+                              <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                {sprint.name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#4B5563]">
+                            <strong>Nguyên nhân rủi ro:</strong> {item.riskReason}
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0 font-mono text-[11px]">
+                          <p className="text-[#6B7280]">Người phụ trách:</p>
+                          <p className="font-bold text-[#111827]">{item.assigneeName}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2 & 3: GRID 2 CỘT */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              {/* Member Progress & Workload Assessment (3/5 width) */}
+              <div className="lg:col-span-3 bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
+                    Tiến độ &amp; Khối lượng Công việc từng Thành viên ({riskAnalysis.memberProfiles.length})
+                  </h4>
+                  <span className="text-[10px] text-[#6B7280] italic">
+                    (Bấm vào hàng để xem chi tiết task)
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {riskAnalysis.memberProfiles.map((mp) => {
+                    const isExpanded = expandedMemberRiskId === mp.member.id;
+                    return (
+                      <div
+                        key={mp.member.id}
+                        className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-xs overflow-hidden transition-all"
+                      >
+                        <div
+                          onClick={() => setExpandedMemberRiskId(isExpanded ? null : mp.member.id)}
+                          className="p-3 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-gray-100/70 transition-colors"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-[#111827]">
+                                {mp.member.fullName || mp.member.username}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold border ${
+                                  mp.loadStatus === "OVERLOADED"
+                                    ? "bg-red-50 text-red-700 border-red-200"
+                                    : mp.loadStatus === "AVAILABLE"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
+                                }`}
+                              >
+                                {mp.loadLabel}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[#6B7280] truncate">
+                              {mp.member.jobTitle || mp.member.email}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold" title="Đã hoàn thành">
+                              Đã xong: {mp.doneCount}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold" title="Đang làm">
+                              Đang làm: {mp.inProgressCount}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 font-bold" title="Cần làm (chưa bắt đầu)">
+                              Cần làm: {mp.todoCount}
+                            </span>
+                            {mp.overdueCount > 0 && (
+                              <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-bold" title="Công việc bị trễ hạn">
+                                ⚠️ Trễ: {mp.overdueCount}
+                              </span>
+                            )}
+                            <button type="button" className="p-0.5 text-gray-400 hover:text-gray-600">
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expandable list of unfinished tasks held by this member */}
+                        {isExpanded && (
+                          <div className="p-2.5 bg-white border-t border-[#E5E7EB] space-y-1.5">
+                            <p className="text-[10px] font-mono font-bold uppercase text-gray-500 pb-1 border-b border-gray-100">
+                              Các công việc chưa hoàn thành đang giữ ({mp.openTasksList.length}):
+                            </p>
+                            {mp.openTasksList.length === 0 ? (
+                              <p className="text-[11px] text-gray-400 italic">Thành viên không còn công việc nào đang mở.</p>
+                            ) : (
+                              mp.openTasksList.map((ot) => (
+                                <div
+                                  key={ot.id}
+                                  className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px]"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-mono font-bold text-gray-600 shrink-0">
+                                      Task-{ot.id}
+                                    </span>
+                                    <span className="truncate text-gray-900 font-medium">{ot.title}</span>
+                                  </div>
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded font-mono text-[9px] font-bold shrink-0 ${
+                                      ot.status === "IN_PROGRESS"
+                                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                        : "bg-gray-100 text-gray-700 border border-gray-200"
+                                    }`}
+                                  >
+                                    {ot.status === "IN_PROGRESS" ? "Đang làm" : "Cần làm"}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Actionable AI Solutions (2/5 width) */}
+              <div className="lg:col-span-2 bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#1A73E8]" />
+                    <span>Giải pháp Điều phối Rủi ro ({riskAnalysis.suggestions.length})</span>
+                  </h4>
+                  <p className="text-[11px] text-[#6B7280]">
+                    Đề xuất xử lý các điểm nghẽn và san sẻ việc quá tải
+                  </p>
+                </div>
+
+                {riskAnalysis.suggestions.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-[#9CA3AF] italic">
+                    Dự án đang cân bằng tốt, không có cảnh báo cần can thiệp.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                    {riskAnalysis.suggestions.map((sug) => (
+                      <div
+                        key={sug.id}
+                        className="p-3 rounded-xl border border-[#D2E3FC] bg-[#F0F7FF]/60 space-y-2 text-xs"
+                      >
+                        <p className="font-bold text-[#111827]">{sug.title}</p>
+                        
+                        <div className="space-y-1 text-[11px]">
+                          <p className="text-red-700">
+                            <strong>• Vấn đề:</strong> {sug.problem}
+                          </p>
+                          <p className="text-blue-900">
+                            <strong>• Giải pháp:</strong> {sug.solution}
+                          </p>
+                        </div>
+
+                        {isCoordinator && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === sug.id}
+                            onClick={async () => {
+                              setActionLoadingId(sug.id);
+                              if (
+                                (sug.type === "REASSIGN" || sug.type === "ASSIGN_UNASSIGNED") &&
+                                sug.targetMember
+                              ) {
+                                await handleQuickTaskUpdate(sug.task, {
+                                  ownerId: sug.targetMember.id,
+                                });
+                              } else if (sug.type === "EXTEND_DUE" && sug.newDueDate) {
+                                await handleQuickTaskUpdate(sug.task, {
+                                  dueDate: sug.newDueDate,
+                                });
+                              } else if (sug.type === "PRIORITIZE_TASK") {
+                                await handleQuickTaskUpdate(sug.task, {
+                                  status: sug.newStatus || "IN_PROGRESS",
+                                  priority: sug.newPriority || "URGENT",
+                                });
+                              }
+                              setActionLoadingId(null);
+                            }}
+                            className="w-full py-1.5 px-3 bg-[#1A73E8] hover:bg-[#1557B0] text-white rounded-xl font-mono text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <span>{sug.actionLabel}</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================================
+            MODE 3: BƯỚC 2 - TỔNG HỢP BÁO CÁO BÀN GIAO & DUYỆT TASK (PM & ASSISTANT)
+            ==================================================================== */}
+        {activeMode === "acceptance" && isCoordinator && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="p-4 bg-white border border-[#E5E7EB] rounded-2xl shadow-2xs flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
+                  Tổng hợp Công việc Chờ duyệt ({inReviewTasks.length})
+                </h4>
+                <p className="text-xs text-[#6B7280]">
+                  {isAssistant
+                    ? "Assistant kiểm tra kết quả thực hiện của thành viên và xác nhận đề xuất để PM duyệt."
+                    : "Tổng hợp trạng thái hoàn thành bước làm và xác nhận từ Assistant để PM quyết định duyệt."}
+                </p>
+              </div>
+
+              {isPM && readyForApproveTasks.length > 0 && (
+                <button
+                  type="button"
+                  disabled={batchApproving}
+                  onClick={handleBatchApprovePassedTasks}
+                  className="px-4 py-2 bg-[#137333] hover:bg-[#0d5324] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>
+                    {batchApproving
+                      ? "Đang duyệt..."
+                      : `Duyệt nhanh các task đủ điều kiện (${readyForApproveTasks.length})`}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {evaluatedInReview.length === 0 ? (
+              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-10 text-center space-y-2">
+                <CheckCircle2 className="w-9 h-9 text-[#10B981] mx-auto" />
+                <p className="text-sm font-bold text-[#111827]">
+                  Không có công việc nào đang ở trạng thái Chờ duyệt
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {evaluatedInReview.map(({ task: t, evalResult }) => {
+                  const assigneeUser = members.find(
+                    (m) => m.id === t.ownerId || m.id === t.assignee?.id
+                  );
+                  return (
+                    <div
+                      key={t.id}
+                      className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] shadow-2xs flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#F6F5EF] border border-[#E5E7EB] text-[#111827]">
+                            Task-{t.id}
+                          </span>
+                          <span className="text-sm font-extrabold text-[#111827]">{t.title}</span>
+                          <span className="text-xs text-[#6B7280]">
+                            ({assigneeUser?.fullName || t.ownerName || "Thành viên"})
+                          </span>
+                        </div>
+
+                        {/* Short Visual Pills */}
+                        <div className="flex items-center gap-2 flex-wrap font-mono text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded bg-[#F9FAFB] border border-[#E5E7EB] text-[#111827]">
+                            {evalResult.checklistLabel}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded border ${
+                              evalResult.isOverdue
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
+                            }`}
+                          >
+                            {evalResult.timelineLabel}
+                          </span>
+                          {evalResult.assistantVerified ? (
+                            <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                              ✓ Assistant đã kiểm tra
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                              {evalResult.statusSummary}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isAssistant && !isPM && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === t.id || evalResult.assistantVerified}
+                            onClick={() => handleAssistantVerifyTask(t)}
+                            className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60"
+                          >
+                            {evalResult.assistantVerified
+                              ? "✓ Đã xác nhận"
+                              : "✓ Xác nhận đạt"}
+                          </button>
+                        )}
+
+                        {isPM && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === t.id}
+                            onClick={() => handleQuickTaskUpdate(t, { status: "DONE" })}
+                            className="px-3.5 py-1.5 bg-[#137333] hover:bg-[#0d5324] text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Duyệt Done</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={actionLoadingId === t.id}
+                          onClick={() => handleQuickTaskUpdate(t, { status: "IN_PROGRESS" })}
+                          className="px-3 py-1.5 bg-white hover:bg-gray-100 text-[#4B5563] border border-[#D1D5DB] rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Sửa lại</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ====================================================================
+            MODE 4: AI PHÂN RÃ TASK TỪ TÀI LIỆU (Dành cho PM & ASSISTANT)
+            ==================================================================== */}
+        {activeMode === "decompose" && isCoordinator && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <AiChatWindow
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              loading={loading}
             />
+
+            {result && (
+              <div className="pt-4 border-t border-[#E5E7EB] space-y-3">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#111827]">
+                  📋 Kết Quả Phân Rã Task Mới Nối Tiếp
+                </h4>
+                <AiDecomposedResults
+                  result={result}
+                  targetMode="EXISTING_SPACE"
+                  selectedSpace={space}
+                  newSpaceName=""
+                  workspaceId={workspaceId}
+                  selectedSpaceId={space.id}
+                  createdSpaceId={null}
+                  onImportTasks={handleImportTasks}
+                  importing={importing}
+                  importSuccess={importSuccess}
+                  isImported={isImported}
+                  members={members.map((m) => m.fullName || m.email)}
+                  onUpdateTasks={handleUpdateTasks}
+                  existingTaskCount={totalExistingTaskCount}
+                  existingSprintsSummary={existingSprintsSummary}
+                  startDate={space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0]}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

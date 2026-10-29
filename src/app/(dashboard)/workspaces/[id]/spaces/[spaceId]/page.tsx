@@ -21,6 +21,7 @@ import { SpaceTrashModal } from "@/components/space/SpaceTrashModal";
 import { sprintService } from "@/services/sprint.service";
 import { taskService } from "@/services/task.service";
 import { Space, Task, Sprint, Workspace, User } from "@/types";
+import { roleIdToSpaceRole } from "@/utils/roleAssignment";
 
 export default function SpaceDetailPage() {
   const params = useParams();
@@ -40,11 +41,23 @@ export default function SpaceDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [rawSpaceMembers, setRawSpaceMembers] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
+  const mySpaceRole = React.useMemo(() => {
+    if (!currentUser?.id) return "MEMBER";
+    const isCreator = workspace?.ownerId === currentUser.id;
+    const myMember = rawSpaceMembers.find(
+      (m: any) => (m.id?.userId || m.userId) === currentUser.id
+    );
+    return roleIdToSpaceRole(myMember?.roleId, isCreator);
+  }, [currentUser?.id, workspace?.ownerId, rawSpaceMembers]);
+
+  const isSpacePM = mySpaceRole === "PM";
+  const isSpaceAssistant = mySpaceRole === "ASSISTANT";
 
   const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
 
@@ -105,6 +118,7 @@ export default function SpaceDetailPage() {
       }
       setTasks(taskList || []);
       setSprints(sprintList || []);
+      setRawSpaceMembers(memberList || []);
 
       // Extract unique user IDs and fetch full user profile details
       const userIds: number[] = Array.from(
@@ -229,9 +243,11 @@ export default function SpaceDetailPage() {
           setActiveTab={handleTabChange}
           onOpenSettings={() => setIsEditOpen(true)}
           onOpenCopilot={() => setIsCopilotOpen(true)}
-          onOpenAddMember={() => setIsAddMemberOpen(true)}
-          onOpenTrash={() => setIsTrashOpen(true)}
-          isOwner={isOwner}
+          onOpenAddMember={isSpacePM ? () => setIsAddMemberOpen(true) : undefined}
+          onOpenTrash={isSpacePM ? () => setIsTrashOpen(true) : undefined}
+          isOwner={isSpacePM}
+          isLeadPM={isOwner}
+          spaceRole={mySpaceRole}
         />
 
         {/* Tab Contents */}
@@ -255,6 +271,9 @@ export default function SpaceDetailPage() {
               <SprintTaskList
                 spaceId={spaceId}
                 members={members}
+                isPM={isSpacePM}
+                isAssistant={isSpaceAssistant}
+                currentUserId={currentUser?.id}
                 onDrawerStateChange={setIsDrawerOpen}
               />
             </div>
@@ -265,6 +284,10 @@ export default function SpaceDetailPage() {
             <div className="animate-in fade-in duration-200">
               <SprintKanbanBoard
                 spaceId={spaceId}
+                isPM={isSpacePM}
+                isAssistant={isSpaceAssistant}
+                currentUserId={currentUser?.id}
+                members={members}
                 onDrawerStateChange={setIsDrawerOpen}
               />
             </div>
@@ -290,15 +313,19 @@ export default function SpaceDetailPage() {
                 workspaceId={workspaceId}
                 spaceId={spaceId}
                 tasks={tasks}
+                isPM={isSpacePM}
+                workspaceOwnerId={workspace?.ownerId}
+                currentUserId={currentUser?.id}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onSelectTask={handleSelectTaskToggle}
+                onRoleUpdated={() => fetchData(true)}
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* AI Co-Pilot Drawer for Space (Always available via floating bottom-right button) */}
+      {/* AI Co-Pilot Drawer for Space (Available for ALL roles: PM, ASSISTANT, and MEMBER) */}
       {space && (
         <SpaceAiCopilotDrawer
           isOpen={true}
@@ -306,23 +333,32 @@ export default function SpaceDetailPage() {
           space={space}
           workspaceId={workspaceId}
           existingTasks={tasks}
+          spaceRole={mySpaceRole}
+          currentUser={currentUser}
+          members={members}
+          isTaskDrawerOpen={isDrawerVisible}
         />
       )}
 
       {/* Add Space Member Modal */}
-      <AddSpaceMemberModal
-        isOpen={isAddMemberOpen}
-        workspaceId={workspaceId}
-        spaceId={spaceId}
-        onClose={() => setIsAddMemberOpen(false)}
-        onMemberAdded={fetchData}
-      />
+      {isSpacePM && (
+        <AddSpaceMemberModal
+          isOpen={isAddMemberOpen}
+          workspaceId={workspaceId}
+          spaceId={spaceId}
+          onClose={() => setIsAddMemberOpen(false)}
+          onMemberAdded={fetchData}
+        />
+      )}
 
       {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview */}
       {selectedTask && isDrawerOpen && (
         <TaskDetailDrawer
           task={selectedTask}
           taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+          isPM={isSpacePM}
+          isAssistant={isSpaceAssistant}
+          currentUserId={currentUser?.id}
           members={members}
           isClosedSprint={Boolean(
             selectedTask?.sprintId &&
@@ -377,7 +413,7 @@ export default function SpaceDetailPage() {
       <EditSpaceModal
         isOpen={isEditOpen}
         space={space}
-        isOwner={isOwner}
+        isOwner={isSpacePM}
         onClose={() => setIsEditOpen(false)}
         onUpdate={handleUpdateSpace}
         onDelete={handleDeleteSpace}

@@ -148,6 +148,13 @@ export function SpaceTimelineTab({
         </span>
       );
     }
+    if (status === "IN_REVIEW") {
+      return (
+        <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A] text-[11px] font-bold rounded-md flex items-center gap-1 shrink-0">
+          Chờ duyệt <ChevronDown className="w-3 h-3 text-[#B45309]" />
+        </span>
+      );
+    }
     if (status === "IN_PROGRESS") {
       return (
         <span className="px-2 py-0.5 bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC] text-[11px] font-bold rounded-md flex items-center gap-1 shrink-0">
@@ -164,6 +171,7 @@ export function SpaceTimelineTab({
 
   const getTaskBarColor = (status: string) => {
     if (status === "DONE") return "bg-[#70B500] hover:bg-[#5C9400]";
+    if (status === "IN_REVIEW") return "bg-[#F59E0B] hover:bg-[#D97706]";
     if (status === "IN_PROGRESS") return "bg-[#1A73E8] hover:bg-[#1557B0]";
     return "bg-[#6B7280] hover:bg-[#4B5563]";
   };

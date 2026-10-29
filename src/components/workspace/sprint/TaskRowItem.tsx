@@ -1,15 +1,19 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { AlertTriangle, ChevronUp, User, Trash2, Check, Lock } from "lucide-react";
+import { AlertTriangle, ChevronUp, User, Trash2, Check } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { getTaskTransferredOrigin } from "@/hooks/useSprints";
+import { canUserDeleteTaskItem } from "@/utils/aiTaskAssistant";
 
 interface TaskRowItemProps {
   task: Task;
   taskIndex?: number;
   members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   isOverdue?: boolean;
   isClosedSprint?: boolean;
   isActiveSprint?: boolean;
@@ -23,9 +27,17 @@ interface TaskRowItemProps {
   onDelete?: (taskId: number) => void;
 }
 
-const taskStatusMap: Record<TaskStatus, { label: string; bg: string; text: string }> = {
+const taskStatusMap: Record<
+  TaskStatus,
+  { label: string; bg: string; text: string }
+> = {
   TODO: { label: "Cần làm", bg: "bg-gray-100", text: "text-gray-700" },
-  IN_PROGRESS: { label: "Đang làm", bg: "bg-[#E8F0FE]", text: "text-[#1A73E8]" },
+  IN_PROGRESS: {
+    label: "Đang làm",
+    bg: "bg-[#E8F0FE]",
+    text: "text-[#1A73E8]",
+  },
+  IN_REVIEW: { label: "Chờ duyệt", bg: "bg-[#FEF3C7]", text: "text-[#B45309]" },
   DONE: { label: "Đã xong", bg: "bg-[#E6F4EA]", text: "text-[#137333]" },
 };
 
@@ -33,6 +45,9 @@ export function TaskRowItem({
   task,
   taskIndex,
   members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   isOverdue = false,
   isClosedSprint = false,
   isActiveSprint = false,
@@ -45,8 +60,25 @@ export function TaskRowItem({
   onUpdateOwner,
   onDelete,
 }: TaskRowItemProps) {
-  const isReadOnly = isClosedSprint || isGhostTransferred;
-  const canDelete = !isClosedSprint && !isGhostTransferred && (!isActiveSprint || task.status === "TODO");
+  const isCoordinator = isPM || isAssistant;
+  const taskOwnerId = task.ownerId || task.assignee?.id;
+  const isMyTask = Boolean(currentUserId && taskOwnerId === currentUserId);
+  const isUnassigned = !taskOwnerId;
+  const isOtherMemberTask = !isCoordinator && !isUnassigned && !isMyTask;
+
+  const isReadOnly = isClosedSprint || isGhostTransferred || isOtherMemberTask;
+  const canEditTaskFields = !isReadOnly && (isCoordinator || isMyTask);
+  const canChangeStatus = canEditTaskFields && (isPM || task.status !== "DONE");
+  const canDragAcrossSprints =
+    isCoordinator && !isClosedSprint && !isGhostTransferred;
+  const canDelete = canUserDeleteTaskItem(
+    task,
+    currentUserId,
+    isPM,
+    isClosedSprint,
+    isActiveSprint,
+    isGhostTransferred,
+  );
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
 
   // Popover States
@@ -62,13 +94,22 @@ export function TaskRowItem({
   // Close popovers on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (priorityRef.current && !priorityRef.current.contains(event.target as Node)) {
+      if (
+        priorityRef.current &&
+        !priorityRef.current.contains(event.target as Node)
+      ) {
         setShowPriorityPopover(false);
       }
-      if (assigneeRef.current && !assigneeRef.current.contains(event.target as Node)) {
+      if (
+        assigneeRef.current &&
+        !assigneeRef.current.contains(event.target as Node)
+      ) {
         setShowAssigneePopover(false);
       }
-      if (statusRef.current && !statusRef.current.contains(event.target as Node)) {
+      if (
+        statusRef.current &&
+        !statusRef.current.contains(event.target as Node)
+      ) {
         setShowStatusPopover(false);
       }
     };
@@ -113,22 +154,30 @@ export function TaskRowItem({
   return (
     <>
       <div
-        draggable={!isReadOnly}
+        draggable={canDragAcrossSprints}
         onDragStart={(e) => {
-          if (isReadOnly) return;
+          if (!canDragAcrossSprints) return;
           e.dataTransfer.setData("taskId", task.id.toString());
-          e.dataTransfer.setData("sourceSprintId", (task.sprintId || "backlog").toString());
+          e.dataTransfer.setData(
+            "sourceSprintId",
+            (task.sprintId || "backlog").toString(),
+          );
         }}
-        className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${isSelected
-          ? "bg-[#E8F0FE]/60 border-l-2 border-l-[#1A73E8]"
-          : isReadOnly
-            ? "bg-gray-50/70 cursor-default"
-            : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
-          }`}
+        className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${
+          isSelected
+            ? "bg-[#E8F0FE]/60 border-l-[3px] border-l-[#1A73E8]"
+            : isMyTask
+              ? "bg-[#F8FAFF]/70 hover:bg-[#F0F6FF] border-l-[3px] border-l-[#1A73E8] cursor-pointer"
+              : isReadOnly
+                ? "bg-white hover:bg-[#F9FAFB] cursor-pointer"
+                : canDragAcrossSprints
+                  ? "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+                  : "bg-white hover:bg-[#F9FAFB] cursor-pointer"
+        }`}
       >
-        {/* Left side: Checkbox + Task Code & Title */}
+        {/* Left side: Checkbox (PM only) + Task Code & Title */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {onToggleSelect && !isGhostTransferred && (
+          {isPM && onToggleSelect && !isGhostTransferred && (
             <input
               type="checkbox"
               disabled={!canDelete}
@@ -138,10 +187,11 @@ export function TaskRowItem({
                 if (canDelete) onToggleSelect(task.id);
               }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-4 h-4 rounded border-gray-300 transition-all ${canDelete
-                ? "text-[#1A73E8] focus:ring-[#1A73E8] cursor-pointer"
-                : "opacity-30 cursor-not-allowed bg-gray-200"
-                }`}
+              className={`w-4 h-4 rounded border-gray-300 transition-all ${
+                canDelete
+                  ? "text-[#1A73E8] focus:ring-[#1A73E8] cursor-pointer"
+                  : "opacity-30 cursor-not-allowed bg-gray-200"
+              }`}
               title={
                 isClosedSprint
                   ? "Không thể xóa công việc trong Sprint đã đóng"
@@ -159,11 +209,22 @@ export function TaskRowItem({
             <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0 group-hover:border-[#111827] transition-colors">
               Task-{taskIndex !== undefined ? taskIndex + 1 : task.id}
             </span>
+
+            {isMyTask && (
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC] font-mono text-[10px] font-bold shrink-0"
+                title="Công việc do bạn phụ trách thực hiện"
+              >
+                Tôi
+              </span>
+            )}
+
             <span
-              className={`font-semibold truncate ${task.status === "DONE"
-                ? "line-through text-gray-500"
-                : "text-[#111827] hover:underline"
-                }`}
+              className={`font-semibold truncate ${
+                task.status === "DONE"
+                  ? "line-through text-gray-500"
+                  : "text-[#111827] hover:underline"
+              }`}
             >
               {task.title}
             </span>
@@ -172,56 +233,122 @@ export function TaskRowItem({
             {isGhostTransferred ? (
               <span
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10px] font-bold shrink-0 shadow-2xs"
-                title="Công việc trễ hạn đã dời sang Sprint mới để làm tiếp. Tại Sprint đã đóng này chỉ lưu vết để theo dõi (chỉ xem, không chỉnh sửa)."
+                title="Công việc trễ hạn đã dời sang Sprint mới để làm tiếp. Sprint đã đóng này chỉ lưu vết để theo dõi"
               >
-                <span>⚠️</span>
-                <span>Lưu vết (Đã dời sang Sprint mới)</span>
+                <span>Đã dời sang Sprint mới</span>
               </span>
             ) : (
               (() => {
                 const transferred = getTaskTransferredOrigin(task);
                 if (!transferred.isTransferred) return null;
                 return (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 font-mono text-[10px] font-bold shrink-0 shadow-2xs"
-                    title={`Nhiệm vụ trễ hạn từ sprint đã đóng: ${transferred.originSprintName}`}
-                  >
-                    <span>⚠️</span>
-                    <span>Tồn đọng: {transferred.originSprintName}</span>
+                  <span className="relative group/origin inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10px] font-bold shrink-0 shadow-2xs transition-colors">
+                    <span>
+                      Tồn đọng -{" "}
+                      {transferred.shortSprintName ||
+                        transferred.originSprintName}
+                    </span>
+
+                    {/* Tooltip hiển thị đầy đủ tên Sprint phía trên khi di chuột vào */}
+                    <span className="pointer-events-none opacity-0 translate-y-1 group-hover/origin:opacity-100 group-hover/origin:translate-y-0 transition-all duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-1.5 rounded-lg bg-[#111827] text-white font-sans text-[11px] font-semibold whitespace-nowrap shadow-xl border border-gray-700">
+                      <span className="block font-mono text-[9px] text-amber-300 uppercase tracking-wider mb-0.5">
+                        Chuyển từ Sprint trước
+                      </span>
+                      <span>{transferred.originSprintName}</span>
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-[#111827]" />
+                    </span>
                   </span>
                 );
               })()
             )}
-
-            {isReadOnly && (
-              <span title="Công việc đã hoàn thành, nằm trong Sprint đã đóng hoặc là bản ghi lưu vết">
-                <Lock className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Right side controls */}
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Overdue Badge */}
+        {/* Right side controls — Fixed columns on the far right (Priority -> Status -> Avatar) so all rows align 100% */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Quick Delete icon (Soft delete -> Move to trash) placed on the left of fixed columns so it never indents the row */}
+          {canDelete && onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(true);
+              }}
+              title="Chuyển vào thùng rác"
+              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Overdue Badge (không dùng icon tam giác để tránh trùng với độ ưu tiên Khẩn cấp) */}
           {isOverdue && task.status !== "DONE" && (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FDEDEC] border border-[#FADBD8] text-[#D93025] font-mono font-extrabold text-[10px] animate-pulse">
-              <AlertTriangle className="w-3 h-3" />
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#FDEDEC] border border-[#FADBD8] text-[#D93025] font-mono font-extrabold text-[10px] shrink-0">
               TRỄ HẠN
             </span>
           )}
 
-          {/* PRIORITY POPOVER SELECTOR */}
-          <div className="relative" ref={priorityRef}>
+          {/* Quick Self-Assign Button for MEMBER on Unassigned Tasks */}
+          {!isCoordinator &&
+            isUnassigned &&
+            !isClosedSprint &&
+            !isGhostTransferred &&
+            currentUserId &&
+            onUpdateOwner && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateOwner(task.id, currentUserId);
+                }}
+                className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 font-mono text-[10px] font-bold transition-all cursor-pointer shrink-0 shadow-2xs"
+                title="Tự nhận (Self-assign) công việc này về cho bạn"
+              >
+                + Nhận việc
+              </button>
+            )}
+
+          {/* Quick Approve Button for PM when task is IN_REVIEW */}
+          {isPM &&
+            task.status === "IN_REVIEW" &&
+            !isClosedSprint &&
+            !isGhostTransferred &&
+            onUpdateStatus && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateStatus(task.id, "DONE");
+                }}
+                className="px-2.5 py-0.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[10px] font-extrabold transition-all flex items-center gap-1 cursor-pointer shadow-xs hover:shadow shrink-0"
+                title="PM nghiệm thu và duyệt công việc sang ĐÃ XONG (DONE)"
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>Duyệt</span>
+              </button>
+            )}
+
+          {/* COLUMN 1 (Fixed Width): PRIORITY POPOVER SELECTOR */}
+          <div
+            className="relative w-6 flex items-center justify-center shrink-0"
+            ref={priorityRef}
+          >
             <button
-              disabled={isReadOnly}
+              disabled={!canEditTaskFields}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!isReadOnly) setShowPriorityPopover(!showPriorityPopover);
+                if (canEditTaskFields)
+                  setShowPriorityPopover(!showPriorityPopover);
               }}
-              className={`flex items-center gap-1 rounded p-1 hover:bg-[#E5E7EB] transition-colors ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
-                }`}
-              title={`Độ ưu tiên: ${task.priority}`}
+              className={`flex items-center justify-center rounded p-0.5 hover:bg-[#E5E7EB] transition-colors ${
+                !canEditTaskFields
+                  ? "cursor-not-allowed opacity-70"
+                  : "cursor-pointer"
+              }`}
+              title={
+                !canEditTaskFields && !isPM
+                  ? "Chỉ PM hoặc người phụ trách công việc này mới được đổi độ ưu tiên"
+                  : `Độ ưu tiên: ${task.priority}`
+              }
             >
               {renderPriorityIcon(task.priority)}
             </button>
@@ -229,66 +356,129 @@ export function TaskRowItem({
             {/* Custom Priority Dropdown Card */}
             {showPriorityPopover && (
               <div className="absolute right-0 bottom-full mb-1.5 z-50 w-36 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
-                {(["LOW", "MEDIUM", "HIGH", "URGENT"] as TaskPriority[]).map((p) => {
-                  const pLabels: Record<TaskPriority, string> = {
-                    LOW: "Thấp",
-                    MEDIUM: "Trung bình",
-                    HIGH: "Cao",
-                    URGENT: "Khẩn cấp",
-                  };
-                  const isSelected = task.priority === p;
-                  return (
-                    <button
-                      key={p}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onUpdatePriority) onUpdatePriority(task.id, p);
-                        setShowPriorityPopover(false);
-                      }}
-                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 text-[#111827] font-bold" : "hover:bg-gray-50 text-[#4B5563]"
+                {(["LOW", "MEDIUM", "HIGH", "URGENT"] as TaskPriority[]).map(
+                  (p) => {
+                    const pLabels: Record<TaskPriority, string> = {
+                      LOW: "Thấp",
+                      MEDIUM: "Trung bình",
+                      HIGH: "Cao",
+                      URGENT: "Khẩn cấp",
+                    };
+                    const isSelected = task.priority === p;
+                    return (
+                      <button
+                        key={p}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onUpdatePriority) onUpdatePriority(task.id, p);
+                          setShowPriorityPopover(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
+                          isSelected
+                            ? "bg-gray-100 text-[#111827] font-bold"
+                            : "hover:bg-gray-50 text-[#4B5563]"
                         }`}
-                    >
-                      {renderPriorityIcon(p)}
-                      <span className="flex-1">{pLabels[p]}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#111827]" />}
-                    </button>
-                  );
-                })}
+                      >
+                        {renderPriorityIcon(p)}
+                        <span className="flex-1">{pLabels[p]}</span>
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-[#111827]" />
+                        )}
+                      </button>
+                    );
+                  },
+                )}
               </div>
             )}
           </div>
 
-          {/* STATUS POPOVER SELECTOR (3 States: TODO, IN_PROGRESS, DONE) */}
-          <div className="relative" ref={statusRef}>
+          {/* COLUMN 2 (Fixed Width): STATUS POPOVER SELECTOR (Dropdown only shows 3 options: Cần làm, Đang làm, Hoàn thành; Outer badge shows Chờ duyệt when IN_REVIEW) */}
+          <div
+            className="relative w-[78px] flex items-center justify-center shrink-0"
+            ref={statusRef}
+          >
             <button
-              disabled={isReadOnly}
+              disabled={!canChangeStatus}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!isReadOnly) setShowStatusPopover(!showStatusPopover);
+                if (canChangeStatus) setShowStatusPopover(!showStatusPopover);
               }}
-              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${statusObj.bg} ${statusObj.text} ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:opacity-80"
-                }`}
+              title={
+                !isPM && task.status === "DONE"
+                  ? "Công việc đã được PM duyệt hoàn thành (DONE) và không thể chuyển trạng thái"
+                  : !canEditTaskFields && !isPM
+                  ? "Chỉ PM hoặc người phụ trách công việc này mới được cập nhật trạng thái"
+                  : undefined
+              }
+              className={`w-[78px] py-0.5 rounded text-[10px] font-mono font-bold inline-flex items-center justify-center text-center transition-all ${statusObj.bg} ${statusObj.text} ${
+                !canChangeStatus
+                  ? "cursor-not-allowed opacity-80"
+                  : "cursor-pointer hover:opacity-85"
+              }`}
             >
               {statusObj.label}
             </button>
 
             {showStatusPopover && (
-              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-32 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
+              <div className="absolute right-0 bottom-full mb-1.5 z-50 w-40 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-1.5 space-y-0.5 animate-in fade-in duration-100 font-sans text-xs">
                 {(["TODO", "IN_PROGRESS", "DONE"] as TaskStatus[]).map((st) => {
-                  const isSelected = task.status === st;
+                  const dropdownLabels: Record<
+                    "TODO" | "IN_PROGRESS" | "DONE",
+                    string
+                  > = {
+                    TODO: "Cần làm",
+                    IN_PROGRESS: "Đang làm",
+                    DONE: "Hoàn thành",
+                  };
                   const stInfo = taskStatusMap[st];
+                  const isAutoRouteToReview = st === "DONE" && !isPM;
+                  const isOptionSelected =
+                    st === "DONE"
+                      ? task.status === "DONE" ||
+                        (!isPM && task.status === "IN_REVIEW")
+                      : task.status === st;
+
                   return (
                     <button
                       key={st}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isAutoRouteToReview) {
+                          if (onUpdateStatus)
+                            onUpdateStatus(task.id, "IN_REVIEW");
+                          setShowStatusPopover(false);
+                          return;
+                        }
+                        if (st === "DONE" && isPM) {
+                          const isAssignedToOther = Boolean(
+                            taskOwnerId && taskOwnerId !== currentUserId,
+                          );
+                          if (
+                            isAssignedToOther &&
+                            task.status !== "IN_REVIEW" &&
+                            task.status !== "DONE"
+                          ) {
+                            alert(
+                              "⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa ở trạng thái 'Chờ duyệt'). PM chỉ duyệt sang 'Đã xong' đối với công việc đang ở trạng thái 'Chờ duyệt'!",
+                            );
+                            setShowStatusPopover(false);
+                            return;
+                          }
+                        }
                         if (onUpdateStatus) onUpdateStatus(task.id, st);
                         setShowStatusPopover(false);
                       }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-mono text-[10px] font-bold ${stInfo.bg} ${stInfo.text}`}
+                      title={
+                        isAutoRouteToReview
+                          ? "Bấm Hoàn thành để chuyển trạng thái hiển thị sang 'Chờ duyệt' cho PM kiểm tra"
+                          : undefined
+                      }
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-mono text-[10px] font-bold cursor-pointer ${stInfo.bg} ${stInfo.text}`}
                     >
-                      <span>{stInfo.label}</span>
-                      {isSelected && <Check className="w-3 h-3" />}
+                      <span>
+                        {dropdownLabels[st as "TODO" | "IN_PROGRESS" | "DONE"]}
+                      </span>
+                      {isOptionSelected && <Check className="w-3 h-3" />}
                     </button>
                   );
                 })}
@@ -296,20 +486,29 @@ export function TaskRowItem({
             )}
           </div>
 
-          {/* ASSIGNEE POPOVER SELECTOR */}
-          <div className="relative" ref={assigneeRef}>
+          {/* COLUMN 3 (Fixed Width): ASSIGNEE POPOVER SELECTOR */}
+          <div
+            className="relative w-7 flex items-center justify-center shrink-0"
+            ref={assigneeRef}
+          >
             {(() => {
-              const isAssignDisabled = isReadOnly || task.status === "DONE";
+              const isAssignDisabled =
+                isReadOnly ||
+                task.status === "DONE" ||
+                (!isCoordinator && !isUnassigned);
               const assignedMember = members.find((m) => {
                 const mId = m.id?.userId || m.userId || m.id;
                 return mId === task.ownerId || mId === task.assignee?.id;
               });
 
               const assignedName = assignedMember
-                ? (assignedMember.user?.fullName || assignedMember.user?.email || assignedMember.fullName || assignedMember.email)
-                : task.ownerName || task.assignee?.fullName || task.suggestedMemberName;
-
-              const assignedAvatar = assignedMember?.avatarUrl || assignedMember?.user?.avatarUrl;
+                ? assignedMember.user?.fullName ||
+                  assignedMember.user?.email ||
+                  assignedMember.fullName ||
+                  assignedMember.email
+                : task.ownerName ||
+                  task.assignee?.fullName ||
+                  task.suggestedMemberName;
 
               const getInitials = (text?: string) => {
                 if (!text) return "U";
@@ -322,10 +521,14 @@ export function TaskRowItem({
                     disabled={isAssignDisabled}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isAssignDisabled) setShowAssigneePopover(!showAssigneePopover);
+                      if (!isAssignDisabled)
+                        setShowAssigneePopover(!showAssigneePopover);
                     }}
-                    className={`p-0.5 rounded-full transition-transform ${isAssignDisabled ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:scale-105"
-                      }`}
+                    className={`p-0.5 rounded-full transition-transform ${
+                      isAssignDisabled
+                        ? "cursor-not-allowed opacity-80"
+                        : "cursor-pointer hover:scale-105"
+                    }`}
                     title={
                       task.status === "DONE"
                         ? "Công việc đã hoàn thành, không thể thay đổi người phụ trách"
@@ -354,8 +557,11 @@ export function TaskRowItem({
                           if (onUpdateOwner) onUpdateOwner(task.id, null);
                           setShowAssigneePopover(false);
                         }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${!task.ownerId && !task.assignee?.id ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#6B7280]"
-                          }`}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
+                          !task.ownerId && !task.assignee?.id
+                            ? "bg-gray-100 font-bold text-[#111827]"
+                            : "hover:bg-gray-50 text-[#6B7280]"
+                        }`}
                       >
                         <div className="flex items-center gap-2 truncate pr-2">
                           <div className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0 border border-gray-200">
@@ -363,56 +569,63 @@ export function TaskRowItem({
                           </div>
                           <span className="truncate">Chưa gán</span>
                         </div>
-                        {!task.ownerId && !task.assignee?.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        {!task.ownerId && !task.assignee?.id && (
+                          <Check className="w-3.5 h-3.5 shrink-0" />
+                        )}
                       </button>
 
                       {/* Member List Choices */}
-                      {members.map((m) => {
-                        const mId = m.id?.userId || m.userId || m.id;
-                        const mName = m.user?.fullName || m.user?.email || m.fullName || m.email || `Thành viên #${mId}`;
-                        const isSelected = task.ownerId === mId || task.assignee?.id === mId;
+                      {members
+                        .filter((m) => {
+                          if (isCoordinator) return true;
+                          const mId = m.id?.userId || m.userId || m.id;
+                          return mId === currentUserId;
+                        })
+                        .map((m) => {
+                          const mId = m.id?.userId || m.userId || m.id;
+                          const mName =
+                            m.user?.fullName ||
+                            m.user?.email ||
+                            m.fullName ||
+                            m.email ||
+                            `Thành viên #${mId}`;
+                          const isSelected =
+                            task.ownerId === mId || task.assignee?.id === mId;
 
-                        return (
-                          <button
-                            key={mId}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onUpdateOwner) onUpdateOwner(task.id, mId);
-                              setShowAssigneePopover(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
+                          return (
+                            <button
+                              key={mId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onUpdateOwner) onUpdateOwner(task.id, mId);
+                                setShowAssigneePopover(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
+                                isSelected
+                                  ? "bg-gray-100 font-bold text-[#111827]"
+                                  : "hover:bg-gray-50 text-[#4B5563]"
                               }`}
-                          >
-                            <div className="flex items-center gap-2 truncate pr-2">
-                              <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
-                                {getInitials(mName)}
+                            >
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">
+                                  {getInitials(mName)}
+                                </div>
+                                <span className="truncate">
+                                  {mName} {mId === currentUserId ? "(Tôi)" : ""}
+                                </span>
                               </div>
-                              <span className="truncate">{mName}</span>
-                            </div>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-[#111827] shrink-0" />}
-                          </button>
-                        );
-                      })}
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-[#111827] shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
                     </div>
                   )}
                 </>
               );
             })()}
           </div>
-
-          {/* Quick Delete icon (Soft delete -> Move to trash) */}
-          {canDelete && onDelete && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowDeleteConfirm(true);
-              }}
-              title="Chuyển vào thùng rác"
-              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors opacity-0 group-hover:opacity-100"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
