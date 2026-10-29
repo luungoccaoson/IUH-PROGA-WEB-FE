@@ -18,7 +18,7 @@ interface SprintAccordionProps {
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
   onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
-  onSelectTask: (task: Task) => void;
+  onSelectTask: (task: Task, isReadOnly?: boolean) => void;
   onUpdateStatus: (taskId: number, status: TaskStatus) => void;
   onUpdatePriority: (taskId: number, priority: TaskPriority) => void;
   onUpdateOwner: (taskId: number, ownerId?: number | null) => void;
@@ -60,7 +60,7 @@ export function SprintAccordion({
 
   // Only tasks that are allowed to be deleted (CLOSED: none, ACTIVE: only TODO, FUTURE: all)
   const deletableTasks = tasks.filter((t) => {
-    if (isClosed) return false;
+    if (isClosed || t.sprintId !== sprint.id) return false;
     if (isActive) return t.status === "TODO";
     return true;
   });
@@ -82,9 +82,8 @@ export function SprintAccordion({
           onMoveTask(taskId, sprint.id);
         }
       }}
-      className={`bg-white border border-[#E5E7EB] rounded-2xl shadow-sm transition-all ${
-        isClosed ? "" : "hover:border-[#111827]/40"
-      }`}
+      className={`bg-white border border-[#E5E7EB] rounded-2xl shadow-sm transition-all ${isClosed ? "" : "hover:border-[#111827]/40"
+        }`}
     >
       {/* Header */}
       <div className="p-4 bg-[#F9FAFB] border-b border-[#E5E7EB] flex items-center justify-between gap-4 rounded-t-2xl">
@@ -155,11 +154,6 @@ export function SprintAccordion({
       {/* Body */}
       {isOpen && (
         <div className="p-4 space-y-3">
-          {sprint.goal && (
-            <p className="text-xs text-[#6B7280] bg-[#F6F5EF] p-2.5 rounded-xl border border-[#E5E7EB] italic">
-              <span className="font-bold not-italic text-[#111827]">Mục tiêu:</span> {sprint.goal}
-            </p>
-          )}
 
           {tasks.length > 0 && (
             <div className="divide-y divide-[#E5E7EB]/70 border border-[#E5E7EB] rounded-xl">
@@ -167,6 +161,8 @@ export function SprintAccordion({
                 const globalIdx = allSpaceTasks && allSpaceTasks.length > 0
                   ? allSpaceTasks.findIndex((t) => t.id === task.id)
                   : taskIdx;
+                const isGhost = task.sprintId !== sprint.id;
+
                 return (
                   <TaskRowItem
                     key={task.id}
@@ -176,9 +172,10 @@ export function SprintAccordion({
                     isOverdue={isTaskOverdue(task)}
                     isClosedSprint={isClosed}
                     isActiveSprint={isActive}
+                    isGhostTransferred={isGhost}
                     isSelected={selectedTaskIds.includes(task.id)}
                     onToggleSelect={onToggleSelectTask}
-                    onSelect={onSelectTask}
+                    onSelect={() => onSelectTask(task, isClosed || isGhost)}
                     onUpdateStatus={onUpdateStatus}
                     onUpdatePriority={onUpdatePriority}
                     onUpdateOwner={onUpdateOwner}

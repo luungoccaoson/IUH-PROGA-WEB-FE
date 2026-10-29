@@ -5,7 +5,7 @@ import {
   KanbanSquare, Sparkles, AlertTriangle, ListTodo, Clock,
   CheckCircle2, ChevronUp, User, Lock, Calendar, Plus
 } from "lucide-react";
-import { useSprints } from "@/hooks/useSprints";
+import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
@@ -87,7 +87,16 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
     if (selectedSprintId === "backlog") {
       return !t.sprintId || !sprintIds.has(t.sprintId);
     }
-    return t.sprintId === selectedSprintId;
+    if (t.sprintId === selectedSprintId) return true;
+    if (isClosedSprint && currentSprint) {
+      const transferred = getTaskTransferredOrigin(t);
+      return (
+        transferred.isTransferred &&
+        transferred.originSprintName?.toLowerCase().trim() ===
+          currentSprint.name.toLowerCase().trim()
+      );
+    }
+    return false;
   });
 
   const renderPriorityIcon = (priority: TaskPriority) => {
@@ -235,7 +244,10 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                 <div className="space-y-3 flex-1 overflow-y-auto pr-0.5">
                   {columnTasks.map((task, tIdx) => {
                     const overdue = isTaskOverdue(task);
-                    const isReadOnly = isClosedSprint;
+                    const isGhost =
+                      typeof selectedSprintId === "number" &&
+                      task.sprintId !== selectedSprintId;
+                    const isReadOnly = isClosedSprint || isGhost;
 
                     return (
                       <div
@@ -247,8 +259,13 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                           e.dataTransfer.setData("sourceStatus", task.status);
                         }}
                         onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)}
-                        className={`p-3.5 bg-white border border-[#E5E7EB] hover:border-[#111827] rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${isReadOnly ? "bg-gray-50/70 cursor-default" : "cursor-grab active:cursor-grabbing"
-                          }`}
+                        className={`p-3.5 bg-white border rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
+                          isGhost
+                            ? "bg-amber-50/25 opacity-60 hover:opacity-95 border-dashed border-amber-300 cursor-pointer"
+                            : isReadOnly
+                            ? "bg-gray-50/70 border-[#E5E7EB] cursor-default"
+                            : "border-[#E5E7EB] hover:border-[#111827] cursor-grab active:cursor-grabbing"
+                        }`}
                       >
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
@@ -262,8 +279,13 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                                 <AlertTriangle className="w-2.5 h-2.5" /> TRỄ
                               </span>
                             )}
+                            {isGhost && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono text-[9px] font-extrabold border border-amber-300">
+                                LƯU VẾT
+                              </span>
+                            )}
                             {isReadOnly && (
-                              <span title="Nằm trong Sprint đã đóng">
+                              <span title="Nằm trong Sprint đã đóng hoặc là bản ghi lưu vết">
                                 <Lock className="w-3 h-3 text-[#9CA3AF]" />
                               </span>
                             )}
@@ -271,9 +293,27 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
                         </div>
 
                         {/* Title */}
-                        <h4 className={`text-xs font-bold text-[#111827] line-clamp-2 leading-relaxed ${task.status === "DONE" ? "line-through text-gray-400" : ""}`}>
+                        <h4 className={`text-xs font-bold leading-relaxed ${task.status === "DONE" ? "line-through text-gray-400" : isGhost ? "text-gray-700 italic" : "text-[#111827]"}`}>
                           {task.title}
                         </h4>
+
+                        {/* Transferred origin badge */}
+                        {(() => {
+                          const transferred = getTaskTransferredOrigin(task);
+                          if (!transferred.isTransferred) return null;
+                          return (
+                            <div
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 font-mono text-[9px] font-bold border border-amber-200"
+                              title={`Nhiệm vụ trễ hạn từ sprint đã đóng: ${transferred.originSprintName}`}
+                            >
+                              <span>⚠️</span>
+                              <span className="truncate">
+                                {isGhost ? "Lưu vết: " : "Tồn đọng: "}
+                                {transferred.originSprintName}
+                              </span>
+                            </div>
+                          );
+                        })()}
 
                         {/* Footer: Priority & Assignee */}
                         <div className="flex items-center justify-between pt-1 border-t border-gray-100">
@@ -327,7 +367,12 @@ export function SprintKanbanBoard({ spaceId, onDrawerStateChange }: SprintKanban
       <TaskDetailDrawer
         task={selectedTask}
         taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
-        isClosedSprint={isClosedSprint}
+        isClosedSprint={Boolean(
+          isClosedSprint ||
+          (selectedTask &&
+            typeof selectedSprintId === "number" &&
+            selectedTask.sprintId !== selectedSprintId)
+        )}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}

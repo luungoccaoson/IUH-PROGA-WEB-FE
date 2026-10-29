@@ -3,6 +3,25 @@ import { Sprint, SprintStatus, Task } from '@/types';
 import { sprintService } from '@/services/sprint.service';
 import { taskService } from '@/services/task.service';
 
+/**
+ * Helper nhận biết task trễ hạn được chuyển từ sprint đã đóng sang sprint hiện tại
+ */
+export function getTaskTransferredOrigin(task?: Task | null): {
+  isTransferred: boolean;
+  originSprintName?: string;
+} {
+  if (!task) return { isTransferred: false };
+  const desc = task.description || "";
+  const match = desc.match(/\[(?:Chuyển từ|Tồn đọng từ):\s*([^\]\(\n]+)(?:\([^\)]+\))?\]/i);
+  if (match && match[1]) {
+    return {
+      isTransferred: true,
+      originSprintName: match[1].trim(),
+    };
+  }
+  return { isTransferred: false };
+}
+
 export function useSprints(spaceId: number) {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -29,9 +48,12 @@ export function useSprints(spaceId: number) {
       setTasks(fetchedTasks);
       setLoading(false);
 
-      // Background non-blocking auto-start & end check
+      // Background non-blocking auto-start, auto-close & OVERDUE TASKS ROLLOVER
       setTimeout(async () => {
         const now = new Date();
+        let sprintsUpdated = false;
+
+        // 1. Tự động kích hoạt / đóng sprint dựa trên ngày
         for (const sprint of sortedSprints) {
           const startDate = sprint.startDate ? new Date(sprint.startDate) : null;
           const endDate = sprint.endDate ? new Date(sprint.endDate) : null;
@@ -39,6 +61,8 @@ export function useSprints(spaceId: number) {
           if (sprint.status === 'FUTURE' && startDate && startDate <= now && (!endDate || endDate > now)) {
             try {
               await sprintService.updateSprintStatus(sprint.id, 'ACTIVE');
+              sprint.status = 'ACTIVE';
+              sprintsUpdated = true;
             } catch (err) {
               console.error(`Failed to auto-activate sprint ${sprint.id}`, err);
             }
@@ -47,10 +71,84 @@ export function useSprints(spaceId: number) {
           if (sprint.status !== 'CLOSED' && endDate && endDate <= now) {
             try {
               await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
+              sprint.status = 'CLOSED';
+              sprintsUpdated = true;
             } catch (err) {
               console.error(`Failed to auto-close sprint ${sprint.id}`, err);
             }
           }
+        }
+
+        // 2. Nghiệp vụ: Chuyển task trễ hạn của các sprint đã đóng sang sprint hiện tại (ACTIVE)
+        const activeSprint =
+          sortedSprints.find((s) => s.status === 'ACTIVE') ||
+          sortedSprints.find((s) => s.status === 'FUTURE');
+
+        if (activeSprint) {
+          const closedSprintMap = new Map<number, Sprint>();
+          sortedSprints.forEach((s) => {
+            const endDate = s.endDate ? new Date(s.endDate) : null;
+            if (s.status === 'CLOSED' || (endDate && endDate <= now)) {
+              if (s.id !== activeSprint.id) {
+                closedSprintMap.set(s.id, s);
+              }
+            }
+          });
+
+          // Các task thuộc sprint đã đóng mà chưa xong (TODO hoặc IN_PROGRESS)
+          const overdueTasksFromClosed = fetchedTasks.filter((t) => {
+            if (t.status === 'DONE') return false;
+            if (!t.sprintId) return false;
+            return closedSprintMap.has(t.sprintId);
+          });
+
+          if (overdueTasksFromClosed.length > 0) {
+            let tasksChanged = false;
+            for (const t of overdueTasksFromClosed) {
+              const originSprint = closedSprintMap.get(t.sprintId!);
+              const originSprintName = originSprint ? originSprint.name : `Sprint ${t.sprintId}`;
+              const marker = `[Chuyển từ: ${originSprintName} (Trễ hạn)]`;
+
+              let newDesc = t.description || '';
+              if (!newDesc.includes('[Chuyển từ:') && !newDesc.includes('[Tồn đọng từ:')) {
+                newDesc = `${marker}\n\n${newDesc}`.trim();
+              }
+
+              // Giữ trễ hạn: nếu không có dueDate hoặc dueDate ở tương lai, đặt dueDate bằng endDate của sprint cũ
+              let preservedDueDate = t.dueDate;
+              if (!preservedDueDate || new Date(preservedDueDate) >= now) {
+                preservedDueDate = originSprint?.endDate || new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+              }
+
+              try {
+                await taskService.updateTask(t.id, {
+                  spaceId: t.spaceId,
+                  title: t.title,
+                  sprintId: activeSprint.id,
+                  description: newDesc,
+                  status: t.status,
+                  priority: t.priority,
+                  dueDate: preservedDueDate,
+                });
+
+                t.sprintId = activeSprint.id;
+                t.description = newDesc;
+                t.dueDate = preservedDueDate;
+                tasksChanged = true;
+              } catch (err) {
+                console.error(`Lỗi chuyển task trễ hạn #${t.id} sang ${activeSprint.name}:`, err);
+              }
+            }
+
+            if (tasksChanged) {
+              setTasks([...fetchedTasks]);
+              window.dispatchEvent(new CustomEvent('space_tasks_updated'));
+            }
+          }
+        }
+
+        if (sprintsUpdated) {
+          setSprints([...sortedSprints]);
         }
       }, 50);
 
@@ -142,7 +240,12 @@ export function useSprints(spaceId: number) {
 
   // Helper check if task is overdue
   const isTaskOverdue = (task: Task): boolean => {
-    if (!task.dueDate || task.status === 'DONE') return false;
+    if (!task || task.status === 'DONE') return false;
+    // Task chuyển từ sprint đã đóng sang sprint hiện tại luôn được đánh dấu trễ hạn
+    const transferred = getTaskTransferredOrigin(task);
+    if (transferred.isTransferred) return true;
+
+    if (!task.dueDate) return false;
     const due = new Date(task.dueDate);
     const now = new Date();
     return due < now;

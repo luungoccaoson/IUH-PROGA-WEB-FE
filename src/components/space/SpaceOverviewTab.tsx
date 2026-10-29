@@ -533,18 +533,16 @@ export function SpaceOverviewTab({
 
               return (
                 <div
-                  className={`absolute ${
-                    placement === "left" ? "right-full mr-3" : "left-full ml-3"
-                  } bottom-0 z-50 w-72 sm:w-80 max-h-64 bg-white/95 backdrop-blur-xs border-2 border-gray-200 rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 space-y-2 cursor-default text-left`}
+                  className={`absolute ${placement === "left" ? "right-full mr-3" : "left-full ml-3"
+                    } bottom-0 z-50 w-72 sm:w-80 max-h-64 bg-white/95 backdrop-blur-xs border-2 border-gray-200 rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 space-y-2 cursor-default text-left`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Arrow notch pointing directly to the bar */}
                   <div
-                    className={`absolute bottom-6 ${
-                      placement === "left"
+                    className={`absolute bottom-6 ${placement === "left"
                         ? "-right-2 border-t-2 border-r-2 border-gray-200 bg-white"
                         : "-left-2 border-b-2 border-l-2 border-gray-200 bg-white"
-                    } w-3.5 h-3.5 rotate-45`}
+                      } w-3.5 h-3.5 rotate-45`}
                   />
 
                   <div className="flex items-center justify-between border-b border-gray-100 pb-1.5 relative z-10">
@@ -592,13 +590,12 @@ export function SpaceOverviewTab({
                           <div className="flex items-center justify-between">
                             <span className="font-mono text-[10px] font-bold text-gray-500">#{t.id}</span>
                             <span
-                              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                                t.status === "DONE"
+                              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${t.status === "DONE"
                                   ? "bg-emerald-100 text-emerald-800"
                                   : t.status === "IN_PROGRESS"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-gray-200 text-gray-700"
-                              }`}
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
                             >
                               {t.status === "DONE" ? "Đã xong" : t.status === "IN_PROGRESS" ? "Đang làm" : "Cần làm"}
                             </span>
@@ -624,9 +621,8 @@ export function SpaceOverviewTab({
                 <div
                   onClick={() => handlePriorityClick("URGENT")}
                   onMouseEnter={() => handlePriorityHover("URGENT")}
-                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${
-                    activePriority === "URGENT" ? "z-50" : "z-10"
-                  }`}
+                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${activePriority === "URGENT" ? "z-50" : "z-10"
+                    }`}
                 >
                   <span className="text-xs font-bold text-[#D93025]">{urgentCount}</span>
                   <div
@@ -641,9 +637,8 @@ export function SpaceOverviewTab({
                 <div
                   onClick={() => handlePriorityClick("HIGH")}
                   onMouseEnter={() => handlePriorityHover("HIGH")}
-                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${
-                    activePriority === "HIGH" ? "z-50" : "z-10"
-                  }`}
+                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${activePriority === "HIGH" ? "z-50" : "z-10"
+                    }`}
                 >
                   <span className="text-xs font-bold text-[#F97316]">{highCount}</span>
                   <div
@@ -658,9 +653,8 @@ export function SpaceOverviewTab({
                 <div
                   onClick={() => handlePriorityClick("MEDIUM")}
                   onMouseEnter={() => handlePriorityHover("MEDIUM")}
-                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${
-                    activePriority === "MEDIUM" ? "z-50" : "z-10"
-                  }`}
+                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${activePriority === "MEDIUM" ? "z-50" : "z-10"
+                    }`}
                 >
                   <span className="text-xs font-bold text-[#1A73E8]">{mediumCount}</span>
                   <div
@@ -675,9 +669,8 @@ export function SpaceOverviewTab({
                 <div
                   onClick={() => handlePriorityClick("LOW")}
                   onMouseEnter={() => handlePriorityHover("LOW")}
-                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${
-                    activePriority === "LOW" ? "z-50" : "z-10"
-                  }`}
+                  className={`relative flex-1 flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:-translate-y-1 p-2 ${activePriority === "LOW" ? "z-50" : "z-10"
+                    }`}
                 >
                   <span className="text-xs font-bold text-[#6B7280]">{lowCount}</span>
                   <div

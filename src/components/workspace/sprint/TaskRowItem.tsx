@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { AlertTriangle, ChevronUp, User, Trash2, Check, Lock } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { getTaskTransferredOrigin } from "@/hooks/useSprints";
 
 interface TaskRowItemProps {
   task: Task;
@@ -12,6 +13,7 @@ interface TaskRowItemProps {
   isOverdue?: boolean;
   isClosedSprint?: boolean;
   isActiveSprint?: boolean;
+  isGhostTransferred?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (taskId: number) => void;
   onSelect?: (task: Task) => void;
@@ -34,6 +36,7 @@ export function TaskRowItem({
   isOverdue = false,
   isClosedSprint = false,
   isActiveSprint = false,
+  isGhostTransferred = false,
   isSelected = false,
   onToggleSelect,
   onSelect,
@@ -42,8 +45,8 @@ export function TaskRowItem({
   onUpdateOwner,
   onDelete,
 }: TaskRowItemProps) {
-  const isReadOnly = isClosedSprint;
-  const canDelete = !isClosedSprint && (!isActiveSprint || task.status === "TODO");
+  const isReadOnly = isClosedSprint || isGhostTransferred;
+  const canDelete = !isClosedSprint && !isGhostTransferred && (!isActiveSprint || task.status === "TODO");
   const statusObj = taskStatusMap[task.status] || taskStatusMap.TODO;
 
   // Popover States
@@ -116,17 +119,16 @@ export function TaskRowItem({
           e.dataTransfer.setData("taskId", task.id.toString());
           e.dataTransfer.setData("sourceSprintId", (task.sprintId || "backlog").toString());
         }}
-        className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${
-          isSelected
-            ? "bg-[#E8F0FE]/60 border-l-2 border-l-[#1A73E8]"
-            : isReadOnly
+        className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${isSelected
+          ? "bg-[#E8F0FE]/60 border-l-2 border-l-[#1A73E8]"
+          : isReadOnly
             ? "bg-gray-50/70 cursor-default"
             : "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
-        }`}
+          }`}
       >
         {/* Left side: Checkbox + Task Code & Title */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {onToggleSelect && (
+          {onToggleSelect && !isGhostTransferred && (
             <input
               type="checkbox"
               disabled={!canDelete}
@@ -136,17 +138,16 @@ export function TaskRowItem({
                 if (canDelete) onToggleSelect(task.id);
               }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-4 h-4 rounded border-gray-300 transition-all ${
-                canDelete
-                  ? "text-[#1A73E8] focus:ring-[#1A73E8] cursor-pointer"
-                  : "opacity-30 cursor-not-allowed bg-gray-200"
-              }`}
+              className={`w-4 h-4 rounded border-gray-300 transition-all ${canDelete
+                ? "text-[#1A73E8] focus:ring-[#1A73E8] cursor-pointer"
+                : "opacity-30 cursor-not-allowed bg-gray-200"
+                }`}
               title={
                 isClosedSprint
                   ? "Không thể xóa công việc trong Sprint đã đóng"
                   : isActiveSprint && task.status !== "TODO"
-                  ? "Trong Sprint đang diễn ra, chỉ cho phép xóa công việc ở trạng thái Cần làm (TODO)"
-                  : "Chọn công việc để xóa hoặc thao tác hàng loạt"
+                    ? "Trong Sprint đang diễn ra, chỉ cho phép xóa công việc ở trạng thái Cần làm (TODO)"
+                    : "Chọn công việc để xóa hoặc thao tác hàng loạt"
               }
             />
           )}
@@ -158,12 +159,42 @@ export function TaskRowItem({
             <span className="font-mono text-[11px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] shrink-0 group-hover:border-[#111827] transition-colors">
               Task-{taskIndex !== undefined ? taskIndex + 1 : task.id}
             </span>
-            <span className={`font-semibold truncate ${task.status === "DONE" ? "line-through text-gray-500" : "text-[#111827] hover:underline"}`}>
+            <span
+              className={`font-semibold truncate ${task.status === "DONE"
+                ? "line-through text-gray-500"
+                : "text-[#111827] hover:underline"
+                }`}
+            >
               {task.title}
             </span>
 
+            {/* Tag tồn đọng trễ hạn hoặc lưu vết từ sprint đã đóng */}
+            {isGhostTransferred ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10px] font-bold shrink-0 shadow-2xs"
+                title="Công việc trễ hạn đã dời sang Sprint mới để làm tiếp. Tại Sprint đã đóng này chỉ lưu vết để theo dõi (chỉ xem, không chỉnh sửa)."
+              >
+                <span>⚠️</span>
+                <span>Lưu vết (Đã dời sang Sprint mới)</span>
+              </span>
+            ) : (
+              (() => {
+                const transferred = getTaskTransferredOrigin(task);
+                if (!transferred.isTransferred) return null;
+                return (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 font-mono text-[10px] font-bold shrink-0 shadow-2xs"
+                    title={`Nhiệm vụ trễ hạn từ sprint đã đóng: ${transferred.originSprintName}`}
+                  >
+                    <span>⚠️</span>
+                    <span>Tồn đọng: {transferred.originSprintName}</span>
+                  </span>
+                );
+              })()
+            )}
+
             {isReadOnly && (
-              <span title="Công việc đã hoàn thành hoặc nằm trong Sprint đã đóng">
+              <span title="Công việc đã hoàn thành, nằm trong Sprint đã đóng hoặc là bản ghi lưu vết">
                 <Lock className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
               </span>
             )}
@@ -188,9 +219,8 @@ export function TaskRowItem({
                 e.stopPropagation();
                 if (!isReadOnly) setShowPriorityPopover(!showPriorityPopover);
               }}
-              className={`flex items-center gap-1 rounded p-1 hover:bg-[#E5E7EB] transition-colors ${
-                isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
-              }`}
+              className={`flex items-center gap-1 rounded p-1 hover:bg-[#E5E7EB] transition-colors ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer"
+                }`}
               title={`Độ ưu tiên: ${task.priority}`}
             >
               {renderPriorityIcon(task.priority)}
@@ -215,9 +245,8 @@ export function TaskRowItem({
                         if (onUpdatePriority) onUpdatePriority(task.id, p);
                         setShowPriorityPopover(false);
                       }}
-                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
-                        isSelected ? "bg-gray-100 text-[#111827] font-bold" : "hover:bg-gray-50 text-[#4B5563]"
-                      }`}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 text-[#111827] font-bold" : "hover:bg-gray-50 text-[#4B5563]"
+                        }`}
                     >
                       {renderPriorityIcon(p)}
                       <span className="flex-1">{pLabels[p]}</span>
@@ -237,9 +266,8 @@ export function TaskRowItem({
                 e.stopPropagation();
                 if (!isReadOnly) setShowStatusPopover(!showStatusPopover);
               }}
-              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${statusObj.bg} ${statusObj.text} ${
-                isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:opacity-80"
-              }`}
+              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${statusObj.bg} ${statusObj.text} ${isReadOnly ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:opacity-80"
+                }`}
             >
               {statusObj.label}
             </button>
@@ -296,15 +324,14 @@ export function TaskRowItem({
                       e.stopPropagation();
                       if (!isAssignDisabled) setShowAssigneePopover(!showAssigneePopover);
                     }}
-                    className={`p-0.5 rounded-full transition-transform ${
-                      isAssignDisabled ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:scale-105"
-                    }`}
+                    className={`p-0.5 rounded-full transition-transform ${isAssignDisabled ? "cursor-not-allowed opacity-80" : "cursor-pointer hover:scale-105"
+                      }`}
                     title={
                       task.status === "DONE"
                         ? "Công việc đã hoàn thành, không thể thay đổi người phụ trách"
                         : assignedName
-                        ? `Người thực hiện: ${assignedName}`
-                        : "Chưa gán người thực hiện"
+                          ? `Người thực hiện: ${assignedName}`
+                          : "Chưa gán người thực hiện"
                     }
                   >
                     {assignedName ? (
@@ -327,9 +354,8 @@ export function TaskRowItem({
                           if (onUpdateOwner) onUpdateOwner(task.id, null);
                           setShowAssigneePopover(false);
                         }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
-                          !task.ownerId && !task.assignee?.id ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#6B7280]"
-                        }`}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${!task.ownerId && !task.assignee?.id ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#6B7280]"
+                          }`}
                       >
                         <div className="flex items-center gap-2 truncate pr-2">
                           <div className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0 border border-gray-200">
@@ -354,9 +380,8 @@ export function TaskRowItem({
                               if (onUpdateOwner) onUpdateOwner(task.id, mId);
                               setShowAssigneePopover(false);
                             }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${
-                              isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
-                            }`}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-medium ${isSelected ? "bg-gray-100 font-bold text-[#111827]" : "hover:bg-gray-50 text-[#4B5563]"
+                              }`}
                           >
                             <div className="flex items-center gap-2 truncate pr-2">
                               <div className="w-5 h-5 rounded-full bg-[#E8F0FE] text-[#1A73E8] font-mono font-bold text-[9px] flex items-center justify-center shrink-0 border border-[#D2E3FC]">

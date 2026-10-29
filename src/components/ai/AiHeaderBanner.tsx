@@ -97,11 +97,10 @@ export function AiHeaderBanner({
 
           <button
             onClick={() => setTargetMode("EXISTING_SPACE")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              targetMode === "EXISTING_SPACE"
-                ? "bg-white text-[#111827] shadow-sm"
-                : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-            }`}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${targetMode === "EXISTING_SPACE"
+              ? "bg-white text-[#111827] shadow-sm"
+              : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+              }`}
           >
             <Compass className="w-4 h-4" />
             1. Chọn Space Có Sẵn
@@ -109,11 +108,10 @@ export function AiHeaderBanner({
 
           <button
             onClick={() => setTargetMode("NEW_SPACE")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              targetMode === "NEW_SPACE"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
-            }`}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${targetMode === "NEW_SPACE"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+              }`}
           >
             <FolderPlus className="w-4 h-4" />
             2. ➕ Tạo Dự Án (Space) Mới Tự Động
@@ -127,7 +125,7 @@ export function AiHeaderBanner({
             title="Xóa đàm thoại hiện tại và bắt đầu phân rã dự án mới"
           >
             <PlusCircle className="w-3.5 h-3.5 text-[#FBBF24]" />
-            <span>➕ Tạo Phiên Đàm Thoại Mới</span>
+            <span>Tạo Phiên Đàm Thoại Mới</span>
           </button>
         )}
       </div>
@@ -165,9 +163,6 @@ export function AiHeaderBanner({
               <FolderPlus className="w-4 h-4 text-indigo-400" />
               Tên Dự Án (Space) Mới Cần Khởi Tạo:
             </label>
-            <span className="text-[11px] text-[#9CA3AF]">
-              AI sẽ tự động đặt tên theo bài toán nếu để trống
-            </span>
           </div>
           <input
             type="text"
@@ -232,20 +227,15 @@ export function AiHeaderBanner({
                     className="px-3.5 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-full font-mono"
                     placeholder="VD: 30"
                   />
-                  <span className="text-xs text-slate-300 shrink-0 font-mono font-bold">Ngày</span>
                 </div>
               </div>
             </div>
-
-            <p className="text-[11px] text-slate-400 pt-1">
-              💡 Bạn có thể chọn ngày kết thúc hoặc gõ số ngày dự án. AI sẽ tự động phân bổ số lượng Sprint và thời lượng từng Sprint (mặc định 1 tuần/sprint, các phần phức tạp có thể 2 tuần) dựa trên độ khó của bài toán.
-            </p>
           </div>
         </div>
       )}
 
       {/* Preset Prompt Chips */}
-      <div className="space-y-2 pt-1">
+      {/* <div className="space-y-2 pt-1">
         <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#9CA3AF]">
           Mẫu yêu cầu bài toán gợi ý (Bấm để thử nghiệm ngay):
         </p>
@@ -260,7 +250,7 @@ export function AiHeaderBanner({
             </button>
           ))}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

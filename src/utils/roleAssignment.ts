@@ -213,7 +213,46 @@ export function detectTaskCategory(task: Task): {
 }
 
 /**
- * Thuật toán phân công tự động toàn diện theo vai trò và cân bằng tải
+ * Lấy số ngày làm việc thực tế của một Task do AI ước tính từ trước (Số nguyên tròn: 1, 2, 3...)
+ */
+export function getTaskComplexity(task: Task): {
+  days: number;
+  label: string;
+  level: "HIGH" | "MEDIUM" | "LOW";
+} {
+  let days = 2;
+
+  // 1. Ưu tiên lấy từ trường estimatedDays mà AI đã lưu
+  if (task.estimatedDays && task.estimatedDays > 0) {
+    days = Math.round(task.estimatedDays);
+  } else if (task.description) {
+    // 2. Tìm trong mô tả task nếu AI đã phân rã ra trước đó
+    const match = task.description.match(/(?:ước tính|thời gian|estimate|dự kiến)?:\s*(\d+)\s*(?:ngày|days?)/i);
+    if (match && match[1]) {
+      const parsed = parseInt(match[1], 10);
+      if (!isNaN(parsed) && parsed > 0) days = parsed;
+    } else {
+      const daysMatch = task.description.match(/(\d+)\s*ngày/i);
+      if (daysMatch && daysMatch[1]) {
+        const parsed = parseInt(daysMatch[1], 10);
+        if (!isNaN(parsed) && parsed > 0) days = parsed;
+      }
+    }
+  } else if (task.startDate && task.dueDate) {
+    // 3. Tính từ khoảng thời gian startDate và dueDate nếu có
+    const diff = Math.ceil((new Date(task.dueDate).getTime() - new Date(task.startDate).getTime()) / (1000 * 60 * 60 * 24));
+    if (diff > 0 && diff <= 14) days = diff;
+  } else if (task.priority === "URGENT" || task.priority === "HIGH") {
+    // 4. Nếu task ưu tiên khẩn cấp/cao -> 3 ngày, còn lại mặc định 2 ngày
+    days = 3;
+  }
+
+  const level = days >= 3 ? "HIGH" : days === 2 ? "MEDIUM" : "LOW";
+  return { days, label: `${days} ngày`, level };
+}
+
+/**
+ * Thuật toán phân công tự động toàn diện theo vai trò và cân bằng tải công bằng cho TẤT CẢ thành viên
  */
 export function autoAssignTasks(
   tasks: Task[],
@@ -247,10 +286,10 @@ export function autoAssignTasks(
     };
   }
 
-  // 2. Khởi tạo bộ đếm công việc (Workload Counter) để cân bằng tải
+  // 2. Khởi tạo bộ đếm số task và tổng ngày công việc (Workload Counter)
   const memberWorkload: Record<number, number> = {};
+  const memberDaysLoad: Record<number, number> = {};
   members.forEach((m) => {
-    // Đếm số task thành viên đã có sẵn (nếu chỉ gán unassigned)
     if (options.unassignedOnly) {
       const existingCount = tasks.filter(
         (t) => !t.isDeleted && (t.ownerId === m.id || t.assignee?.id === m.id)
@@ -259,6 +298,7 @@ export function autoAssignTasks(
     } else {
       memberWorkload[m.id] = 0;
     }
+    memberDaysLoad[m.id] = 0;
   });
 
   const memberCaps = members.map((m) => ({
@@ -266,17 +306,31 @@ export function autoAssignTasks(
     caps: getMemberCapabilities(m),
   }));
 
+  // Sắp xếp task theo độ phức tạp / ngày ước tính giảm dần (LPT - Longest Processing Time First)
+  // Task kỹ thuật cốt lõi lớn xếp trước để Dev chuyên môn nhận, các task vừa/nhỏ chia đều cho các thành viên khác
+  const sortedTasks = [...targetTasks].sort((a, b) => {
+    const compA = getTaskComplexity(a).days;
+    const compB = getTaskComplexity(b).days;
+    return compB - compA;
+  });
+
+  // Số lượng task trung bình mỗi người nên nhận để đảm bảo công bằng
+  const avgTasksPerMember = Math.ceil(sortedTasks.length / members.length);
+  // Ngưỡng tối đa cho 1 Dev nhận để không bị dồn 100% việc (Ví dụ: 3 người 18 việc thì 1 người nhận tối đa ~7-8 việc)
+  const maxTasksPerMember = Math.max(avgTasksPerMember + 1, Math.ceil(sortedTasks.length * 0.45));
+
   const previewResults: TaskAssignmentResult[] = [];
   const assignments: { taskId: number; ownerId: number }[] = [];
 
-  // 3. Phân công từng task
-  for (const task of targetTasks) {
+  // 3. Phân công từng task với cơ chế Cân Bằng Tải Thực Sự
+  for (const task of sortedTasks) {
     const { category, reason, suggestedName } = detectTaskCategory(task);
+    const comp = getTaskComplexity(task);
 
-    // Ưu tiên 0: Trùng tên gợi ý trong mô tả AI
     let selectedMember: User | null = null;
     let finalReason = reason;
 
+    // Ưu tiên 0: Trùng tên gợi ý trong mô tả AI
     if (suggestedName) {
       const normSuggested = normalizeText(suggestedName);
       const matchUser = members.find(
@@ -287,103 +341,90 @@ export function autoAssignTasks(
       );
       if (matchUser) {
         selectedMember = matchUser;
-        finalReason = `Gợi ý theo phân công AI: ${matchUser.fullName || matchUser.displayName}`;
+        finalReason = `Gợi ý theo phân công AI`;
       }
     }
 
-    // Nếu chưa chọn được theo tên, chọn theo nhóm vai trò phù hợp
+    // Nếu chưa chọn theo tên, tính toán độ phù hợp theo chuyên môn + cân bằng tải
     if (!selectedMember) {
-      let candidateMembers: User[] = [];
+      let candidatePool: User[] = [];
 
       switch (category) {
         case "QA": {
-          // 1. Chuyên gia QA
-          candidateMembers = memberCaps.filter((mc) => mc.caps.isQA).map((mc) => mc.member);
-          // Fallback nếu không có QA: Fullstack hoặc Backend
-          if (candidateMembers.length === 0) {
-            candidateMembers = memberCaps
-              .filter((mc) => mc.caps.isFullstack || mc.caps.isBackend)
-              .map((mc) => mc.member);
-            finalReason += " (Không có QA chuyên trách -> Phân bổ cho Dev)";
-          }
+          candidatePool = memberCaps.filter((mc) => mc.caps.isQA).map((mc) => mc.member);
           break;
         }
-
         case "DEVOPS": {
-          candidateMembers = memberCaps.filter((mc) => mc.caps.isDevOps).map((mc) => mc.member);
-          if (candidateMembers.length === 0) {
-            candidateMembers = memberCaps
-              .filter((mc) => mc.caps.isBackend || mc.caps.isFullstack)
-              .map((mc) => mc.member);
-            finalReason += " (Không có DevOps chuyên trách -> Phân bổ cho Backend/Fullstack)";
-          }
+          candidatePool = memberCaps.filter((mc) => mc.caps.isDevOps).map((mc) => mc.member);
           break;
         }
-
         case "FRONTEND": {
-          // Ưu tiên: Dedicated Frontend trước -> Sau đó đến Fullstack
-          const dedicatedFe = memberCaps
-            .filter((mc) => mc.caps.isDedicatedFrontend)
-            .map((mc) => mc.member);
-
-          if (dedicatedFe.length > 0) {
-            candidateMembers = dedicatedFe;
-          } else {
-            // Nếu không có Dedicated FE, lấy Fullstack
-            candidateMembers = memberCaps
-              .filter((mc) => mc.caps.isFrontend)
-              .map((mc) => mc.member);
-            if (candidateMembers.length > 0) {
-              finalReason = "Phân bổ chuyên môn Fullstack Developer (Đảm nhận Frontend)";
-            }
-          }
+          candidatePool = memberCaps.filter((mc) => mc.caps.isFrontend).map((mc) => mc.member);
           break;
         }
-
         case "BACKEND": {
-          // Ưu tiên: Dedicated Backend trước -> Sau đó đến Fullstack
-          const dedicatedBe = memberCaps
-            .filter((mc) => mc.caps.isDedicatedBackend)
-            .map((mc) => mc.member);
-
-          if (dedicatedBe.length > 0) {
-            candidateMembers = dedicatedBe;
-          } else {
-            // Nếu không có Dedicated BE, lấy Fullstack
-            candidateMembers = memberCaps
-              .filter((mc) => mc.caps.isBackend)
-              .map((mc) => mc.member);
-            if (candidateMembers.length > 0) {
-              finalReason = "Phân bổ chuyên môn Fullstack Developer (Đảm nhận Backend)";
-            }
-          }
+          candidatePool = memberCaps.filter((mc) => mc.caps.isBackend).map((mc) => mc.member);
           break;
         }
-
         case "MANAGEMENT": {
-          candidateMembers = memberCaps
-            .filter((mc) => mc.caps.isManagement)
-            .map((mc) => mc.member);
+          candidatePool = memberCaps.filter((mc) => mc.caps.isManagement).map((mc) => mc.member);
           break;
         }
-
         default:
           break;
       }
 
-      // Nếu vẫn chưa có ứng viên, lấy toàn bộ thành viên khả dụng
-      if (candidateMembers.length === 0) {
-        candidateMembers = members;
+      // Kiểm tra: Nếu tất cả ứng viên trong nhóm chuyên môn đã vượt quá ngưỡng tải `maxTasksPerMember`,
+      // HOẶC nếu trong Space có thành viên đang có 0 task trong khi người khác đã nhận nhiều:
+      // => MỞ RỘNG POOL ỨNG VIÊN RA TOÀN BỘ THÀNH VIÊN SPACE để san sẻ công việc!
+      const membersWithZeroTasks = members.filter((m) => (memberWorkload[m.id] || 0) === 0);
+      const allCandidatesOverloaded =
+        candidatePool.length > 0 &&
+        candidatePool.every((m) => (memberWorkload[m.id] || 0) >= maxTasksPerMember);
+
+      if (candidatePool.length === 0 || allCandidatesOverloaded) {
+        // San sẻ cho các thành viên chưa có việc hoặc ít việc nhất trong Space
+        candidatePool = members;
         finalReason = "Phân bổ cân bằng tải toàn Space";
+      } else if (membersWithZeroTasks.length > 0 && comp.level !== "HIGH") {
+        // Với các task độ phức tạp Vừa / Thấp: Ưu tiên san sẻ cho thành viên chưa có việc (PM, Scrum, v.v.)
+        candidatePool = [...candidatePool, ...membersWithZeroTasks];
       }
 
-      // Thuật toán Cân bằng tải: Chọn thành viên trong nhóm ứng viên có số lượng task hiện tại ÍT NHẤT
-      candidateMembers.sort((a, b) => (memberWorkload[a.id] || 0) - (memberWorkload[b.id] || 0));
-      selectedMember = candidateMembers[0];
+      // Chấm điểm từng thành viên trong candidatePool:
+      // + Người có ít task hơn được ưu tiên cao nhất
+      // + Thành viên có 0 task được ưu tiên tuyệt đối để không ai bị bỏ rơi
+      // + Người có đúng chuyên môn được ưu tiên thêm điểm
+      const scoredCandidates = candidatePool.map((m) => {
+        const currentCount = memberWorkload[m.id] || 0;
+        const currentDays = memberDaysLoad[m.id] || 0;
+        const caps = getMemberCapabilities(m);
+
+        let roleScore = 0;
+        if (category === "FRONTEND" && caps.isFrontend) roleScore += 4;
+        if (category === "BACKEND" && caps.isBackend) roleScore += 4;
+        if (category === "QA" && caps.isQA) roleScore += 4;
+        if (category === "DEVOPS" && caps.isDevOps) roleScore += 4;
+        if (category === "MANAGEMENT" && caps.isManagement) roleScore += 4;
+
+        // Phạt nặng nếu đã vượt ngưỡng tải trung bình để san sẻ cho người khác
+        const loadPenalty = currentCount * 5 + currentDays * 2;
+        // Thưởng lớn cho người chưa có task nào
+        const zeroBonus = currentCount === 0 ? 30 : 0;
+
+        return {
+          member: m,
+          score: zeroBonus + roleScore - loadPenalty,
+        };
+      });
+
+      scoredCandidates.sort((a, b) => b.score - a.score);
+      selectedMember = scoredCandidates[0].member;
     }
 
     // Cập nhật bộ đếm tải và danh sách gán
     memberWorkload[selectedMember.id] = (memberWorkload[selectedMember.id] || 0) + 1;
+    memberDaysLoad[selectedMember.id] = (memberDaysLoad[selectedMember.id] || 0) + comp.days;
 
     assignments.push({
       taskId: task.id,

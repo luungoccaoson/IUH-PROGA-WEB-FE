@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Trash2, Calendar, AlignLeft, Check, Lock } from "lucide-react";
+import { X, Trash2, Calendar, AlignLeft, Check, Lock, AlertTriangle } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { getTaskTransferredOrigin } from "@/hooks/useSprints";
 
 interface TaskDetailDrawerProps {
   task: Task | null;
@@ -136,6 +137,25 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
 
         {/* Content body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+          {/* Overdue Rollover Notice */}
+          {(() => {
+            const transferred = getTaskTransferredOrigin(task);
+            if (!transferred.isTransferred) return null;
+            return (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-[11px] text-amber-950 uppercase tracking-wide">
+                    Nhiệm vụ tồn đọng trễ hạn
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Công việc này trễ hạn từ <strong>{transferred.originSprintName}</strong> (Sprint đã đóng) và đã được chuyển sang Sprint hiện tại để tiếp tục thực hiện.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Task Title Edit */}
           <div className="space-y-1">
             <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px]">
@@ -220,35 +240,49 @@ export function TaskDetailDrawer({ task, taskNumber, isClosedSprint = false, isA
           </div>
 
           {/* Dates Section */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                Ngày bắt đầu
-              </label>
-              <input
-                type="date"
-                disabled={isReadOnly}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100"
-              />
-            </div>
+          {(() => {
+            const transferred = getTaskTransferredOrigin(task);
+            const isDateLocked = isReadOnly || transferred.isTransferred;
+            return (
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Ngày bắt đầu
+                    </label>
+                    <input
+                      type="date"
+                      disabled={isDateLocked}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    />
+                  </div>
 
-            <div className="space-y-1">
-              <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                Ngày kết thúc (Due Date)
-              </label>
-              <input
-                type="date"
-                disabled={isReadOnly}
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100"
-              />
-            </div>
-          </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Ngày kết thúc (Due Date)
+                    </label>
+                    <input
+                      type="date"
+                      disabled={isDateLocked}
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {transferred.isTransferred && !isReadOnly && (
+                  <p className="text-[10px] font-mono text-amber-800 bg-amber-50 p-2 rounded-xl border border-amber-200 leading-normal">
+                    🔒 <strong>Khóa chỉnh ngày:</strong> Không được phép chỉnh sửa ngày vì công việc đã trễ hạn từ sprint trước (bạn vẫn có thể chỉnh sửa tiêu đề, người phụ trách và trạng thái).
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Description Editor */}
           <div className="space-y-1 pt-1">
