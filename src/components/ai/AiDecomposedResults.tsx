@@ -14,7 +14,11 @@ import {
   FileText,
   Sparkles,
 } from "lucide-react";
-import { TaskDecompositionResponse, DecomposedTaskItem, aiService } from "@/services/ai.service";
+import {
+  TaskDecompositionResponse,
+  DecomposedTaskItem,
+  aiService,
+} from "@/services/ai.service";
 import { Space, User } from "@/types";
 import { TargetMode } from "./AiHeaderBanner";
 import { RagCitationsDrawer } from "./RagCitationsDrawer";
@@ -42,7 +46,11 @@ interface AiDecomposedResultsProps {
   onUpdateSpaceUsers?: (users: User[]) => void;
   onUpdateTasks: (updatedTasks: DecomposedTaskItem[]) => void;
   existingTaskCount?: number;
-  existingSprintsSummary?: { name: string; status: string; taskCount: number }[];
+  existingSprintsSummary?: {
+    name: string;
+    status: string;
+    taskCount: number;
+  }[];
   startDate?: string;
   endDate?: string;
   sprintCustomDays?: Record<string, number>;
@@ -78,7 +86,10 @@ export function AiDecomposedResults({
   const router = useRouter();
 
   // Group tasks by exact Sprint returned from AI result
-  const groupedTasks: Record<string, { task: DecomposedTaskItem; originalIndex: number }[]> = {};
+  const groupedTasks: Record<
+    string,
+    { task: DecomposedTaskItem; originalIndex: number }[]
+  > = {};
   if (result?.tasks) {
     result.tasks.forEach((t, idx) => {
       const sprintName = t.sprint || "Sprint 1";
@@ -108,9 +119,13 @@ export function AiDecomposedResults({
   // Single Unified AI Chatbox States
   const [isChatBoxOpen, setIsChatBoxOpen] = useState(false);
   const [targetSprintScope, setTargetSprintScope] = useState<string>("ALL");
-  const [chatBoxMessages, setChatBoxMessages] = useState<UnifiedChatMessage[]>([]);
+  const [chatBoxMessages, setChatBoxMessages] = useState<UnifiedChatMessage[]>(
+    [],
+  );
   const [isChatBoxLoading, setIsChatBoxLoading] = useState(false);
-  const [prevThreadId, setPrevThreadId] = useState<number | undefined>(result?.threadId);
+  const [prevThreadId, setPrevThreadId] = useState<number | undefined>(
+    result?.threadId,
+  );
 
   // Auto reset Chatbox session when main threadId changes
   useEffect(() => {
@@ -121,7 +136,9 @@ export function AiDecomposedResults({
   }, [result?.threadId, prevThreadId]);
 
   // Sprint Duration custom overrides per sprint (default: 7 days / 1 week each)
-  const [localSprintDays, setLocalSprintDays] = useState<Record<string, number>>({});
+  const [localSprintDays, setLocalSprintDays] = useState<
+    Record<string, number>
+  >({});
   const activeSprintDays = sprintCustomDays || localSprintDays;
   const handleSetSprintDays = (sprintName: string, days: number) => {
     if (onUpdateSprintDays) {
@@ -161,7 +178,7 @@ export function AiDecomposedResults({
             const num = spNumMatch[1];
             const regex = new RegExp(
               `Sprint\\s*${num}[^:\\n]*\\([^)]*(?:2\\s*tuần|14\\s*ngày)[^)]*\\)|Sprint\\s*${num}[^:\\n]*:[^\\n]*(?:2\\s*tuần|14\\s*ngày)`,
-              "i"
+              "i",
             );
             if (regex.test(planText)) {
               detectedDays = 14;
@@ -189,7 +206,8 @@ export function AiDecomposedResults({
     return dateStr;
   };
 
-  const targetSpaceId = targetMode === "NEW_SPACE" ? createdSpaceId : selectedSpaceId;
+  const targetSpaceId =
+    targetMode === "NEW_SPACE" ? createdSpaceId : selectedSpaceId;
 
   // Open Unified Chatbox focused on a target sprint or ALL
   const handleOpenChatBox = (scope: string) => {
@@ -201,7 +219,10 @@ export function AiDecomposedResults({
   const handleSendUnifiedChatBox = async (prompt: string) => {
     if (!prompt.trim() || isChatBoxLoading) return;
 
-    const nowTime = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const nowTime = new Date().toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     const userMsg: UnifiedChatMessage = {
       sender: "USER",
       text: prompt,
@@ -221,24 +242,41 @@ export function AiDecomposedResults({
       if (targetSprintScope === "ALL") {
         fullInstruction = `[YÊU CẦU TINH CHỈNH TOÀN BỘ BÀI TOÁN WBS]\nYêu cầu người dùng: "${prompt}"\nLƯU Ý QUAN TRỌNG: Người dùng đã sắp xếp, kéo thả các task vào từng Sprint cụ thể. BẮT BUỘC tôn trọng vị trí Sprint hiện tại của từng task, TUYỆT ĐỐI không được kéo task trở lại Sprint cũ. Hãy cập nhật và phân rã lại bảng WBS task hoàn chỉnh.`;
       } else {
-        const currentSprintTasks = (groupedTasks[targetSprintScope] || []).map((t) => t.task);
+        const currentSprintTasks = (groupedTasks[targetSprintScope] || []).map(
+          (t) => t.task,
+        );
         fullInstruction = `[YÊU CẦU ĐIỀU CHỈNH RIÊNG CHO SPRINT: ${targetSprintScope}]\nCác tasks hiện tại của ${targetSprintScope}: ${JSON.stringify(
-          currentSprintTasks
+          currentSprintTasks,
         )}\nYêu cầu người dùng: "${prompt}"\nLƯU Ý QUAN TRỌNG: Hãy thực hiện chỉnh sửa/thêm task riêng cho ${targetSprintScope}. Đối với các task thuộc Sprint khác hoặc các task đã được người dùng kéo sang Sprint khác, BẮT BUỘC giữ nguyên vị trí Sprint hiện tại của chúng, TUYỆT ĐỐI không được chuyển chúng về Sprint cũ.`;
       }
 
       let updatedResult: TaskDecompositionResponse | null = null;
       try {
-        updatedResult = await aiService.decomposeRequirements(spaceIdToUse, fullInstruction, threadIdToUse, currentTasksJson);
+        updatedResult = await aiService.decomposeRequirements(
+          spaceIdToUse,
+          fullInstruction,
+          threadIdToUse,
+          currentTasksJson,
+        );
       } catch (err) {
-        console.warn("Backend decompose call warning, applying smart local refinement:", err);
+        console.warn(
+          "Backend decompose call warning, applying smart local refinement:",
+          err,
+        );
       }
 
-      if (updatedResult && updatedResult.tasks && updatedResult.tasks.length > 0) {
+      if (
+        updatedResult &&
+        updatedResult.tasks &&
+        updatedResult.tasks.length > 0
+      ) {
         // Map current user task sprint placements: title -> sprint
         const userPlacedSprintMap: Record<string, string> = {};
         result.tasks.forEach((t) => {
-          const cleanKey = (t.title || "").toLowerCase().replace(/^task-\d+\s*:\s*/i, "").trim();
+          const cleanKey = (t.title || "")
+            .toLowerCase()
+            .replace(/^task-\d+\s*:\s*/i, "")
+            .trim();
           if (cleanKey && t.sprint) {
             userPlacedSprintMap[cleanKey] = t.sprint;
           }
@@ -246,7 +284,10 @@ export function AiDecomposedResults({
 
         // Ensure tasks that were dragged keep their current user-placed sprint unless explicitly targeted
         const mergedTasks = updatedResult.tasks.map((t) => {
-          const cleanKey = (t.title || "").toLowerCase().replace(/^task-\d+\s*:\s*/i, "").trim();
+          const cleanKey = (t.title || "")
+            .toLowerCase()
+            .replace(/^task-\d+\s*:\s*/i, "")
+            .trim();
           if (userPlacedSprintMap[cleanKey] && targetSprintScope !== "ALL") {
             return {
               ...t,
@@ -259,10 +300,14 @@ export function AiDecomposedResults({
         onUpdateTasks(mergedTasks);
         const assistantMsg: UnifiedChatMessage = {
           sender: "ASSISTANT",
-          text: `✅ AI đã cập nhật công việc thành công cho **${targetSprintScope === "ALL" ? "Toàn bộ bài toán" : targetSprintScope
-            }** theo yêu cầu!`,
+          text: `✅ AI đã cập nhật công việc thành công cho **${
+            targetSprintScope === "ALL" ? "Toàn bộ bài toán" : targetSprintScope
+          }** theo yêu cầu!`,
           sprintScope: targetSprintScope,
-          timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          timestamp: new Date().toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
         };
         setChatBoxMessages((prev) => [...prev, assistantMsg]);
       } else {
@@ -274,31 +319,42 @@ export function AiDecomposedResults({
         if (targetSprintScope !== "ALL") {
           if (promptLower.includes("bổ sung") || promptLower.includes("thêm")) {
             const newTaskTitle =
-              prompt.replace(/^(bổ sung|thêm|thêm task|bổ sung task)\s*/i, "").trim() ||
-              `Công việc mới bổ sung cho ${targetSprintScope}`;
+              prompt
+                .replace(/^(bổ sung|thêm|thêm task|bổ sung task)\s*/i, "")
+                .trim() || `Công việc mới bổ sung cho ${targetSprintScope}`;
             updatedTasks.push({
               sprint: targetSprintScope,
-              title: newTaskTitle.charAt(0).toUpperCase() + newTaskTitle.slice(1),
+              title:
+                newTaskTitle.charAt(0).toUpperCase() + newTaskTitle.slice(1),
               description: `Nhiệm vụ được AI bổ sung tự động cho ${targetSprintScope} theo yêu cầu: "${prompt}"`,
               priority: "HIGH",
               estimatedDays: 2,
               assignedRole: "Backend Developer",
             });
             responseNote = `✅ Đã bổ sung task mới **"${newTaskTitle}"** vào ${targetSprintScope}.`;
-          } else if (promptLower.includes("tăng") || promptLower.includes("kéo dài")) {
+          } else if (
+            promptLower.includes("tăng") ||
+            promptLower.includes("kéo dài")
+          ) {
             updatedTasks = updatedTasks.map((t) =>
-              t.sprint === targetSprintScope ? { ...t, estimatedDays: (t.estimatedDays || 2) + 1 } : t
+              t.sprint === targetSprintScope
+                ? { ...t, estimatedDays: (t.estimatedDays || 2) + 1 }
+                : t,
             );
             responseNote = `⏱️ Đã tăng thêm +1 ngày làm cho tất cả task trong ${targetSprintScope}.`;
-          } else if (promptLower.includes("rủi ro") || promptLower.includes("dự phòng")) {
+          } else if (
+            promptLower.includes("rủi ro") ||
+            promptLower.includes("dự phòng")
+          ) {
             updatedTasks = updatedTasks.map((t) =>
               t.sprint === targetSprintScope
                 ? {
-                  ...t,
-                  bufferDays: (t.bufferDays || 0) + 1,
-                  riskWarning: "Task có rủi ro kỹ thuật cao, cần kiểm thử kỹ.",
-                }
-                : t
+                    ...t,
+                    bufferDays: (t.bufferDays || 0) + 1,
+                    riskWarning:
+                      "Task có rủi ro kỹ thuật cao, cần kiểm thử kỹ.",
+                  }
+                : t,
             );
             responseNote = `🛡️ Đã cập nhật cảnh báo rủi ro & thêm ngày dự phòng cho ${targetSprintScope}.`;
           } else {
@@ -313,7 +369,10 @@ export function AiDecomposedResults({
           sender: "ASSISTANT",
           text: responseNote,
           sprintScope: targetSprintScope,
-          timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          timestamp: new Date().toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
         };
         setChatBoxMessages((prev) => [...prev, assistantMsg]);
       }
@@ -333,7 +392,12 @@ export function AiDecomposedResults({
 
   // Delete Task
   const handleDeleteTask = (index: number) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa Task này khỏi danh sách gợi ý AI?")) return;
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn xóa Task này khỏi danh sách gợi ý AI?",
+      )
+    )
+      return;
     const updated = result.tasks.filter((_, idx) => idx !== index);
     onUpdateTasks(updated);
   };
@@ -371,36 +435,53 @@ export function AiDecomposedResults({
           </div>
 
           <h3 className="text-base font-extrabold text-[#111827]">
-            {newSpaceName || selectedSpace?.name || result.suggestedSpaceName || "Kế Hoạch Dự Án"}
+            {newSpaceName ||
+              selectedSpace?.name ||
+              result.suggestedSpaceName ||
+              "Kế Hoạch Dự Án"}
           </h3>
 
           {/* 4 Clean Metric Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-              <span className="text-[10px] text-slate-500 font-mono block">Tổng số Tasks</span>
+              <span className="text-[10px] text-slate-500 font-mono block">
+                Tổng số Tasks
+              </span>
               <span className="text-sm font-extrabold text-slate-900 block font-mono">
                 {result.tasks.length} tasks
               </span>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-              <span className="text-[10px] text-slate-500 font-mono block">Khung Thời Gian</span>
-              <span className="text-xs font-bold text-indigo-700 block font-mono truncate" title={`${startDate || 'Bắt đầu'} - ${endDate || 'Kết thúc'}`}>
-                {startDate ? startDate.substring(5) : 'Bắt đầu'} ➔ {endDate ? endDate.substring(5) : 'Kết thúc'}
+              <span className="text-[10px] text-slate-500 font-mono block">
+                Khung Thời Gian
+              </span>
+              <span
+                className="text-xs font-bold text-indigo-700 block font-mono truncate"
+                title={`${startDate || "Bắt đầu"} - ${endDate || "Kết thúc"}`}
+              >
+                {startDate ? startDate.substring(5) : "Bắt đầu"} ➔{" "}
+                {endDate ? endDate.substring(5) : "Kết thúc"}
               </span>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-              <span className="text-[10px] text-slate-500 font-mono block">Số Lượng Sprint</span>
+              <span className="text-[10px] text-slate-500 font-mono block">
+                Số Lượng Sprint
+              </span>
               <span className="text-sm font-extrabold text-emerald-700 block font-mono">
                 {availableSprints.length} Sprints
               </span>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-              <span className="text-[10px] text-slate-500 font-mono block">Thành Viên Trong Space</span>
+              <span className="text-[10px] text-slate-500 font-mono block">
+                Thành Viên Trong Space
+              </span>
               <span className="text-xs font-bold text-amber-700 block truncate">
-                {spaceUsers.length > 0 ? `${spaceUsers.length} Thành viên` : "Chưa có thành viên"}
+                {spaceUsers.length > 0
+                  ? `${spaceUsers.length} Thành viên`
+                  : "Chưa có thành viên"}
               </span>
             </div>
           </div>
@@ -409,7 +490,7 @@ export function AiDecomposedResults({
         {/* Action Buttons: Unified AI Chat, Auto Assign & Import */}
         <div className="flex flex-wrap items-center gap-2.5 text-left md:text-right shrink-0">
           {/* Nút Chat AI cố định 1 chỗ tại thanh công cụ */}
-          <button
+          {/* <button
             type="button"
             onClick={() => handleOpenChatBox("ALL")}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
@@ -417,23 +498,31 @@ export function AiDecomposedResults({
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Chat Tinh Chỉnh</span>
-          </button>
+          </button> */}
 
           <button
             type="button"
             onClick={onImportTasks}
-            disabled={importing || importSuccess || isImported || result.tasks.length === 0}
-            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${importSuccess || isImported
-              ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
-              : targetMode === "NEW_SPACE"
-                ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
-                : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
-              }`}
+            disabled={
+              importing ||
+              importSuccess ||
+              isImported ||
+              result.tasks.length === 0
+            }
+            className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition-all ${
+              importSuccess || isImported
+                ? "bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] cursor-not-allowed opacity-95"
+                : targetMode === "NEW_SPACE"
+                  ? "bg-[#10B981] hover:bg-[#059669] text-white cursor-pointer"
+                  : "bg-[#137333] hover:bg-[#0D652D] text-white cursor-pointer"
+            }`}
           >
             {importing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                {targetMode === "NEW_SPACE" ? "Đang khởi tạo Space Mới & Nạp Task..." : "Đang nạp Task vào Space..."}
+                {targetMode === "NEW_SPACE"
+                  ? "Đang khởi tạo Space Mới & Nạp Task..."
+                  : "Đang nạp Task vào Space..."}
               </>
             ) : importSuccess || isImported ? (
               <>
@@ -450,7 +539,8 @@ export function AiDecomposedResults({
             ) : (
               <>
                 <PlusCircle className="w-4 h-4" />
-                Nạp Tasks Vào Space: {selectedSpace?.name} ({result.tasks.length})
+                Nạp Tasks Vào Space: {selectedSpace?.name} (
+                {result.tasks.length})
               </>
             )}
           </button>
@@ -469,11 +559,14 @@ export function AiDecomposedResults({
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(new Event("switch_to_kanban_tab"));
                     }
-                    router.push(`/workspaces/${workspaceId}/spaces/${targetSpaceId}`);
+                    router.push(
+                      `/workspaces/${workspaceId}/spaces/${targetSpaceId}`,
+                    );
                   }}
                   className="text-xs text-[#1A73E8] hover:underline font-bold flex items-center justify-end gap-1 cursor-pointer ml-auto"
                 >
-                  👉 Chuyển Tới Bảng Kanban Của Dự Án <ArrowRight className="w-3.5 h-3.5" />
+                  👉 Chuyển Tới Bảng Kanban Của Dự Án{" "}
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -482,51 +575,64 @@ export function AiDecomposedResults({
       </div>
 
       {/* Ongoing Space Timeline Context Banner */}
-      {targetMode === "EXISTING_SPACE" && existingSprintsSummary && existingSprintsSummary.length > 0 && (
-        <div className="p-4 bg-[#111827] text-white rounded-2xl space-y-2.5 border border-gray-800 font-sans shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-[#10B981]" />
-              <span>
-                Tiến Trình Các Sprint Trong Space "{selectedSpace?.name}" ({existingTaskCount} Tasks)
+      {targetMode === "EXISTING_SPACE" &&
+        existingSprintsSummary &&
+        existingSprintsSummary.length > 0 && (
+          <div className="p-4 bg-[#111827] text-white rounded-2xl space-y-2.5 border border-gray-800 font-sans shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-[#10B981]" />
+                <span>
+                  Tiến Trình Các Sprint Trong Space "{selectedSpace?.name}" (
+                  {existingTaskCount} Tasks)
+                </span>
               </span>
-            </span>
-            <span className="text-[11px] text-gray-400 font-mono">Không đụng vào các Sprint cũ</span>
-          </div>
+              <span className="text-[11px] text-gray-400 font-mono">
+                Không đụng vào các Sprint cũ
+              </span>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {existingSprintsSummary.map((sp, idx) => {
-              const statusUpper = (sp.status || "").toUpperCase();
-              const isActive = statusUpper === "ACTIVE" || statusUpper === "IN_PROGRESS";
-              const isClosed = statusUpper === "COMPLETED" || statusUpper === "CLOSED";
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {existingSprintsSummary.map((sp, idx) => {
+                const statusUpper = (sp.status || "").toUpperCase();
+                const isActive =
+                  statusUpper === "ACTIVE" || statusUpper === "IN_PROGRESS";
+                const isClosed =
+                  statusUpper === "COMPLETED" || statusUpper === "CLOSED";
 
-              const badgeStyle = isActive
-                ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
-                : isClosed
-                  ? "bg-gray-800/80 text-gray-400 border-gray-700"
-                  : "bg-blue-500/20 text-blue-300 border-blue-500/40";
+                const badgeStyle = isActive
+                  ? "bg-[#10B981]/20 text-[#A7F3D0] border-[#10B981]/40"
+                  : isClosed
+                    ? "bg-gray-800/80 text-gray-400 border-gray-700"
+                    : "bg-blue-500/20 text-blue-300 border-blue-500/40";
 
-              const statusText = isActive ? "Đang chạy" : isClosed ? "Đã hoàn thành" : "Sắp tới";
+                const statusText = isActive
+                  ? "Đang chạy"
+                  : isClosed
+                    ? "Đã hoàn thành"
+                    : "Sắp tới";
 
-              return (
-                <div
-                  key={idx}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold font-mono flex items-center gap-2 ${badgeStyle}`}
-                >
-                  <span>{sp.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/40 text-gray-200">
-                    {sp.taskCount} tasks ({statusText})
-                  </span>
-                </div>
-              );
-            })}
-            <div className="text-[#10B981] font-bold text-sm px-1 font-mono">➜</div>
-            <div className="px-3 py-1.5 rounded-xl bg-[#10B981] text-white font-mono text-xs font-extrabold shadow-sm animate-pulse">
-              ✨ {result.tasks[0]?.sprint || "Sprint Mới"} (AI Nối Tiếp)
+                return (
+                  <div
+                    key={idx}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold font-mono flex items-center gap-2 ${badgeStyle}`}
+                  >
+                    <span>{sp.name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/40 text-gray-200">
+                      {sp.taskCount} tasks ({statusText})
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="text-[#10B981] font-bold text-sm px-1 font-mono">
+                ➜
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-[#10B981] text-white font-mono text-xs font-extrabold shadow-sm animate-pulse">
+                ✨ {result.tasks[0]?.sprint || "Sprint Mới"} (AI Nối Tiếp)
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Grouped Tasks By Sprint */}
       <div className="space-y-6">
@@ -545,7 +651,9 @@ export function AiDecomposedResults({
           const sprintStartStr = addDays(baseStart, currentOffsetDays);
           const sprintEndStr = addDays(sprintStartStr, thisSprintDays - 1);
           const dateRangeStr = `${formatDateVN(sprintStartStr)} ➔ ${formatDateVN(sprintEndStr)} (${thisSprintDays} ngày)`;
-          const shortSprintTitle = sprintName.includes(":") ? sprintName.split(":")[0].trim() : sprintName;
+          const shortSprintTitle = sprintName.includes(":")
+            ? sprintName.split(":")[0].trim()
+            : sprintName;
           const nextSprintShortTitle =
             groupIdx < availableSprints.length - 1
               ? availableSprints[groupIdx + 1].includes(":")
@@ -660,7 +768,7 @@ export function AiDecomposedResults({
         onApplyAssignments={(updatedTasks) => onUpdateTasks(updatedTasks)}
         workspaceUsers={workspaceUsers}
         currentSpaceUsers={spaceUsers}
-        onUpdateSpaceUsers={onUpdateSpaceUsers || (() => { })}
+        onUpdateSpaceUsers={onUpdateSpaceUsers || (() => {})}
         availableSprints={availableSprints}
       />
     </div>

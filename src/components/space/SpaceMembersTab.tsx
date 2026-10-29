@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users,
   UserPlus,
@@ -14,6 +15,7 @@ import {
   Lock,
   Crown,
   Sparkles,
+  UserCircle,
 } from "lucide-react";
 import { Task, User } from "@/types";
 import { userService } from "@/services/user.service";
@@ -88,6 +90,7 @@ export function SpaceMembersTab({
   onSelectTask,
   onRoleUpdated,
 }: SpaceMembersTabProps) {
+  const router = useRouter();
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
   const [memberRoleMap, setMemberRoleMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
@@ -339,7 +342,6 @@ export function SpaceMembersTab({
                         className={`px-2 py-0.5 text-[10px] font-mono font-extrabold rounded-md border cursor-pointer focus:outline-none ${roleBadgeStyle}`}
                         title="Đổi vai trò phân quyền (RBAC) trong Space"
                       >
-                        <option value="PM">Role: PM Phụ</option>
                         <option value="ASSISTANT">Role: ASSISTANT</option>
                         <option value="MEMBER">Role: MEMBER</option>
                       </select>
@@ -348,9 +350,21 @@ export function SpaceMembersTab({
                         className={`px-2 py-0.5 text-[10px] font-mono font-extrabold rounded-md border flex items-center gap-1 ${roleBadgeStyle}`}
                       >
                         {isMemberWsOwner && <Crown className="w-3 h-3 text-amber-600" />}
-                        {isMemberWsOwner ? "Lead PM" : roleBadgeLabel}
+                        {isMemberWsOwner ? "PM (Quản lý Space)" : roleBadgeLabel}
                       </span>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(currentUserId === member.id ? "/profile" : `/profile/${member.id}`);
+                      }}
+                      className="p-1 hover:bg-blue-50 text-[#6B7280] hover:text-[#1A73E8] rounded-md transition-colors cursor-pointer"
+                      title="Xem hồ sơ cá nhân"
+                    >
+                      <UserCircle className="w-4 h-4" />
+                    </button>
 
                     {isPM && !isMemberWsOwner && (
                       <button
@@ -484,10 +498,12 @@ export function SpaceMembersTab({
                         className={`px-2 py-0.5 text-[10px] font-mono font-extrabold rounded-md border ${
                           selectedRole === "PM"
                             ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : selectedRole === "ASSISTANT"
+                            ? "bg-purple-50 text-purple-700 border-purple-200"
                             : "bg-blue-50 text-blue-700 border-blue-200"
                         }`}
                       >
-                        {isSelectedWsOwner ? "Lead PM (Owner)" : `Role: ${selectedRole}`}
+                        {isSelectedWsOwner ? "PM (Quản lý Space)" : `Role: ${selectedRole}`}
                       </span>
                     </div>
                     <p className="text-xs text-[#6B7280] truncate">
@@ -495,12 +511,26 @@ export function SpaceMembersTab({
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelectedMember(null)}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg text-[#6B7280]"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetId = selectedMember.id;
+                      setSelectedMember(null);
+                      router.push(currentUserId === targetId ? "/profile" : `/profile/${targetId}`);
+                    }}
+                    className="px-3 py-1.5 bg-[#E8F0FE] hover:bg-[#D2E3FC] text-[#1A73E8] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    <span>Xem hồ sơ</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedMember(null)}
+                    className="p-1.5 hover:bg-gray-100 rounded-lg text-[#6B7280]"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-y-auto space-y-4 pr-1 flex-1">
@@ -522,7 +552,6 @@ export function SpaceMembersTab({
                           }
                           className="px-2 py-1 border border-[#D1D5DB] rounded-lg text-xs font-bold bg-white"
                         >
-                          <option value="PM">PM Phụ (Quản lý &amp; Duyệt Task)</option>
                           <option value="ASSISTANT">ASSISTANT (Trợ lý điều phối &amp; AI Nháp)</option>
                           <option value="MEMBER">MEMBER (Thành viên thực thi)</option>
                         </select>

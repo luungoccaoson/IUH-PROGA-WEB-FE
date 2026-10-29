@@ -2,8 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  KanbanSquare, Sparkles, AlertTriangle, ListTodo, Clock,
-  CheckCircle2, ChevronUp, User, Lock, Calendar, Plus, Eye, Check, RotateCcw
+  KanbanSquare,
+  Sparkles,
+  AlertTriangle,
+  ListTodo,
+  Clock,
+  CheckCircle2,
+  ChevronUp,
+  User,
+  Calendar,
+  Plus,
+  Eye,
+  Check,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
@@ -20,11 +32,46 @@ interface SprintKanbanBoardProps {
   onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
-const statusColumns: { key: TaskStatus; title: string; icon: React.ElementType; color: string; bg: string; border: string }[] = [
-  { key: "TODO", title: "CẦN LÀM", icon: ListTodo, color: "text-gray-700", bg: "bg-gray-100/60", border: "border-t-gray-400" },
-  { key: "IN_PROGRESS", title: "ĐANG LÀM", icon: Clock, color: "text-[#1A73E8]", bg: "bg-[#E8F0FE]/40", border: "border-t-[#1A73E8]" },
-  { key: "IN_REVIEW", title: "CHỜ DUYỆT (IN REVIEW)", icon: Eye, color: "text-[#B45309]", bg: "bg-[#FEF3C7]/40", border: "border-t-[#F59E0B]" },
-  { key: "DONE", title: "ĐÃ XONG", icon: CheckCircle2, color: "text-[#137333]", bg: "bg-[#E6F4EA]/40", border: "border-t-[#10B981]" },
+const statusColumns: {
+  key: TaskStatus;
+  title: string;
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+  border: string;
+}[] = [
+  {
+    key: "TODO",
+    title: "CẦN LÀM",
+    icon: ListTodo,
+    color: "text-gray-700",
+    bg: "bg-gray-100/60",
+    border: "border-t-gray-400",
+  },
+  {
+    key: "IN_PROGRESS",
+    title: "ĐANG LÀM",
+    icon: Clock,
+    color: "text-[#1A73E8]",
+    bg: "bg-[#E8F0FE]/40",
+    border: "border-t-[#1A73E8]",
+  },
+  {
+    key: "IN_REVIEW",
+    title: "CHỜ DUYỆT",
+    icon: Eye,
+    color: "text-[#B45309]",
+    bg: "bg-[#FEF3C7]/40",
+    border: "border-t-[#F59E0B]",
+  },
+  {
+    key: "DONE",
+    title: "ĐÃ XONG",
+    icon: CheckCircle2,
+    color: "text-[#137333]",
+    bg: "bg-[#E6F4EA]/40",
+    border: "border-t-[#10B981]",
+  },
 ];
 
 export function SprintKanbanBoard({
@@ -36,14 +83,8 @@ export function SprintKanbanBoard({
   onDrawerStateChange,
 }: SprintKanbanBoardProps) {
   const isCoordinator = isPM || isAssistant;
-  const {
-    sprints,
-    tasks,
-    loading,
-    error,
-    reload,
-    isTaskOverdue,
-  } = useSprints(spaceId);
+  const { sprints, tasks, loading, error, reload, isTaskOverdue } =
+    useSprints(spaceId);
 
   const {
     selectedTask,
@@ -53,6 +94,68 @@ export function SprintKanbanBoard({
     deleteTask,
   } = useTasks(spaceId, reload);
 
+  // Undo Toast state when reverting a task from IN_REVIEW to IN_PROGRESS
+  const [revertUndoToast, setRevertUndoToast] = useState<{
+    taskId: number;
+    taskTitle: string;
+  } | null>(null);
+  const revertUndoTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (revertUndoTimerRef.current) clearTimeout(revertUndoTimerRef.current);
+    };
+  }, []);
+
+  const triggerRevertTaskWithUndo = (taskToRevert: Task) => {
+    updateTaskStatus(taskToRevert.id, "IN_PROGRESS");
+    if (revertUndoTimerRef.current) {
+      clearTimeout(revertUndoTimerRef.current);
+    }
+    revertUndoTimerRef.current = setTimeout(() => {
+      setRevertUndoToast(null);
+    }, 8000);
+    setRevertUndoToast({
+      taskId: taskToRevert.id,
+      taskTitle: taskToRevert.title,
+    });
+  };
+
+  const handleUndoRevert = () => {
+    if (!revertUndoToast) return;
+    if (revertUndoTimerRef.current) {
+      clearTimeout(revertUndoTimerRef.current);
+    }
+    updateTaskStatus(revertUndoToast.taskId, "IN_REVIEW");
+    setRevertUndoToast(null);
+  };
+
+  const getAssigneeInfo = (task: Task) => {
+    const taskOwnerId = task.ownerId || task.assignee?.id;
+    if (!taskOwnerId) return null;
+    const member = members.find((m: any) => {
+      const mId = m.id?.userId || m.userId || m.id;
+      return mId === taskOwnerId;
+    });
+    const name =
+      member?.user?.fullName ||
+      member?.user?.email ||
+      member?.fullName ||
+      member?.email ||
+      task.ownerName ||
+      task.assignee?.fullName ||
+      task.suggestedMemberName;
+
+    if (!name) return null;
+    const parts = name.trim().split(" ");
+    const lastPart = parts[parts.length - 1];
+    const initials = lastPart
+      ? lastPart.substring(0, 2).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+
+    return { name, initials, shortName: lastPart || name };
+  };
+
   useEffect(() => {
     if (onDrawerStateChange) {
       onDrawerStateChange(Boolean(selectedTask));
@@ -60,7 +163,9 @@ export function SprintKanbanBoard({
   }, [selectedTask, onDrawerStateChange]);
 
   // Selected Sprint for Kanban filter (defaults to active sprint or first sprint)
-  const [selectedSprintId, setSelectedSprintId] = useState<number | "backlog">(0);
+  const [selectedSprintId, setSelectedSprintId] = useState<number | "backlog">(
+    0,
+  );
 
   useEffect(() => {
     if (sprints.length > 0 && selectedSprintId === 0) {
@@ -72,16 +177,21 @@ export function SprintKanbanBoard({
   const currentSprint = sprints.find((s) => s.id === selectedSprintId);
   const isClosedSprint = currentSprint?.status === "CLOSED";
 
-  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+  const sprintIds = React.useMemo(
+    () => new Set(sprints.map((s) => s.id)),
+    [sprints],
+  );
 
   const orderedSpaceTasks = React.useMemo(() => {
     const list: Task[] = [];
     sprints.forEach((sprint) => {
-      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      const sTasks = tasks.filter(
+        (t) => t.sprintId === sprint.id && !t.isDeleted,
+      );
       list.push(...sTasks);
     });
     const bTasks = tasks.filter(
-      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId)),
     );
     list.push(...bTasks);
     return list;
@@ -116,13 +226,19 @@ export function SprintKanbanBoard({
     switch (priority) {
       case "LOW":
         return (
-          <div title="Mức độ ưu tiên: Thấp" className="w-4 h-4 rounded flex items-center justify-center bg-[#E6F4EA] shrink-0">
+          <div
+            title="Mức độ ưu tiên: Thấp"
+            className="w-4 h-4 rounded flex items-center justify-center bg-[#E6F4EA] shrink-0"
+          >
             <span className="w-2 h-1 bg-[#10B981] rounded-xs" />
           </div>
         );
       case "MEDIUM":
         return (
-          <div title="Mức độ ưu tiên: Trung bình" className="w-4 h-4 rounded flex items-center justify-center bg-[#E8F0FE] shrink-0">
+          <div
+            title="Mức độ ưu tiên: Trung bình"
+            className="w-4 h-4 rounded flex items-center justify-center bg-[#E8F0FE] shrink-0"
+          >
             <div className="flex flex-col gap-[1px]">
               <span className="w-2 h-[1.5px] bg-[#3B82F6] rounded-xs" />
               <span className="w-2 h-[1.5px] bg-[#3B82F6] rounded-xs" />
@@ -131,13 +247,19 @@ export function SprintKanbanBoard({
         );
       case "HIGH":
         return (
-          <div title="Mức độ ưu tiên: Cao" className="w-4 h-4 rounded flex items-center justify-center bg-[#FFEDD5] text-[#F97316] shrink-0">
+          <div
+            title="Mức độ ưu tiên: Cao"
+            className="w-4 h-4 rounded flex items-center justify-center bg-[#FFEDD5] text-[#F97316] shrink-0"
+          >
             <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
           </div>
         );
       case "URGENT":
         return (
-          <div title="Mức độ ưu tiên: Khẩn cấp" className="w-4 h-4 rounded flex items-center justify-center bg-[#FEE2E2] text-[#EF4444] shrink-0">
+          <div
+            title="Mức độ ưu tiên: Khẩn cấp"
+            className="w-4 h-4 rounded flex items-center justify-center bg-[#FEE2E2] text-[#EF4444] shrink-0"
+          >
             <AlertTriangle className="w-3 h-3 stroke-[2.5]" />
           </div>
         );
@@ -150,7 +272,9 @@ export function SprintKanbanBoard({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#6B7280]">
         <Sparkles className="w-7 h-7 text-[#111827] animate-spin mb-2" />
-        <p className="font-mono text-xs uppercase tracking-wider">Đang tải Bảng Kanban...</p>
+        <p className="font-mono text-xs uppercase tracking-wider">
+          Đang tải Bảng Kanban...
+        </p>
       </div>
     );
   }
@@ -195,13 +319,21 @@ export function SprintKanbanBoard({
                 value={selectedSprintId}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setSelectedSprintId(val === "backlog" ? "backlog" : parseInt(val, 10));
+                  setSelectedSprintId(
+                    val === "backlog" ? "backlog" : parseInt(val, 10),
+                  );
                 }}
                 className="bg-white border border-[#E5E7EB] rounded-lg px-3 py-1.5 font-bold text-xs text-[#111827] focus:outline-none cursor-pointer"
               >
                 {sprints.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.status === "ACTIVE" ? "Đang diễn ra" : s.status === "CLOSED" ? "Đã đóng" : "Sắp tới"})
+                    {s.name} (
+                    {s.status === "ACTIVE"
+                      ? "Đang diễn ra"
+                      : s.status === "CLOSED"
+                        ? "Đã đóng"
+                        : "Sắp tới"}
+                    )
                   </option>
                 ))}
                 <option value="backlog">Công việc tồn đọng (Backlog)</option>
@@ -236,25 +368,95 @@ export function SprintKanbanBoard({
                   if (!taskIdStr) return;
                   const taskId = parseInt(taskIdStr, 10);
                   const draggedTask = tasks.find((t) => t.id === taskId);
+                  if (!draggedTask) return;
 
-                  // Nghiệp vụ 1: Khi MEMBER / ASSISTANT kéo sang cột ĐÃ XONG (DONE),
-                  // hệ thống tự động đưa vào cột CHỜ DUYỆT (IN_REVIEW) để PM biết họ đã làm xong và chờ PM duyệt!
-                  if (col.key === "DONE" && !isPM) {
-                    updateTaskStatus(taskId, "IN_REVIEW");
+                  const draggedOwnerId =
+                    draggedTask.ownerId || draggedTask.assignee?.id;
+                  const isMyDraggedTask = Boolean(
+                    currentUserId && draggedOwnerId === currentUserId,
+                  );
+
+                  // 1. Task đã duyệt DONE: Chỉ PM mới có quyền di chuyển (Thành viên & Assistant bị khóa hoàn toàn)
+                  if (draggedTask.status === "DONE" && !isPM) {
+                    alert(
+                      "⚠️ Công việc đã được PM duyệt hoàn thành (DONE) và không thể chuyển trạng thái!",
+                    );
                     return;
                   }
 
-                  // Nghiệp vụ 2: PM không đơn phương bấm/kéo DONE đối với task của thành viên khác khi họ chưa nộp vào CHỜ DUYỆT (IN_REVIEW)
-                  if (col.key === "DONE" && isPM && draggedTask) {
-                    const draggedOwnerId = draggedTask.ownerId || draggedTask.assignee?.id;
-                    const isAssignedToOther = Boolean(draggedOwnerId && draggedOwnerId !== currentUserId);
-                    if (isAssignedToOther && draggedTask.status !== "IN_REVIEW" && draggedTask.status !== "DONE") {
-                      alert("⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'CHỜ DUYỆT / IN REVIEW'). PM chỉ duyệt sang 'ĐÃ XONG' đối với các công việc đang nằm ở cột 'CHỜ DUYỆT'!");
+                  // 2. Nghiệp vụ Thành viên (MEMBER): chỉ được kéo task của mình ở Cần làm và Đang làm
+                  if (!isCoordinator) {
+                    if (!isMyDraggedTask) {
+                      alert(
+                        "⚠️ Bạn chỉ có quyền chuyển trạng thái công việc của chính mình!",
+                      );
                       return;
                     }
+                    // Thành viên kéo sang cột DONE sẽ tự động chuyển sang CHỜ DUYỆT (IN_REVIEW)
+                    if (col.key === "DONE") {
+                      updateTaskStatus(taskId, "IN_REVIEW");
+                      return;
+                    }
+                    updateTaskStatus(taskId, col.key);
+                    return;
                   }
 
-                  updateTaskStatus(taskId, col.key);
+                  // 3. Nghiệp vụ Trợ lý (ASSISTANT):
+                  if (isAssistant && !isPM) {
+                    if (isMyDraggedTask) {
+                      if (col.key === "DONE") {
+                        updateTaskStatus(taskId, "IN_REVIEW");
+                        return;
+                      }
+                      updateTaskStatus(taskId, col.key);
+                      return;
+                    }
+                    // Đối với task của thành viên khác: Assistant CHỈ ĐƯỢC PHÉP kéo trả lại từ IN_REVIEW về IN_PROGRESS
+                    if (
+                      draggedTask.status === "IN_REVIEW" &&
+                      col.key === "IN_PROGRESS"
+                    ) {
+                      triggerRevertTaskWithUndo(draggedTask);
+                      return;
+                    }
+                    if (col.key === "DONE") {
+                      alert(
+                        "⚠️ Chỉ Trưởng dự án (PM) mới có quyền duyệt hoàn thành công việc (DONE)!",
+                      );
+                      return;
+                    }
+                    alert(
+                      "⚠️ Trợ lý chỉ có quyền duyệt trả lại công việc từ 'CHỜ DUYỆT' về 'ĐANG LÀM', hoặc thao tác trên công việc của chính mình!",
+                    );
+                    return;
+                  }
+
+                  // 4. Nghiệp vụ Trưởng dự án (PM):
+                  if (isPM) {
+                    if (col.key === "DONE") {
+                      const isAssignedToOther = Boolean(
+                        draggedOwnerId && draggedOwnerId !== currentUserId,
+                      );
+                      if (
+                        isAssignedToOther &&
+                        draggedTask.status !== "IN_REVIEW" &&
+                        draggedTask.status !== "DONE"
+                      ) {
+                        alert(
+                          "⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'CHỜ DUYỆT / IN REVIEW'). PM chỉ duyệt sang 'ĐÃ XONG' đối với các công việc đang nằm ở cột 'CHỜ DUYỆT'!",
+                        );
+                        return;
+                      }
+                    }
+                    if (
+                      draggedTask.status === "IN_REVIEW" &&
+                      col.key === "IN_PROGRESS"
+                    ) {
+                      triggerRevertTaskWithUndo(draggedTask);
+                      return;
+                    }
+                    updateTaskStatus(taskId, col.key);
+                  }
                 }}
                 className={`bg-white border border-[#E5E7EB] hover:border-[#111827]/40 rounded-2xl p-3.5 space-y-3.5 border-t-4 ${col.border} shadow-sm min-h-[480px] flex flex-col transition-all`}
               >
@@ -284,10 +486,36 @@ export function SprintKanbanBoard({
                       typeof selectedSprintId === "number" &&
                       task.sprintId !== selectedSprintId;
                     const taskOwnerId = task.ownerId || task.assignee?.id;
-                    const isMyTask = Boolean(currentUserId && taskOwnerId === currentUserId);
+                    const isMyTask = Boolean(
+                      currentUserId && taskOwnerId === currentUserId,
+                    );
                     const isUnassigned = !taskOwnerId;
-                    const canDragCard = !isClosedSprint && !isGhost && (isCoordinator || isMyTask);
-                    const isReadOnly = isClosedSprint || isGhost || (!isCoordinator && !isMyTask);
+
+                    // 1. Task đã duyệt DONE: Thành viên & Trợ lý bị khóa, không được kéo
+                    const isDoneLocked = !isPM && task.status === "DONE";
+
+                    // 2. Assistant: chỉ kéo task của mình; riêng task ở Chờ duyệt (IN_REVIEW) thì được kéo trả lại
+                    const canAssistantDrag =
+                      isAssistant &&
+                      !isDoneLocked &&
+                      (isMyTask || task.status === "IN_REVIEW");
+
+                    // 3. Member: chỉ kéo task của mình (khi chưa DONE)
+                    const canMemberDrag =
+                      !isCoordinator && isMyTask && !isDoneLocked;
+
+                    // 4. PM: có quyền kéo (trừ closed sprint hoặc ghost)
+                    const canPMDrag = isPM;
+
+                    const canDragCard =
+                      !isClosedSprint &&
+                      !isGhost &&
+                      (canPMDrag || canAssistantDrag || canMemberDrag);
+
+                    const isReadOnly =
+                      isClosedSprint ||
+                      isGhost ||
+                      (!isCoordinator && !isMyTask);
 
                     return (
                       <div
@@ -298,25 +526,44 @@ export function SprintKanbanBoard({
                           e.dataTransfer.setData("taskId", task.id.toString());
                           e.dataTransfer.setData("sourceStatus", task.status);
                         }}
-                        onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)}
+                        onClick={() =>
+                          setSelectedTask(
+                            selectedTask?.id === task.id ? null : task,
+                          )
+                        }
                         className={`p-3.5 bg-white border rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
                           isGhost
                             ? "bg-amber-50/25 opacity-60 hover:opacity-95 border-dashed border-amber-300 cursor-pointer"
-                            : isReadOnly
-                            ? "bg-gray-50/70 border-[#E5E7EB] cursor-pointer"
-                            : "border-[#E5E7EB] hover:border-[#111827] cursor-grab active:cursor-grabbing"
+                            : isDoneLocked
+                              ? "bg-white border-[#E5E7EB] opacity-90 cursor-pointer"
+                              : isMyTask
+                                ? "border-[#E5E7EB] border-l-[3px] border-l-[#1A73E8] hover:border-[#1A73E8] cursor-grab active:cursor-grabbing"
+                                : isReadOnly
+                                  ? "bg-white border-[#E5E7EB] cursor-pointer"
+                                  : "border-[#E5E7EB] hover:border-[#111827] cursor-grab active:cursor-grabbing"
                         }`}
                       >
                         {/* Header: Code & Status Action */}
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] group-hover:border-[#111827] transition-colors">
-                            Task-{taskNumberMap.get(task.id) ?? (tasks.findIndex((t) => t.id === task.id) !== -1 ? tasks.findIndex((t) => t.id === task.id) + 1 : tIdx + 1)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-bold text-[#6B7280] bg-[#F6F5EF] px-2 py-0.5 rounded border border-[#E5E7EB] group-hover:border-[#111827] transition-colors">
+                              Task-
+                              {taskNumberMap.get(task.id) ??
+                                (tasks.findIndex((t) => t.id === task.id) !== -1
+                                  ? tasks.findIndex((t) => t.id === task.id) + 1
+                                  : tIdx + 1)}
+                            </span>
+                            {isMyTask && (
+                              <span className="px-1.5 py-0.5 rounded bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC] font-mono text-[9px] font-extrabold">
+                                Của tôi
+                              </span>
+                            )}
+                          </div>
 
                           <div className="flex items-center gap-1.5">
                             {overdue && task.status !== "DONE" && (
-                              <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-mono text-[9px] font-extrabold border border-red-100 flex items-center gap-0.5">
-                                <AlertTriangle className="w-2.5 h-2.5" /> TRỄ
+                              <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-mono text-[9px] font-extrabold border border-red-200">
+                                TRỄ HẠN
                               </span>
                             )}
                             {isGhost && (
@@ -324,39 +571,42 @@ export function SprintKanbanBoard({
                                 LƯU VẾT
                               </span>
                             )}
-                            {isReadOnly && (
-                              <span title="Nằm trong Sprint đã đóng hoặc là bản ghi lưu vết">
-                                <Lock className="w-3 h-3 text-[#9CA3AF]" />
-                              </span>
-                            )}
                           </div>
                         </div>
 
                         {/* Title */}
-                        <h4 className={`text-xs font-bold leading-relaxed ${task.status === "DONE" ? "line-through text-gray-400" : isGhost ? "text-gray-700 italic" : "text-[#111827]"}`}>
+                        <h4
+                          className={`text-xs font-bold leading-relaxed ${task.status === "DONE" ? "line-through text-gray-400" : isGhost ? "text-gray-700 italic" : "text-[#111827]"}`}
+                        >
                           {task.title}
                         </h4>
 
                         {/* IN_REVIEW Action Bar: Quick Submit for Member on IN_PROGRESS or Quick Approve for PM on IN_REVIEW */}
-                        {!isClosedSprint && !isGhost && task.status === "IN_PROGRESS" && isMyTask && !isPM && (
-                          <div className="pt-0.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateTaskStatus(task.id, "IN_REVIEW");
-                              }}
-                              className="w-full py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white border border-amber-200 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                              title="Báo cáo đã làm xong công việc để chuyển sang cột Chờ PM duyệt (IN REVIEW)"
-                            >
-                              <Check className="w-3 h-3" />
-                              <span>Hoàn thành (Gửi PM duyệt)</span>
-                            </button>
-                          </div>
-                        )}
+                        {!isClosedSprint &&
+                          !isGhost &&
+                          task.status === "IN_PROGRESS" &&
+                          isMyTask &&
+                          !isPM && (
+                            <div className="pt-0.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateTaskStatus(task.id, "IN_REVIEW");
+                                }}
+                                className="w-full py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white border border-amber-200 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Báo cáo đã làm xong công việc để chuyển sang cột Chờ PM duyệt (IN REVIEW)"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Hoàn thành (Gửi PM duyệt)</span>
+                              </button>
+                            </div>
+                          )}
 
-                        {!isClosedSprint && !isGhost && task.status === "IN_REVIEW" && (
-                          isPM ? (
+                        {!isClosedSprint &&
+                          !isGhost &&
+                          task.status === "IN_REVIEW" &&
+                          (isPM ? (
                             <div className="flex items-center gap-1.5 pt-0.5">
                               <button
                                 type="button"
@@ -364,17 +614,17 @@ export function SprintKanbanBoard({
                                   e.stopPropagation();
                                   updateTaskStatus(task.id, "DONE");
                                 }}
-                                className="flex-1 py-1 px-2 rounded-lg bg-[#137333] hover:bg-[#0d5324] text-white font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                                className="flex-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs hover:shadow"
                                 title="Nghiệm thu đạt yêu cầu và chuyển sang ĐÃ XONG (DONE)"
                               >
-                                <Check className="w-3 h-3" />
+                                <Check className="w-3 h-3 stroke-[3]" />
                                 <span>Duyệt Done</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  updateTaskStatus(task.id, "IN_PROGRESS");
+                                  triggerRevertTaskWithUndo(task);
                                 }}
                                 className="py-1 px-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                 title="Yêu cầu thành viên chỉnh sửa lại (Chuyển về ĐANG LÀM)"
@@ -383,27 +633,45 @@ export function SprintKanbanBoard({
                                 <span>Sửa lại</span>
                               </button>
                             </div>
+                          ) : isAssistant ? (
+                            <div className="pt-0.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  triggerRevertTaskWithUndo(task);
+                                }}
+                                className="w-full py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Duyệt trả lại cho thành viên chỉnh sửa (Chuyển về ĐANG LÀM)"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Trả lại (Yêu cầu sửa)</span>
+                              </button>
+                            </div>
                           ) : (
                             <div className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10px] font-bold flex items-center justify-center gap-1">
                               <Eye className="w-3 h-3 text-amber-600" />
                               <span>Đang chờ PM kiểm tra &amp; duyệt</span>
                             </div>
-                          )
-                        )}
+                          ))}
 
                         {/* Transferred origin badge */}
                         {(() => {
                           const transferred = getTaskTransferredOrigin(task);
                           if (!transferred.isTransferred) return null;
                           return (
-                            <div
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 font-mono text-[9px] font-bold border border-amber-200"
-                              title={`Nhiệm vụ trễ hạn từ sprint đã đóng: ${transferred.originSprintName}`}
-                            >
-                              <span>⚠️</span>
-                              <span className="truncate">
+                            <div className="relative group/origin inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 font-mono text-[9px] font-bold border border-amber-300 transition-colors">
+                              <span>
                                 {isGhost ? "Lưu vết: " : "Tồn đọng: "}
-                                {transferred.originSprintName}
+                                {transferred.shortSprintName ||
+                                  transferred.originSprintName}
+                              </span>
+                              <span className="pointer-events-none opacity-0 translate-y-1 group-hover/origin:opacity-100 group-hover/origin:translate-y-0 transition-all duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 px-2.5 py-1.5 rounded-lg bg-[#111827] text-white font-sans text-[10px] font-semibold whitespace-nowrap shadow-xl border border-gray-700">
+                                <span className="block font-mono text-[8px] text-amber-300 uppercase tracking-wider mb-0.5">
+                                  Chuyển từ Sprint trước
+                                </span>
+                                <span>{transferred.originSprintName}</span>
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-[#111827]" />
                               </span>
                             </div>
                           );
@@ -418,42 +686,53 @@ export function SprintKanbanBoard({
                             </span>
                           </div>
 
-                           {/* Avatar Circle or Quick Self-Assign for Unassigned Task */}
+                          {/* Avatar Circle or Quick Self-Assign for Unassigned Task */}
                           <div className="flex items-center gap-1.5">
-                            {!isPM && isUnassigned && !isClosedSprint && !isGhost && currentUserId && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updateTask(task.id, { ownerId: currentUserId });
-                                }}
-                                className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 font-mono text-[9px] font-bold transition-colors cursor-pointer"
-                                title="Tự nhận công việc này về cho bạn"
-                              >
-                                + Nhận việc
-                              </button>
-                            )}
-                            <div title={task.ownerName ? `Người thực hiện: ${task.ownerName}` : "Chưa gán"}>
-                              {task.ownerId && task.ownerName ? (
-                                <div
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold font-mono border border-white shadow-2xs ${task.ownerId % 2 === 0
-                                    ? "bg-purple-600 text-white"
-                                    : "bg-amber-500 text-white"
-                                    }`}
+                            {!isPM &&
+                              isUnassigned &&
+                              !isClosedSprint &&
+                              !isGhost &&
+                              currentUserId && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateTask(task.id, {
+                                      ownerId: currentUserId,
+                                    });
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 font-mono text-[9px] font-bold transition-colors cursor-pointer"
+                                  title="Tự nhận công việc này về cho bạn"
                                 >
-                                  {task.ownerName
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .substring(0, 2)
-                                    .toUpperCase()}
-                                </div>
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-[#E5E7EB] flex items-center justify-center text-[#6B7280]">
+                                  + Nhận việc
+                                </button>
+                              )}
+                            {(() => {
+                              const assigneeInfo = getAssigneeInfo(task);
+                              if (assigneeInfo) {
+                                return (
+                                  <div
+                                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs group/avatar"
+                                    title={`Người thực hiện: ${assigneeInfo.name}`}
+                                  >
+                                    <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 font-mono font-bold text-[8px] flex items-center justify-center shrink-0">
+                                      {assigneeInfo.initials}
+                                    </div>
+                                    <span className="text-[10px] font-medium max-w-[70px] truncate text-slate-800">
+                                      {assigneeInfo.shortName}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div
+                                  className="w-5 h-5 rounded-full bg-[#E5E7EB] flex items-center justify-center text-[#6B7280]"
+                                  title="Chưa gán người thực hiện"
+                                >
                                   <User className="w-3 h-3" />
                                 </div>
-                              )}
-                            </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -472,10 +751,50 @@ export function SprintKanbanBoard({
         </div>
       </div>
 
+      {/* Floating Undo Toast when PM or Assistant Reverts a Task from IN_REVIEW to IN_PROGRESS */}
+      {revertUndoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] bg-[#111827] text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-gray-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>
+              Đã trả{" "}
+              <strong>
+                Task-
+                {taskNumberMap.get(revertUndoToast.taskId) ??
+                  revertUndoToast.taskId}
+              </strong>{" "}
+              (
+              {revertUndoToast.taskTitle.length > 25
+                ? `${revertUndoToast.taskTitle.slice(0, 25)}...`
+                : revertUndoToast.taskTitle}
+              ) về <strong>Đang làm</strong>.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleUndoRevert}
+            className="px-3 py-1 rounded-xl bg-[#1A73E8] hover:bg-blue-600 text-white font-mono text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Hoàn tác (Khôi phục Chờ duyệt)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRevertUndoToast(null)}
+            className="p-1 text-gray-400 hover:text-white rounded cursor-pointer"
+            title="Đóng thông báo"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Task Detail Drawer Side Panel (Non-blocking right layout) */}
       <TaskDetailDrawer
         task={selectedTask}
-        taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+        taskNumber={
+          selectedTask ? taskNumberMap.get(selectedTask.id) : undefined
+        }
         isPM={isPM}
         isAssistant={isAssistant}
         currentUserId={currentUserId}
@@ -484,7 +803,7 @@ export function SprintKanbanBoard({
           isClosedSprint ||
           (selectedTask &&
             typeof selectedSprintId === "number" &&
-            selectedTask.sprintId !== selectedSprintId)
+            selectedTask.sprintId !== selectedSprintId),
         )}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}

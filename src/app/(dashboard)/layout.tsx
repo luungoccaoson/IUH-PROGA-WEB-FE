@@ -11,6 +11,7 @@ import {
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { usePathname } from "next/navigation";
@@ -400,6 +401,18 @@ export default function DashboardLayout({
                   <LayoutGrid className="w-5 h-5 text-[#111827]" />
                   <span>Danh sách Workspaces</span>
                 </Link>
+
+                <Link
+                  href="/profile"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+                    pathname.startsWith("/profile")
+                      ? "bg-white text-[#111827] border border-[#E5E7EB]"
+                      : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                  }`}
+                >
+                  <UserCircle className="w-5 h-5 text-[#1A73E8]" />
+                  <span>Hồ sơ cá nhân</span>
+                </Link>
               </nav>
             </div>
           )}
@@ -407,23 +420,32 @@ export default function DashboardLayout({
 
         {/* Footer User Info & Logout */}
         <div className="pt-4 border-t border-[#E5E7EB] space-y-3 font-sans">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2 overflow-hidden">
+          <Link
+            href="/profile"
+            className="flex items-center justify-between px-2.5 py-2 rounded-2xl hover:bg-white/80 border border-transparent hover:border-[#E5E7EB] transition-all group"
+            title="Xem & Chỉnh sửa hồ sơ cá nhân"
+          >
+            <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shrink-0">
-                {mounted && user?.username
-                  ? user.username.substring(0, 2).toUpperCase()
+                {mounted && (user?.fullName || user?.username)
+                  ? (user.fullName || user.username)
+                      .substring(0, 2)
+                      .toUpperCase()
                   : "SL"}
               </div>
               <div className="truncate text-xs">
-                <p className="font-bold text-[#111827] truncate">
-                  {mounted && user?.username ? user.username : "Son Luu"}
+                <p className="font-bold text-[#111827] group-hover:text-[#1A73E8] transition-colors truncate">
+                  {mounted && (user?.fullName || user?.username)
+                    ? user.fullName || user.username
+                    : "Son Luu"}
                 </p>
                 <p className="text-[10px] text-[#6B7280] font-mono truncate">
                   {mounted && user?.email ? user.email : "developer@proga.vn"}
                 </p>
               </div>
             </div>
-          </div>
+            <UserCircle className="w-4 h-4 text-[#6B7280] group-hover:text-[#1A73E8] shrink-0" />
+          </Link>
 
           <button
             onClick={() => {
@@ -444,11 +466,10 @@ export default function DashboardLayout({
         {isSidebarCollapsed && (
           <button
             onClick={() => setIsSidebarCollapsed(false)}
-            className="fixed top-4 left-4 z-40 flex items-center gap-2 px-3.5 py-2 bg-[#111827] text-white hover:bg-black rounded-xl shadow-lg border border-gray-700 text-xs font-bold transition-all cursor-pointer animate-in zoom-in-95"
+            className="fixed top-4 left-4 z-40 flex items-center gap-2 px-3.5 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 text-[#4B5563] rounded-xl shadow-lg text-xs font-bold transition-all cursor-pointer animate-in zoom-in-95"
             title="Mở thanh Sidebar Menu"
           >
-            <PanelLeftOpen className="w-4 h-4 text-[#10B981]" />
-            <span>Mở Menu Sidebar</span>
+            <PanelLeftOpen className="w-4 h-4 text-[#111827]" />
           </button>
         )}
         <main className="flex-1 p-6 md:p-10 overflow-y-auto">{children}</main>

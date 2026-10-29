@@ -325,14 +325,18 @@ export default function SpaceDetailPage() {
         </div>
       </div>
 
-      {/* AI Co-Pilot Drawer for Space (Available for PM & ASSISTANT) */}
-      {space && (isSpacePM || isSpaceAssistant) && (
+      {/* AI Co-Pilot Drawer for Space (Available for ALL roles: PM, ASSISTANT, and MEMBER) */}
+      {space && (
         <SpaceAiCopilotDrawer
           isOpen={true}
           onClose={() => {}}
           space={space}
           workspaceId={workspaceId}
           existingTasks={tasks}
+          spaceRole={mySpaceRole}
+          currentUser={currentUser}
+          members={members}
+          isTaskDrawerOpen={isDrawerVisible}
         />
       )}
 

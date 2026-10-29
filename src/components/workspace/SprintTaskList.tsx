@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Layers, Sparkles, AlertTriangle, Trash2, CheckSquare, X } from "lucide-react";
+import {
+  Plus,
+  Layers,
+  Sparkles,
+  AlertTriangle,
+  Trash2,
+  CheckSquare,
+  X,
+} from "lucide-react";
 import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
@@ -65,7 +73,8 @@ export function SprintTaskList({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
-  const [selectedTaskReadOnly, setSelectedTaskReadOnly] = useState<boolean>(false);
+  const [selectedTaskReadOnly, setSelectedTaskReadOnly] =
+    useState<boolean>(false);
 
   const handleOpenTask = (task: Task, isReadOnly?: boolean) => {
     handleSelectTask(task);
@@ -80,7 +89,9 @@ export function SprintTaskList({
 
   const handleToggleSelectTask = (taskId: number) => {
     setSelectedTaskIds((prev) =>
-      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+      prev.includes(taskId)
+        ? prev.filter((id) => id !== taskId)
+        : [...prev, taskId],
     );
   };
 
@@ -110,7 +121,10 @@ export function SprintTaskList({
     }
   };
 
-  const handleDeleteSprintWithOptions = async (sprintId: number, deleteTasks: boolean) => {
+  const handleDeleteSprintWithOptions = async (
+    sprintId: number,
+    deleteTasks: boolean,
+  ) => {
     try {
       await deleteSprint(sprintId, deleteTasks);
       setDeletingSprintId(null);
@@ -132,7 +146,9 @@ export function SprintTaskList({
 
   const handleUpdateOwner = async (taskId: number, ownerId?: number | null) => {
     try {
-      await updateTask(taskId, { ownerId: ownerId !== undefined ? ownerId : null });
+      await updateTask(taskId, {
+        ownerId: ownerId !== undefined ? ownerId : null,
+      });
     } catch (err) {
       alert("Không thể gán người thực hiện!");
     }
@@ -157,10 +173,13 @@ export function SprintTaskList({
     }
   };
 
-  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+  const sprintIds = React.useMemo(
+    () => new Set(sprints.map((s) => s.id)),
+    [sprints],
+  );
   const backlogTasks = React.useMemo(
     () => tasks.filter((t) => !t.sprintId || !sprintIds.has(t.sprintId)),
-    [tasks, sprintIds]
+    [tasks, sprintIds],
   );
 
   // Sequentially order all space tasks across Sprints (in sprint order) and then Backlog
@@ -168,12 +187,14 @@ export function SprintTaskList({
     const list: Task[] = [];
     // 1. All tasks in each sprint in sequential sprint order
     sprints.forEach((sprint) => {
-      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      const sTasks = tasks.filter(
+        (t) => t.sprintId === sprint.id && !t.isDeleted,
+      );
       list.push(...sTasks);
     });
     // 2. All tasks in Backlog
     const bTasks = tasks.filter(
-      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId)),
     );
     list.push(...bTasks);
     return list;
@@ -222,11 +243,11 @@ export function SprintTaskList({
           <div className="flex items-center gap-2.5">
             {isCoordinator ? (
               <>
-                {isAssistant && !isPM && (
+                {/* {isAssistant && !isPM && (
                   <span className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold hidden lg:inline-flex items-center gap-1.5">
                     🤝 Trợ lý Điều phối: Phân công, chỉnh hạn &amp; sắp xếp Sprint (PM duyệt DONE)
                   </span>
-                )}
+                )} */}
                 {/* Auto Assign Tasks by Role button - PM & Assistant */}
                 {members && members.length > 0 && (
                   <button
@@ -248,7 +269,10 @@ export function SprintTaskList({
               </>
             ) : (
               <div className="px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold flex items-center gap-2">
-                <span>💡 Quyền Thành viên: Tạo Task mới, tự nhận Task trống &amp; cập nhật tiến độ cá nhân</span>
+                <span>
+                  Tạo Task mới, tự nhận Task trống &amp; cập nhật tiến độ cá
+                  nhân
+                </span>
               </div>
             )}
           </div>
@@ -292,13 +316,19 @@ export function SprintTaskList({
                 isTaskOverdue={isTaskOverdue}
                 selectedTaskIds={selectedTaskIds}
                 onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
-                onToggleSelectAllSprint={isPM ? handleToggleSelectAll : undefined}
+                onToggleSelectAllSprint={
+                  isPM ? handleToggleSelectAll : undefined
+                }
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
                 onCreateTask={(data) =>
                   createTask({
                     ...data,
-                    ownerId: !isCoordinator && currentUserId ? currentUserId : undefined,
+                    ownerId:
+                      !isCoordinator && currentUserId
+                        ? currentUserId
+                        : undefined,
+                    createdByUserId: currentUserId,
                   })
                 }
                 onSelectTask={(task, forceReadOnly) =>
@@ -328,7 +358,9 @@ export function SprintTaskList({
             onCreateTask={(data) =>
               createTask({
                 ...data,
-                ownerId: !isCoordinator && currentUserId ? currentUserId : undefined,
+                ownerId:
+                  !isCoordinator && currentUserId ? currentUserId : undefined,
+                createdByUserId: currentUserId,
               })
             }
             onSelectTask={setSelectedTask}
@@ -347,7 +379,11 @@ export function SprintTaskList({
           <div className="flex items-center gap-2 text-sm font-semibold">
             <CheckSquare className="w-4 h-4 text-[#10B981]" />
             <span>
-              Đã chọn <strong className="text-[#10B981] font-mono">{selectedTaskIds.length}</strong> công việc
+              Đã chọn{" "}
+              <strong className="text-[#10B981] font-mono">
+                {selectedTaskIds.length}
+              </strong>{" "}
+              công việc
             </span>
           </div>
 
@@ -421,7 +457,9 @@ export function SprintTaskList({
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
-        taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+        taskNumber={
+          selectedTask ? taskNumberMap.get(selectedTask.id) : undefined
+        }
         isPM={isPM}
         isAssistant={isAssistant}
         currentUserId={currentUserId}
@@ -430,13 +468,13 @@ export function SprintTaskList({
           selectedTaskReadOnly ||
           (selectedTask?.sprintId &&
             sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-            "CLOSED")
+              "CLOSED"),
         )}
         isActiveSprint={Boolean(
           !selectedTaskReadOnly &&
           selectedTask?.sprintId &&
           sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-          "ACTIVE"
+            "ACTIVE",
         )}
         onClose={() => {
           setSelectedTask(null);
@@ -449,7 +487,11 @@ export function SprintTaskList({
       {/* Auto Assign Modal (Role-matching & Workload Balancing) */}
       <AutoAssignModal
         isOpen={isAutoAssignOpen}
-        tasks={selectedTaskIds.length > 0 ? tasks.filter((t) => selectedTaskIds.includes(t.id)) : tasks}
+        tasks={
+          selectedTaskIds.length > 0
+            ? tasks.filter((t) => selectedTaskIds.includes(t.id))
+            : tasks
+        }
         sprints={sprints}
         members={members}
         taskNumberMap={taskNumberMap}

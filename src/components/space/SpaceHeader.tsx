@@ -44,6 +44,7 @@ export function SpaceHeader({
   activeTab,
   setActiveTab,
   onOpenSettings,
+  onOpenCopilot,
   onOpenAddMember,
   onOpenTrash,
   isOwner = true,
@@ -53,25 +54,14 @@ export function SpaceHeader({
   const router = useRouter();
 
   const renderRoleBadge = () => {
-    if (isLeadPM) {
+    if (isLeadPM || spaceRole === "PM") {
       return (
         <span
           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 font-mono text-[10px] font-extrabold uppercase tracking-wider"
-          title="Người tạo Space (Lead PM): Toàn quyền quản trị Space, phân quyền và duyệt hoàn thành (DONE) mọi công việc"
+          title="Người tạo Space (PM): Toàn quyền quản trị Space, phân quyền và duyệt hoàn thành (DONE) mọi công việc"
         >
           <Crown className="w-3 h-3 text-amber-600" />
-          Lead PM
-        </span>
-      );
-    }
-    if (spaceRole === "PM") {
-      return (
-        <span
-          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-extrabold uppercase tracking-wider"
-          title="PM Phụ trách chuyên môn: Hỗ trợ quản lý và có quyền bấm Duyệt hoàn thành (DONE) công việc"
-        >
-          <ShieldCheck className="w-3 h-3 text-amber-600" />
-          Role: PM Phụ trách
+          Quản lý Space (PM)
         </span>
       );
     }
@@ -82,17 +72,17 @@ export function SpaceHeader({
           title="Trợ lý điều phối (ASSISTANT): Hỗ trợ AI phân rã nháp, chỉnh sửa deadline, sắp xếp Kanban (Không có quyền chốt DONE hoặc xóa dữ liệu)"
         >
           <Sparkles className="w-3 h-3 text-purple-600" />
-          Role: ASSISTANT (Trợ lý điều phối)
+          Trợ lý điều phối (ASSISTANT)
         </span>
       );
     }
     return (
       <span
         className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px] font-extrabold uppercase tracking-wider"
-        title="Thành viên (MEMBER): Tự nhận việc trống, tạo task cá nhân, cập nhật tiến độ (TODO -> IN_PROGRESS) và chờ PM duyệt DONE"
+        title="Thành viên (MEMBER): Tự nhận việc trống, tạo task cá nhân, cập nhật tiến độ và bấm Hoàn thành để chờ PM duyệt"
       >
         <UserCheck className="w-3 h-3 text-blue-600" />
-        Role: MEMBER (Thực thi)
+        Thành viên (MEMBER)
       </span>
     );
   };
@@ -144,7 +134,25 @@ export function SpaceHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* AI Co-Pilot Button - Đồng bộ màu với nút ẩn Sidebar (bg-white border-[#E5E7EB] text-[#4B5563]) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("toggle_space_ai_copilot"));
+              }
+              if (onOpenCopilot) onOpenCopilot();
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white hover:bg-gray-100 rounded-xl text-xs font-bold text-[#4B5563] hover:text-[#111827] transition-all shadow-2xs cursor-pointer"
+            title="Mở bảng Trợ lý AI (Phân tích tiến độ, gợi ý việc làm & tổng hợp duyệt)"
+          >
+            <Sparkles className="w-4 h-4 text-[#111827]" />
+            <span>
+              {spaceRole === "MEMBER" ? "Trợ lý AI Cá nhân" : "Trợ lý AI Dự án"}
+            </span>
+          </button>
+
           {/* Add Space Member Button - Chỉ dành cho PM */}
           {isOwner && onOpenAddMember && (
             <button

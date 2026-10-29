@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import {
   Sparkles,
   Users,
@@ -51,23 +57,63 @@ function TaskMemberPicker({
 }: TaskMemberPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [popoverCoords, setPopoverCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+  }>({ left: 0, top: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const selectedUser = users.find((u) => u.id === currentUserId);
 
+  const updateCoords = useCallback(() => {
+    if (!buttonRef.current || typeof window === "undefined") return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownWidth = 256; // w-64 = 256px
+    const estimatedHeight = 250;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    let left = align === "right" ? rect.right - dropdownWidth : rect.left;
+    if (left < 12) left = 12;
+    if (left + dropdownWidth > window.innerWidth - 12) {
+      left = window.innerWidth - dropdownWidth - 12;
+    }
+
+    if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
+      setPopoverCoords({
+        bottom: window.innerHeight - rect.top + 6,
+        left,
+      });
+    } else {
+      setPopoverCoords({
+        top: rect.bottom + 6,
+        left,
+      });
+    }
+  }, [align]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
     if (isOpen) {
+      updateCoords();
       document.addEventListener("mousedown", handleClickOutside);
+      window.addEventListener("scroll", updateCoords, true);
+      window.addEventListener("resize", updateCoords);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", updateCoords, true);
+      window.removeEventListener("resize", updateCoords);
     };
-  }, [isOpen]);
+  }, [isOpen, updateCoords]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
@@ -76,7 +122,7 @@ function TaskMemberPicker({
       (u) =>
         (u.fullName || "").toLowerCase().includes(q) ||
         (u.displayName || "").toLowerCase().includes(q) ||
-        (u.email || "").toLowerCase().includes(q)
+        (u.email || "").toLowerCase().includes(q),
     );
   }, [users, search]);
 
@@ -92,6 +138,7 @@ function TaskMemberPicker({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-xl text-xs font-semibold text-slate-800 shadow-2xs transition-all cursor-pointer min-w-[145px] max-w-[180px] justify-between"
@@ -99,10 +146,14 @@ function TaskMemberPicker({
       >
         <div className="flex items-center gap-1.5 truncate">
           <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
-            {selectedUser ? getInitials(selectedUser.fullName || selectedUser.displayName) : "?"}
+            {selectedUser
+              ? getInitials(selectedUser.fullName || selectedUser.displayName)
+              : "?"}
           </div>
           <span className="truncate text-xs font-semibold text-slate-800">
-            {selectedUser ? selectedUser.fullName || selectedUser.displayName : "Chọn người"}
+            {selectedUser
+              ? selectedUser.fullName || selectedUser.displayName
+              : "Chọn người"}
           </span>
         </div>
         <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -110,8 +161,13 @@ function TaskMemberPicker({
 
       {isOpen && (
         <div
-          className={`absolute ${align === "right" ? "right-0" : "left-0"
-            } top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150`}
+          style={{
+            position: "fixed",
+            top: popoverCoords.top,
+            bottom: popoverCoords.bottom,
+            left: popoverCoords.left,
+          }}
+          className="w-64 bg-white rounded-xl shadow-2xl border border-slate-200 z-[10000] p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150"
         >
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -142,10 +198,11 @@ function TaskMemberPicker({
                       setIsOpen(false);
                       setSearch("");
                     }}
-                    className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${isSelected
-                      ? "bg-blue-50 text-blue-800 font-bold"
-                      : "hover:bg-slate-100 text-slate-700"
-                      }`}
+                    className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50 text-blue-800 font-bold"
+                        : "hover:bg-slate-100 text-slate-700"
+                    }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
@@ -160,7 +217,9 @@ function TaskMemberPicker({
                         </span>
                       </div>
                     </div>
-                    {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                    )}
                   </button>
                 );
               })
@@ -195,14 +254,20 @@ export function AutoAssignModal({
 }: AutoAssignModalProps) {
   const [unassignedOnly, setUnassignedOnly] = useState(true);
   const [selectedSprintId, setSelectedSprintId] = useState<number | "ALL">(
-    currentSprintId !== undefined && currentSprintId !== null ? currentSprintId : "ALL"
+    currentSprintId !== undefined && currentSprintId !== null
+      ? currentSprintId
+      : "ALL",
   );
-  const [viewMode, setViewMode] = useState<"BY_MEMBER" | "BY_TASK">("BY_MEMBER");
+  const [viewMode, setViewMode] = useState<"BY_MEMBER" | "BY_TASK">(
+    "BY_MEMBER",
+  );
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Lưu trữ các phân công người dùng chủ động chỉnh sửa thủ công trong modal: { [taskId]: memberId }
-  const [manualOverrides, setManualOverrides] = useState<Record<number, number>>({});
+  const [manualOverrides, setManualOverrides] = useState<
+    Record<number, number>
+  >({});
 
   // Reset manual overrides khi đổi phạm vi lọc
   useEffect(() => {
@@ -234,7 +299,9 @@ export function AutoAssignModal({
       const numB = matchB ? parseInt(matchB[0], 10) : null;
       if (numA !== null && numB !== null) return numA - numB;
       if (a.startDate && b.startDate) {
-        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        return (
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
       }
       return (a.id || 0) - (b.id || 0);
     });
@@ -247,14 +314,18 @@ export function AutoAssignModal({
   const compareTasksBySprint = useCallback(
     (
       a: { taskId: number; sprintId?: number | null },
-      b: { taskId: number; sprintId?: number | null }
+      b: { taskId: number; sprintId?: number | null },
     ) => {
-      const rankA = a.sprintId ? (sprintOrderMap.get(a.sprintId) ?? 9999) : 99999;
-      const rankB = b.sprintId ? (sprintOrderMap.get(b.sprintId) ?? 9999) : 99999;
+      const rankA = a.sprintId
+        ? (sprintOrderMap.get(a.sprintId) ?? 9999)
+        : 99999;
+      const rankB = b.sprintId
+        ? (sprintOrderMap.get(b.sprintId) ?? 9999)
+        : 99999;
       if (rankA !== rankB) return rankA - rankB;
       return a.taskId - b.taskId;
     },
-    [sprintOrderMap]
+    [sprintOrderMap],
   );
 
   // Hợp nhất phân công tự động của thuật toán với các chỉnh sửa thủ công của người dùng
@@ -262,7 +333,8 @@ export function AutoAssignModal({
     const rawPreview: TaskAssignmentResult[] = baseSummary.preview.map((p) => {
       const overrideMemberId = manualOverrides[p.taskId];
       if (overrideMemberId) {
-        const newMember = members.find((m) => m.id === overrideMemberId) || p.assignedMember;
+        const newMember =
+          members.find((m) => m.id === overrideMemberId) || p.assignedMember;
         return {
           ...p,
           assignedMember: newMember,
@@ -281,11 +353,18 @@ export function AutoAssignModal({
     }));
 
     const updatedMemberStats = members.map((m) => {
-      const memberTasks = sortedPreview.filter((p) => p.assignedMember.id === m.id);
+      const memberTasks = sortedPreview.filter(
+        (p) => p.assignedMember.id === m.id,
+      );
       memberTasks.sort(compareTasksBySprint);
+      const baseStat = baseSummary.memberStats.find(
+        (bs) => bs.member.id === m.id,
+      );
       return {
         member: m,
         count: memberTasks.length,
+        existingOpenCount: baseStat?.existingOpenCount ?? 0,
+        existingDoneCount: baseStat?.existingDoneCount ?? 0,
         assignedTasks: memberTasks,
       };
     });
@@ -303,7 +382,7 @@ export function AutoAssignModal({
     return optimizeScheduleForAssignments(
       finalSummary.assignments,
       tasks,
-      sprints
+      sprints,
     );
   }, [finalSummary.assignments, tasks, sprints]);
 
@@ -315,52 +394,56 @@ export function AutoAssignModal({
       badgeClass: string;
       icon: React.ReactNode;
     }[] = [
-        {
-          cat: "BACKEND",
-          title: "Backend & Cơ sở dữ liệu",
-          badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
-          icon: <Terminal className="w-4 h-4 text-amber-600" />,
-        },
-        {
-          cat: "FRONTEND",
-          title: "Frontend & Giao diện người dùng",
-          badgeClass: "bg-blue-100 text-blue-800 border-blue-200",
-          icon: <Monitor className="w-4 h-4 text-blue-600" />,
-        },
-        {
-          cat: "QA",
-          title: "Kiểm thử & Đảm bảo chất lượng (QA)",
-          badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
-          icon: <ShieldCheck className="w-4 h-4 text-rose-600" />,
-        },
-        {
-          cat: "DEVOPS",
-          title: "DevOps & Hạ tầng triển khai",
-          badgeClass: "bg-purple-100 text-purple-800 border-purple-200",
-          icon: <Cloud className="w-4 h-4 text-purple-600" />,
-        },
-        {
-          cat: "MANAGEMENT",
-          title: "Quản lý & Nghiệp vụ (BA / PM / Scrum)",
-          badgeClass: "bg-slate-200 text-slate-800 border-slate-300",
-          icon: <FileText className="w-4 h-4 text-slate-600" />,
-        },
-        {
-          cat: "GENERAL",
-          title: "Nhiệm vụ chung & Khác",
-          badgeClass: "bg-gray-100 text-gray-800 border-gray-200",
-          icon: <Layers className="w-4 h-4 text-gray-600" />,
-        },
-      ];
+      {
+        cat: "BACKEND",
+        title: "Backend & Cơ sở dữ liệu",
+        badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
+        icon: <Terminal className="w-4 h-4 text-amber-600" />,
+      },
+      {
+        cat: "FRONTEND",
+        title: "Frontend & Giao diện người dùng",
+        badgeClass: "bg-blue-100 text-blue-800 border-blue-200",
+        icon: <Monitor className="w-4 h-4 text-blue-600" />,
+      },
+      {
+        cat: "QA",
+        title: "Kiểm thử & Đảm bảo chất lượng (QA)",
+        badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+        icon: <ShieldCheck className="w-4 h-4 text-rose-600" />,
+      },
+      {
+        cat: "DEVOPS",
+        title: "DevOps & Hạ tầng triển khai",
+        badgeClass: "bg-purple-100 text-purple-800 border-purple-200",
+        icon: <Cloud className="w-4 h-4 text-purple-600" />,
+      },
+      {
+        cat: "MANAGEMENT",
+        title: "Quản lý & Nghiệp vụ (BA / PM / Scrum)",
+        badgeClass: "bg-slate-200 text-slate-800 border-slate-300",
+        icon: <FileText className="w-4 h-4 text-slate-600" />,
+      },
+      {
+        cat: "GENERAL",
+        title: "Nhiệm vụ chung & Khác",
+        badgeClass: "bg-gray-100 text-gray-800 border-gray-200",
+        icon: <Layers className="w-4 h-4 text-gray-600" />,
+      },
+    ];
 
     return order
       .map((g) => {
-        const groupTasks = finalSummary.preview.filter((p) => p.category === g.cat);
+        const groupTasks = finalSummary.preview.filter(
+          (p) => p.category === g.cat,
+        );
         // Sắp xếp các task trong từng nhóm chuyên môn theo thứ tự Sprint từ thấp đến cao
         groupTasks.sort(compareTasksBySprint);
         const totalDays = groupTasks.reduce((sum, p) => {
           const originalTask = tasks.find((t) => t.id === p.taskId);
-          return sum + (originalTask ? getTaskComplexity(originalTask).days : 2);
+          return (
+            sum + (originalTask ? getTaskComplexity(originalTask).days : 2)
+          );
         }, 0);
 
         return {
@@ -374,9 +457,17 @@ export function AutoAssignModal({
 
   // Helper format Sprint badge hiển thị tên Sprint gọn gàng (rê chuột vào xem đầy đủ)
   const getSprintShortBadge = (sprintId?: number | null) => {
-    if (!sprintId) return { shortName: "Backlog", fullName: "Chưa thuộc Sprint nào (Backlog)" };
+    if (!sprintId)
+      return {
+        shortName: "Backlog",
+        fullName: "Chưa thuộc Sprint nào (Backlog)",
+      };
     const sprint = sprints.find((s) => s.id === sprintId);
-    if (!sprint) return { shortName: `Sprint ${sprintId}`, fullName: `Sprint ${sprintId}` };
+    if (!sprint)
+      return {
+        shortName: `Sprint ${sprintId}`,
+        fullName: `Sprint ${sprintId}`,
+      };
 
     const fullName = sprint.name;
     // Bỏ phần "(Tuần X)" ở cuối nếu có để tên gọn gàng hơn mà vẫn giữ tên sprint
@@ -464,7 +555,10 @@ export function AutoAssignModal({
       onClose();
     } catch (err: any) {
       console.error("Lỗi khi áp dụng phân công:", err);
-      alert(err.response?.data?.message || "Không thể áp dụng phân công. Vui lòng thử lại!");
+      alert(
+        err.response?.data?.message ||
+          "Không thể áp dụng phân công. Vui lòng thử lại!",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -489,12 +583,14 @@ export function AutoAssignModal({
                 </span>
                 {hasManualChanges && (
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" /> Có chỉnh sửa thủ công ({Object.keys(manualOverrides).length})
+                    <UserCheck className="w-3 h-3" /> Có chỉnh sửa thủ công (
+                    {Object.keys(manualOverrides).length})
                   </span>
                 )}
               </div>
               <p className="text-xs text-gray-500 font-medium mt-0.5">
-                AI tự động phân bổ cân đối theo độ phức tạp công việc và chuyên môn giữa tất cả các thành viên trong Space.
+                AI tự động phân bổ cân đối theo độ phức tạp công việc và chuyên
+                môn giữa tất cả các thành viên trong Space.
               </p>
             </div>
           </div>
@@ -518,11 +614,15 @@ export function AutoAssignModal({
               <select
                 value={selectedSprintId}
                 onChange={(e) =>
-                  setSelectedSprintId(e.target.value === "ALL" ? "ALL" : Number(e.target.value))
+                  setSelectedSprintId(
+                    e.target.value === "ALL" ? "ALL" : Number(e.target.value),
+                  )
                 }
                 className="bg-white border border-gray-300 rounded-lg px-2.5 py-1 font-medium text-gray-800 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
-                <option value="ALL">Toàn bộ Space (Tất cả Sprints & Backlog)</option>
+                <option value="ALL">
+                  Toàn bộ Space (Tất cả Sprints & Backlog)
+                </option>
                 {sprints.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.status})
@@ -549,20 +649,22 @@ export function AutoAssignModal({
                 <button
                   type="button"
                   onClick={() => setViewMode("BY_MEMBER")}
-                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${viewMode === "BY_MEMBER"
-                    ? "bg-white text-gray-900 shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                    }`}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                    viewMode === "BY_MEMBER"
+                      ? "bg-white text-gray-900 shadow-xs"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
                 >
                   Theo thành viên ({finalSummary.memberStats.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("BY_TASK")}
-                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${viewMode === "BY_TASK"
-                    ? "bg-white text-gray-900 shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                    }`}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                    viewMode === "BY_TASK"
+                      ? "bg-white text-gray-900 shadow-xs"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
                 >
                   Theo công việc ({finalSummary.totalAssigned})
                 </button>
@@ -589,29 +691,47 @@ export function AutoAssignModal({
           </div>
         </div>
 
-        {/* 2 Metric Cards (Đã bỏ Card 3 "Chiến lược cân bằng tải" theo góp ý của thầy) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0 text-xs">
+        {/* Tiêu chí & Thống kê Tự động Phân công */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 shrink-0 text-xs">
           <div className="p-2.5 rounded-xl bg-blue-50/60 border border-blue-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 font-bold font-mono">
               {finalSummary.totalAssigned}
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 font-medium">Tổng công việc cần phân bổ</p>
+              <p className="text-[11px] text-gray-500 font-medium">
+                Công việc được phân bổ
+              </p>
               <p className="font-extrabold text-gray-900 font-mono text-xs">
-                {finalSummary.totalAssigned} Tasks
+                {finalSummary.totalAssigned} việc / {members.length} thành viên
               </p>
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-bold font-mono">
-              {members.length}
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 font-medium">Thành viên tham gia Space</p>
-              <p className="font-extrabold text-gray-900 font-mono text-xs">
-                {members.length} Người
+          <div className="lg:col-span-2 p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <div className="space-y-0.5">
+              <p className="font-mono font-extrabold text-[#111827] uppercase text-[10px]">
+                3 Tiêu chí Tự động Phân công của hệ thống:
               </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#4B5563]">
+                <span>
+                  <strong className="text-[#111827]">
+                    1. Đúng chuyên môn:
+                  </strong>{" "}
+                  Khớp từ khóa Task với <code>Job Title</code>
+                </span>
+                <span>•</span>
+                <span>
+                  <strong className="text-[#111827]">2. Cân bằng tải:</strong>{" "}
+                  Ưu tiên người đang giữ ít việc chưa xong nhất
+                </span>
+                <span>•</span>
+                <span>
+                  <strong className="text-[#111827]">
+                    3. Xếp lịch nối tiếp:
+                  </strong>{" "}
+                  Tự động nối ngày làm việc không trùng nhau
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -625,175 +745,206 @@ export function AutoAssignModal({
                 Không có công việc nào cần phân công!
               </p>
               <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                Tất cả các công việc trong phạm vi đã chọn đều đã có người phụ trách, hoặc danh sách công việc đang trống.
+                Tất cả các công việc trong phạm vi đã chọn đều đã có người phụ
+                trách, hoặc danh sách công việc đang trống.
               </p>
             </div>
           ) : viewMode === "BY_MEMBER" ? (
             /* VIEW 1: BY MEMBER */
             <div className="space-y-2.5">
-              {finalSummary.memberStats.map(({ member, count, assignedTasks }) => {
-                const isExpanded = expandedMemberId === member.id;
-                const percentage =
-                  finalSummary.totalAssigned > 0
-                    ? Math.round((count / finalSummary.totalAssigned) * 100)
-                    : 0;
+              {finalSummary.memberStats.map(
+                ({ member, count, existingOpenCount, assignedTasks }) => {
+                  const isExpanded = expandedMemberId === member.id;
+                  const totalAfterAssign = existingOpenCount + count;
 
-                return (
-                  <div
-                    key={member.id}
-                    className="border border-gray-200 rounded-xl bg-white overflow-hidden shadow-2xs hover:border-gray-300 transition-colors"
-                  >
+                  return (
                     <div
-                      onClick={() => setExpandedMemberId(isExpanded ? null : member.id)}
-                      className="p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                      key={member.id}
+                      className="border border-gray-200 rounded-xl bg-white shadow-2xs hover:border-gray-300 transition-colors"
                     >
-                      {/* Member Info */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-100 text-blue-700 border border-blue-200 flex items-center justify-center font-mono font-bold text-xs shrink-0">
-                          {getInitials(member.fullName || member.displayName)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-900 text-xs">
-                              {member.fullName || member.displayName}
-                            </span>
-                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
-                              {member.jobTitle || "Thành viên"}
-                            </span>
+                      <div
+                        onClick={() =>
+                          setExpandedMemberId(isExpanded ? null : member.id)
+                        }
+                        className={`p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-gray-50/60 transition-colors ${
+                          isExpanded && count > 0
+                            ? "rounded-t-xl"
+                            : "rounded-xl"
+                        }`}
+                      >
+                        {/* Member Info */}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-100 text-blue-700 border border-blue-200 flex items-center justify-center font-mono font-bold text-xs shrink-0">
+                            {getInitials(member.fullName || member.displayName)}
                           </div>
-                          <p className="text-[11px] text-gray-500">{member.email}</p>
-                        </div>
-                      </div>
-
-                      {/* Workload metric + bar */}
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <span className="font-mono font-extrabold text-xs text-blue-700">
-                            +{count} tasks
-                          </span>
-                          <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
-                            <div
-                              className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                              style={{ width: `${percentage}%` }}
-                            />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900 text-xs">
+                                {member.fullName || member.displayName}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
+                                {member.jobTitle || "Thành viên"}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-500">
+                              {member.email}
+                            </p>
                           </div>
                         </div>
 
-                        {count > 0 && (
-                          <button
-                            type="button"
-                            className="p-1 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Expandable Task List assigned to this member */}
-                    {isExpanded && count > 0 && (
-                      <div className="border-t border-gray-100 bg-gray-50/70 p-3 space-y-2">
-                        {assignedTasks.map((t) => {
-                          const originalTask = tasks.find((item) => item.id === t.taskId);
-                          const daysBadge = getWorkDaysBadge(originalTask);
-                          const sprintBadge = getSprintShortBadge(t.sprintId);
-
-                          return (
-                            <div
-                              key={t.taskId}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 bg-white rounded-xl border border-gray-200 text-xs shadow-2xs hover:border-gray-300 transition-colors"
+                        {/* Clear Workload Metrics: Existing Open + Newly Assigned */}
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                            <span
+                              className="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 border border-gray-200 font-bold"
+                              title="Số công việc chưa hoàn thành mà thành viên này đang giữ trước khi phân công"
                             >
-                              {/* Left: Task ID, Title & Badges */}
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <span className="font-mono font-bold text-gray-700 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-[11px] shrink-0">
-                                  Task-{taskNumberMap?.get(t.taskId) ?? t.taskId}
-                                </span>
-                                <div className="min-w-0 flex-1 space-y-1">
-                                  <span
-                                    title={t.taskTitle}
-                                    className="font-semibold text-gray-900 block truncate"
-                                  >
-                                    {t.taskTitle}
-                                  </span>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="relative group/sprint shrink-0">
-                                      <span
-                                        className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[240px]"
-                                      >
-                                        <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
-                                        <span className="truncate">{sprintBadge.shortName}</span>
-                                      </span>
-                                      {/* Popup chi tiết Sprint ngay khi di chuột - cùng màu xanh trang nhã */}
-                                      <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/sprint:flex flex-col gap-0.5 z-50 min-w-[220px] max-w-[320px] p-2.5 bg-blue-50/95 text-blue-950 border border-blue-300 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
-                                        {/* <div className="flex items-center gap-1 text-[10px] font-bold font-mono text-blue-700 uppercase pb-1 border-b border-blue-200">
-                                          <Calendar className="w-3 h-3 text-blue-600" /> Chi tiết Sprint
-                                        </div> */}
-                                        <p className="font-extrabold text-[11px] leading-snug text-blue-600 pt-0.5">
-                                          {sprintBadge.fullName}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <span
-                                      className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border ${daysBadge.style}`}
-                                      title={`Thời gian làm việc ước tính: ${daysBadge.label}`}
-                                    >
-                                      <Clock className="w-3 h-3 text-slate-500" />
-                                      {daysBadge.label}
-                                    </span>
+                              Đang giữ: {existingOpenCount} việc
+                            </span>
+                            <span
+                              className={`px-2.5 py-1 rounded-lg font-extrabold border ${
+                                count > 0
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-gray-50 text-gray-400 border-gray-200"
+                              }`}
+                              title="Số công việc mới được phân bổ thêm trong đợt này"
+                            >
+                              Giao thêm: +{count} việc
+                            </span>
+                            <span
+                              className="hidden sm:inline-block px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+                              title="Tổng số việc chưa xong sau khi áp dụng phân công"
+                            >
+                              Tổng: {totalAfterAssign} việc
+                            </span>
+                          </div>
 
-                                    {/* Smart Scheduled Dates Badge (Chỉ hiển thị ngày tháng gọn gàng) */}
-                                    {(() => {
-                                      const scheduled = scheduledDatesMap.get(t.taskId);
-                                      if (!scheduled) return null;
-                                      return (
-                                        <span
-                                          className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-800 border-emerald-200 shrink-0"
-                                          title={`Thời gian thực hiện dự kiến: ${new Date(scheduled.startDate).toLocaleDateString("vi-VN")} - ${new Date(scheduled.dueDate).toLocaleDateString("vi-VN")}`}
-                                        >
-                                          <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
-                                          <span>
-                                            {new Date(scheduled.startDate).toLocaleDateString("vi-VN", {
-                                              day: "2-digit",
-                                              month: "2-digit",
-                                            })}{" "}
-                                            ➔{" "}
-                                            {new Date(scheduled.dueDate).toLocaleDateString("vi-VN", {
-                                              day: "2-digit",
-                                              month: "2-digit",
-                                            })}
+                          {count > 0 && (
+                            <button
+                              type="button"
+                              className="p-1 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expandable Task List assigned to this member */}
+                      {isExpanded && count > 0 && (
+                        <div className="border-t border-gray-100 bg-gray-50/70 p-3 space-y-2 rounded-b-xl">
+                          {assignedTasks.map((t) => {
+                            const originalTask = tasks.find(
+                              (item) => item.id === t.taskId,
+                            );
+                            const daysBadge = getWorkDaysBadge(originalTask);
+                            const sprintBadge = getSprintShortBadge(t.sprintId);
+
+                            return (
+                              <div
+                                key={t.taskId}
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 bg-white rounded-xl border border-gray-200 text-xs shadow-2xs hover:border-gray-300 transition-colors"
+                              >
+                                {/* Left: Task ID, Title, Badges & Role Reason */}
+                                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                  <span className="font-mono font-bold text-gray-700 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-[11px] shrink-0 mt-0.5">
+                                    Task-
+                                    {taskNumberMap?.get(t.taskId) ?? t.taskId}
+                                  </span>
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <span
+                                      title={t.taskTitle}
+                                      className="font-semibold text-gray-900 block truncate"
+                                    >
+                                      {t.taskTitle}
+                                    </span>
+                                    {/* Lý do AI gán công việc này */}
+                                    <p className="text-[11px] text-indigo-700 font-medium bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">
+                                      {t.roleReason}
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                      <div className="relative group/sprint shrink-0">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[240px]">
+                                          <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
+                                          <span className="truncate">
+                                            {sprintBadge.shortName}
                                           </span>
                                         </span>
-                                      );
-                                    })()}
+                                        {/* Popup chi tiết Sprint ngay khi di chuột */}
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/sprint:flex flex-col gap-0.5 z-50 min-w-[220px] max-w-[320px] p-2.5 bg-blue-50/95 text-blue-950 border border-blue-300 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
+                                          <p className="font-extrabold text-[11px] leading-snug text-blue-600 pt-0.5">
+                                            {sprintBadge.fullName}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border ${daysBadge.style}`}
+                                        title={`Thời gian làm việc ước tính: ${daysBadge.label}`}
+                                      >
+                                        <Clock className="w-3 h-3 text-slate-500" />
+                                        {daysBadge.label}
+                                      </span>
+
+                                      {/* Smart Scheduled Dates Badge */}
+                                      {(() => {
+                                        const scheduled = scheduledDatesMap.get(
+                                          t.taskId,
+                                        );
+                                        if (!scheduled) return null;
+                                        return (
+                                          <span
+                                            className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-800 border-emerald-200 shrink-0"
+                                            title={`Thời gian thực hiện dự kiến: ${new Date(scheduled.startDate).toLocaleDateString("vi-VN")} - ${new Date(scheduled.dueDate).toLocaleDateString("vi-VN")}`}
+                                          >
+                                            <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
+                                            <span>
+                                              {new Date(
+                                                scheduled.startDate,
+                                              ).toLocaleDateString("vi-VN", {
+                                                day: "2-digit",
+                                                month: "2-digit",
+                                              })}{" "}
+                                              ➔{" "}
+                                              {new Date(
+                                                scheduled.dueDate,
+                                              ).toLocaleDateString("vi-VN", {
+                                                day: "2-digit",
+                                                month: "2-digit",
+                                              })}
+                                            </span>
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              {/* Right: Searchable Member Picker */}
-                              <div className="shrink-0 flex items-center gap-1.5">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase font-mono">
-                                  Gán cho:
-                                </span>
-                                <TaskMemberPicker
-                                  currentUserId={t.assignedMember.id}
-                                  users={members}
-                                  onSelect={(newOwnerId) =>
-                                    handleManualReassign(t.taskId, newOwnerId)
-                                  }
-                                />
+                                {/* Right: Searchable Member Picker */}
+                                <div className="shrink-0 flex items-center gap-1.5">
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase font-mono">
+                                    Gán cho:
+                                  </span>
+                                  <TaskMemberPicker
+                                    currentUserId={t.assignedMember.id}
+                                    users={members}
+                                    onSelect={(newOwnerId) =>
+                                      handleManualReassign(t.taskId, newOwnerId)
+                                    }
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                },
+              )}
             </div>
           ) : (
             /* VIEW 2: BY TASK (Phân nhóm trực quan theo VAI TRÒ CỦA CÔNG VIỆC) */
@@ -831,7 +982,9 @@ export function AutoAssignModal({
                     {/* Task items in this role group */}
                     <div className="space-y-2">
                       {group.items.map((item) => {
-                        const originalTask = tasks.find((t) => t.id === item.taskId);
+                        const originalTask = tasks.find(
+                          (t) => t.id === item.taskId,
+                        );
                         const daysBadge = getWorkDaysBadge(originalTask);
                         const sprintBadge = getSprintShortBadge(item.sprintId);
 
@@ -840,9 +993,10 @@ export function AutoAssignModal({
                             key={item.taskId}
                             className="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all"
                           >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <span className="text-[11px] font-mono font-extrabold px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                                Task-{taskNumberMap?.get(item.taskId) ?? item.taskId}
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <span className="text-[11px] font-mono font-extrabold px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shrink-0 mt-0.5">
+                                Task-
+                                {taskNumberMap?.get(item.taskId) ?? item.taskId}
                               </span>
 
                               <div className="min-w-0 flex-1 space-y-1">
@@ -852,28 +1006,28 @@ export function AutoAssignModal({
                                 >
                                   {item.taskTitle}
                                 </span>
+                                <p className="text-[11px] text-indigo-700 font-medium bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">
+                                  {item.roleReason}
+                                </p>
 
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2 pt-0.5">
                                   {/* Sprint badge với popup chi tiết ngay khi di chuột */}
                                   <div className="relative group/sprint shrink-0">
-                                    <span
-                                      className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[260px]"
-                                    >
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer max-w-[200px] sm:max-w-[260px]">
                                       <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
-                                      <span className="truncate">{sprintBadge.shortName}</span>
+                                      <span className="truncate">
+                                        {sprintBadge.shortName}
+                                      </span>
                                     </span>
-                                    {/* Popup chi tiết Sprint ngay khi di chuột - cùng màu xanh trang nhã */}
+                                    {/* Popup chi tiết Sprint ngay khi di chuột */}
                                     <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/sprint:flex flex-col gap-0.5 z-50 min-w-[220px] max-w-[320px] p-2.5 bg-blue-50/95 text-blue-950 border border-blue-300 rounded-xl shadow-xl pointer-events-none animate-in fade-in zoom-in-95 text-xs">
-                                      {/* <div className="flex items-center gap-1 text-[10px] font-bold font-mono text-blue-700 uppercase pb-1 border-b border-blue-200">
-                                        <Calendar className="w-3 h-3 text-blue-600" /> Chi tiết Sprint
-                                      </div> */}
                                       <p className="font-extrabold text-[11px] leading-snug text-blue-600 pt-0.5">
                                         {sprintBadge.fullName}
                                       </p>
                                     </div>
                                   </div>
 
-                                  {/* Số ngày làm việc thực tế do AI tính (không chữ Độ phức tạp, không số lẻ) */}
+                                  {/* Số ngày làm việc thực tế do AI tính */}
                                   <span
                                     className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border ${daysBadge.style}`}
                                     title={`Thời gian làm việc ước tính: ${daysBadge.label}`}
@@ -882,9 +1036,11 @@ export function AutoAssignModal({
                                     {daysBadge.label}
                                   </span>
 
-                                  {/* Smart Scheduled Dates Badge (Chỉ hiển thị ngày tháng gọn gàng) */}
+                                  {/* Smart Scheduled Dates Badge */}
                                   {(() => {
-                                    const scheduled = scheduledDatesMap.get(item.taskId);
+                                    const scheduled = scheduledDatesMap.get(
+                                      item.taskId,
+                                    );
                                     if (!scheduled) return null;
                                     return (
                                       <span
@@ -893,12 +1049,16 @@ export function AutoAssignModal({
                                       >
                                         <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
                                         <span>
-                                          {new Date(scheduled.startDate).toLocaleDateString("vi-VN", {
+                                          {new Date(
+                                            scheduled.startDate,
+                                          ).toLocaleDateString("vi-VN", {
                                             day: "2-digit",
                                             month: "2-digit",
                                           })}{" "}
                                           ➔{" "}
-                                          {new Date(scheduled.dueDate).toLocaleDateString("vi-VN", {
+                                          {new Date(
+                                            scheduled.dueDate,
+                                          ).toLocaleDateString("vi-VN", {
                                             day: "2-digit",
                                             month: "2-digit",
                                           })}
@@ -934,7 +1094,8 @@ export function AutoAssignModal({
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-100 shrink-0">
           <p className="text-xs text-gray-500">
-            Bạn có thể đổi người trực tiếp tại các ô chọn trên, hoặc tinh chỉnh sau tại từng thẻ Task.
+            Bạn có thể đổi người trực tiếp tại các ô chọn trên, hoặc tinh chỉnh
+            sau tại từng thẻ Task.
           </p>
 
           <div className="flex items-center gap-2.5">
