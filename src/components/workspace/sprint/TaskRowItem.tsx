@@ -222,7 +222,7 @@ export function TaskRowItem({
             <span
               className={`font-semibold truncate ${
                 task.status === "DONE"
-                  ? "line-through text-gray-500"
+                  ? "text-[#6B7280] opacity-75 font-normal"
                   : "text-[#111827] hover:underline"
               }`}
             >

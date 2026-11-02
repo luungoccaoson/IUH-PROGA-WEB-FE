@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { AgentChatModal } from "./AgentChatModal";
 import { FileCode2, LineChart, ShieldAlert, Cpu, Sparkles, Check } from "lucide-react";
 
 const AGENTS = [
@@ -58,6 +59,7 @@ const AGENTS = [
 ];
 
 export function AgentShowcase() {
+  const [activeModalAgent, setActiveModalAgent] = useState<any | null>(null);
   return (
     <section id="ai-agents" className="py-24 relative overflow-hidden bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -82,7 +84,8 @@ export function AgentShowcase() {
             return (
               <div
                 key={agent.id}
-                className={`bg-[#F6F5EF] rounded-2xl p-8 border border-[#E5E7EB] flex flex-col justify-between ${agent.borderColor} group transition-all duration-300 shadow-sm`}
+                onClick={() => setActiveModalAgent(agent)}
+                className={`bg-[#F6F5EF] rounded-2xl p-8 border border-[#E5E7EB] flex flex-col justify-between ${agent.borderColor} group transition-all duration-300 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5`}
               >
                 <div>
                   {/* Top Badge & Icon */}
@@ -128,7 +131,7 @@ export function AgentShowcase() {
                     <Sparkles className="w-3.5 h-3.5 text-[#D97706]" />
                     LLM Integrated
                   </span>
-                  <span className="text-[#111827] font-bold group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                  <span className="text-[#137333] font-bold group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
                     Trò chuyện ngay &rarr;
                   </span>
                 </div>
@@ -137,6 +140,14 @@ export function AgentShowcase() {
           })}
         </div>
       </div>
+
+      {/* Interactive Agent Chat Modal */}
+      {activeModalAgent && (
+        <AgentChatModal
+          agent={activeModalAgent}
+          onClose={() => setActiveModalAgent(null)}
+        />
+      )}
     </section>
   );
 }

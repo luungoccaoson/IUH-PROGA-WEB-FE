@@ -490,7 +490,7 @@ export function AiDecomposedResults({
         {/* Action Buttons: Unified AI Chat, Auto Assign & Import */}
         <div className="flex flex-wrap items-center gap-2.5 text-left md:text-right shrink-0">
           {/* Nút Chat AI cố định 1 chỗ tại thanh công cụ */}
-          {/* <button
+          <button
             type="button"
             onClick={() => handleOpenChatBox("ALL")}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
@@ -498,7 +498,7 @@ export function AiDecomposedResults({
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Chat Tinh Chỉnh</span>
-          </button> */}
+          </button>
 
           <button
             type="button"
@@ -534,7 +534,7 @@ export function AiDecomposedResults({
             ) : targetMode === "NEW_SPACE" ? (
               <>
                 <FolderPlus className="w-4 h-4" />
-                🚀 Khởi Tạo Dự Án Mới & Nạp Tasks ({result.tasks.length})
+                Khởi Tạo Dự Án Mới & Nạp Tasks ({result.tasks.length})
               </>
             ) : (
               <>

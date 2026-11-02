@@ -17,6 +17,7 @@ import {
   Check,
   RotateCcw,
   BarChart3,
+  LineChart,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -25,9 +26,15 @@ import {
 import { workspaceService } from "@/services/workspace.service";
 import { sprintService } from "@/services/sprint.service";
 import { taskService } from "@/services/task.service";
-import { aiService, AiChatMessageResponse, TaskDecompositionResponse, DecomposedTaskItem } from "@/services/ai.service";
+import {
+  aiService,
+  AiChatMessageResponse,
+  TaskDecompositionResponse,
+  DecomposedTaskItem,
+} from "@/services/ai.service";
 import { AiChatWindow } from "../ai/AiChatWindow";
 import { AiDecomposedResults } from "../ai/AiDecomposedResults";
+import { PmExecutiveReportView } from "./PmExecutiveReportView";
 import { Space, Task, Sprint, User } from "@/types";
 import { SpaceRoleType } from "@/utils/roleAssignment";
 import {
@@ -72,9 +79,11 @@ export function SpaceAiCopilotDrawer({
   const isCoordinator = spaceRole === "PM" || spaceRole === "ASSISTANT";
 
   const [activeMode, setActiveMode] = useState<CopilotMode>(
-    spaceRole === "MEMBER" ? "personal" : "risk"
+    spaceRole === "MEMBER" ? "personal" : "risk",
   );
-  const [actionLoadingId, setActionLoadingId] = useState<number | string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<
+    number | string | null
+  >(null);
   const [batchApproving, setBatchApproving] = useState(false);
   const [messages, setMessages] = useState<AiChatMessageResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +93,7 @@ export function SpaceAiCopilotDrawer({
   const [importSuccess, setImportSuccess] = useState(false);
   const [isImported, setIsImported] = useState(false);
   const [internalMinimized, setInternalMinimized] = useState(
-    propMinimized !== undefined ? propMinimized : true
+    propMinimized !== undefined ? propMinimized : true,
   );
 
   useEffect(() => {
@@ -93,14 +102,19 @@ export function SpaceAiCopilotDrawer({
     }
   }, [propMinimized]);
 
-  const isMinimized = propMinimized !== undefined ? propMinimized : internalMinimized;
+  const isMinimized =
+    propMinimized !== undefined ? propMinimized : internalMinimized;
 
   const updateMinimized = (val: boolean) => {
     setInternalMinimized(val);
     if (onToggleMinimize) onToggleMinimize(val);
   };
   const [spaceSprints, setSpaceSprints] = useState<Sprint[]>([]);
-  const [expandedMemberRiskId, setExpandedMemberRiskId] = useState<number | null>(null);
+  const [expandedMemberRiskId, setExpandedMemberRiskId] = useState<
+    number | null
+  >(null);
+  const [pmReportText, setPmReportText] = useState<string | null>(null);
+  const [loadingPmReport, setLoadingPmReport] = useState(false);
 
   // Position Dragging State
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -109,17 +123,21 @@ export function SpaceAiCopilotDrawer({
 
   // Window Size & Resizing State (Smooth Drag to Resize with Min/Max Boundaries)
   const [drawerSize, setDrawerSize] = useState({ width: 1050, height: 680 });
-  const [resizingDirection, setResizingDirection] = useState<string | null>(null);
-  const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number }>({
-    x: 0,
-    y: 0,
-    w: 1050,
-    h: 680,
-  });
+  const [resizingDirection, setResizingDirection] = useState<string | null>(
+    null,
+  );
+  const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number }>(
+    {
+      x: 0,
+      y: 0,
+      w: 1050,
+      h: 680,
+    },
+  );
 
   const handleResizeStart = (
     e: React.MouseEvent,
-    direction: "top" | "left" | "top-left"
+    direction: "top" | "left" | "top-left",
   ) => {
     e.stopPropagation();
     e.preventDefault();
@@ -152,10 +170,16 @@ export function SpaceAiCopilotDrawer({
         let nextH = resizeStartRef.current.h;
 
         if (resizingDirection.includes("left")) {
-          nextW = Math.min(maxW, Math.max(minW, resizeStartRef.current.w - deltaX));
+          nextW = Math.min(
+            maxW,
+            Math.max(minW, resizeStartRef.current.w - deltaX),
+          );
         }
         if (resizingDirection.includes("top")) {
-          nextH = Math.min(maxH, Math.max(minH, resizeStartRef.current.h - deltaY));
+          nextH = Math.min(
+            maxH,
+            Math.max(minH, resizeStartRef.current.h - deltaY),
+          );
         }
 
         setDrawerSize({ width: nextW, height: nextH });
@@ -182,9 +206,12 @@ export function SpaceAiCopilotDrawer({
   // Load existing Sprints for this Space
   useEffect(() => {
     if (!space.id) return;
-    sprintService.getSprintsBySpace(space.id).then((sprints) => {
-      setSpaceSprints(sprints);
-    }).catch((e) => console.warn("Could not load sprints for AI copilot:", e));
+    sprintService
+      .getSprintsBySpace(space.id)
+      .then((sprints) => {
+        setSpaceSprints(sprints);
+      })
+      .catch((e) => console.warn("Could not load sprints for AI copilot:", e));
   }, [space.id]);
 
   // Lắng nghe sự kiện mở/đóng từ bên ngoài nếu component tự quản lý trạng thái (uncontrolled)
@@ -200,6 +227,46 @@ export function SpaceAiCopilotDrawer({
   }, [propMinimized]);
 
   // Header Drag Handler
+    const generateLocalPmReport = (): string => {
+    const total = riskAnalysis.totalTasks;
+    const done = riskAnalysis.doneTasks;
+    const inReview = riskAnalysis.inReviewTasks;
+    const inProgress = riskAnalysis.inProgressTasks || 0;
+    const todo = riskAnalysis.todoTasks || Math.max(0, total - done - inReview - inProgress);
+
+    const donePct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const inReviewPct = total > 0 ? Math.round((inReview / total) * 100) : 0;
+    const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+    const todoPct = total > 0 ? Math.max(0, 100 - donePct - inReviewPct - inProgressPct) : 0;
+
+    return `# BÁO CÁO TIẾN ĐỘ & ĐÁNH GIÁ RỦI RO DỰ ÁN
+
+### 1. Tóm Tắt Tỷ Lệ Hoàn Thành Dự Án
+- Tổng số công việc: ${total} Tasks
+- Đã hoàn thành (DONE): ${done}/${total} Tasks (${donePct}%)
+- Đang chờ duyệt (IN_REVIEW): ${inReview}/${total} Tasks (${inReviewPct}%)
+- Đang thực hiện (IN_PROGRESS): ${inProgress}/${total} Tasks (${inProgressPct}%)
+- Cần làm (TODO): ${todo}/${total} Tasks (${todoPct}%)
+> **Đánh giá chung:** Dự án '${space.name}' hiện có ${done}/${total} công việc đã hoàn tất (${donePct}%). ${inReview > 0 ? `Hiện có ${inReview} công việc đang chờ nghiệm thu, cần giải phóng sớm để nâng tỷ lệ hoàn thành lên ${donePct + inReviewPct}%.` : "Các luồng công việc đang bám sát tiến độ đề ra."}
+
+### 2. Phân Tích Rủi Ro & Điểm Nghẽn Tiến Độ
+- **Rủi ro mức độ cao (Critical Risks):** ${riskAnalysis.riskLevel === "HIGH" ? riskAnalysis.riskSummary : "Khối lượng công việc cần làm còn " + todo + " tasks, cần duy trì nhịp độ phân công đều tay cho các thành viên."}
+- **Điểm nghẽn hiện tại (Bottlenecks):** ${inReview > 0 ? `Hiện có ${inReview} công việc đang ở cột Chờ duyệt (IN_REVIEW), cần PM/Assistant nghiệm thu kịp thời để các thành viên tiếp tục nhận task mới.` : "Bảng Kanban đang lưu thông tốt, không có công việc nào bị ứ đọng bất thường."}
+
+### 3. Đề Xuất Kế Hoạch Hành Động Cho PM
+1. **Giải quyết điểm nghẽn Review (Thực hiện trong 24h):** ${inReview > 0 ? `Kiểm thử và phê duyệt dứt điểm ${inReview} công việc tại cột Chờ duyệt.` : "Duy trì kiểm tra hàng ngày các công việc bàn giao."}
+2. **Tập trung nguồn lực dứt điểm công việc đang làm:** Đôn đốc thành viên hoàn thành ${inProgress} công việc đang ở trạng thái Đang làm.
+3. **Phân bổ nhân sự hợp lý:** San sẻ các task tồn đọng cho các thành viên đang có công suất trống.
+
+### 4. Bảng Tóm Tắt Thứ Tự Ưu Tiên Xử Lý
+| Task ID | Tên công việc | Trạng thái hiện tại | Ưu tiên | Hành động đề xuất |
+|---|---|---|---|---|
+${inReview > 0 ? `| In-Review | Nghiệm thu ${inReview} công việc cột Chờ duyệt | IN_REVIEW | URGENT | PM Review & Nghiệm thu ngay |` : ""}
+${inProgress > 0 ? `| In-Progress | Dứt điểm ${inProgress} công việc đang làm | IN_PROGRESS | HIGH | Hoàn thành trong 1-2 ngày tới |` : ""}
+${todo > 0 ? `| Backlog | Triển khai các task tồn đọng | TODO | MEDIUM | Phân công nhân sự phù hợp |` : ""}
+`;
+  };
+
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
     setIsDragging(true);
@@ -262,7 +329,7 @@ export function SpaceAiCopilotDrawer({
       try {
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ messages, result, activeThreadId })
+          JSON.stringify({ messages, result, activeThreadId }),
         );
       } catch (e) {
         console.warn("Could not save space copilot session:", e);
@@ -272,7 +339,8 @@ export function SpaceAiCopilotDrawer({
 
   // Compute existing Sprints & Task metadata for ongoing space
   let maxExistingSprintNum = 0;
-  const sprintTaskCountMap: Record<string, { status: string; count: number }> = {};
+  const sprintTaskCountMap: Record<string, { status: string; count: number }> =
+    {};
 
   // Seed with fetched sprints
   spaceSprints.forEach((sp) => {
@@ -295,18 +363,23 @@ export function SpaceAiCopilotDrawer({
     sprintTaskCountMap[spName].count += 1;
   });
 
-  if (maxExistingSprintNum === 0 && (spaceSprints.length > 0 || existingTasks.length > 0)) {
+  if (
+    maxExistingSprintNum === 0 &&
+    (spaceSprints.length > 0 || existingTasks.length > 0)
+  ) {
     maxExistingSprintNum = Math.max(1, spaceSprints.length);
   }
 
   const nextSprintNum = maxExistingSprintNum > 0 ? maxExistingSprintNum + 1 : 1;
   const totalExistingTaskCount = existingTasks.length;
 
-  const existingSprintsSummary = Object.entries(sprintTaskCountMap).map(([name, data]) => ({
-    name,
-    status: data.status,
-    taskCount: data.count,
-  }));
+  const existingSprintsSummary = Object.entries(sprintTaskCountMap).map(
+    ([name, data]) => ({
+      name,
+      status: data.status,
+      taskCount: data.count,
+    }),
+  );
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -324,20 +397,32 @@ export function SpaceAiCopilotDrawer({
 
     try {
       // Build detailed context of current space's sprints & tasks
-      const sprintSummary = spaceSprints.length > 0
-        ? spaceSprints.map((s) => {
-          const sStart = s.startDate ? s.startDate.substring(0, 10) : "Chưa đặt";
-          const sEnd = s.endDate ? s.endDate.substring(0, 10) : "Chưa đặt";
-          return `- ${s.name} [ID: ${s.id}] [Trạng thái: ${s.status}] [Thời gian: ${sStart} đến ${sEnd}]`;
-        }).join("\n")
-        : "Chưa có Sprint nào.";
+      const sprintSummary =
+        spaceSprints.length > 0
+          ? spaceSprints
+              .map((s) => {
+                const sStart = s.startDate
+                  ? s.startDate.substring(0, 10)
+                  : "Chưa đặt";
+                const sEnd = s.endDate
+                  ? s.endDate.substring(0, 10)
+                  : "Chưa đặt";
+                return `- ${s.name} [ID: ${s.id}] [Trạng thái: ${s.status}] [Thời gian: ${sStart} đến ${sEnd}]`;
+              })
+              .join("\n")
+          : "Chưa có Sprint nào.";
 
-      const taskSummary = existingTasks.length > 0
-        ? existingTasks.map((t, idx) => {
-          const spName = spaceSprints.find((sp) => sp.id === t.sprintId)?.name || "Chưa gắn Sprint";
-          return `- Task-${idx + 1} [Sprint: ${spName}] [Trạng thái: ${t.status}] ${t.title}`;
-        }).join("\n")
-        : "Chưa có công việc nào trong Space.";
+      const taskSummary =
+        existingTasks.length > 0
+          ? existingTasks
+              .map((t, idx) => {
+                const spName =
+                  spaceSprints.find((sp) => sp.id === t.sprintId)?.name ||
+                  "Chưa gắn Sprint";
+                return `- Task-${idx + 1} [Sprint: ${spName}] [Trạng thái: ${t.status}] ${t.title}`;
+              })
+              .join("\n")
+          : "Chưa có công việc nào trong Space.";
 
       const promptWithContext = `[NGỮ CẢNH DỰ ÁN ĐANG DIỄN RA: ${space.name} (Space ID: ${space.id})]
 
@@ -367,7 +452,11 @@ ${taskSummary}
 [YÊU CẦU CỦA NGƯỜI DÙNG]:
 ${text.trim()}`;
 
-      const data = await aiService.decomposeRequirements(space.id, promptWithContext, activeThreadId);
+      const data = await aiService.decomposeRequirements(
+        space.id,
+        promptWithContext,
+        activeThreadId,
+      );
       setResult(data.tasks && data.tasks.length > 0 ? data : null);
       setActiveThreadId(data.threadId);
       setIsImported(false);
@@ -405,7 +494,9 @@ ${text.trim()}`;
       // Fetch existing sprints in this space
       const existingSprints = await sprintService.getSprintsBySpace(space.id);
       const activeSprint = existingSprints.find((s) => s.status === "ACTIVE");
-      const futureSprints = existingSprints.filter((s) => s.status === "FUTURE");
+      const futureSprints = existingSprints.filter(
+        (s) => s.status === "FUTURE",
+      );
       const sprintMap: Record<string, any> = {};
 
       // Helper to find matching existing sprint by exact name, sprint number (e.g. "Sprint 7"), or prefix
@@ -418,7 +509,11 @@ ${text.trim()}`;
         let found = existingSprints.find((sp: any) => {
           const spClean = sp.name.trim().toLowerCase();
           const spPrefix = spClean.split(":")[0].trim();
-          return spClean === cleanRaw || spPrefix === cleanPrefix || spClean.startsWith(cleanPrefix);
+          return (
+            spClean === cleanRaw ||
+            spPrefix === cleanPrefix ||
+            spClean.startsWith(cleanPrefix)
+          );
         });
         if (found) return found;
 
@@ -450,7 +545,9 @@ ${text.trim()}`;
       };
 
       // Find latest end date among existing sprints to schedule new future sprints sequentially
-      let latestExistingEndDate = space.endDate ? space.endDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
+      let latestExistingEndDate = space.endDate
+        ? space.endDate.substring(0, 10)
+        : new Date().toISOString().substring(0, 10);
       existingSprints.forEach((sp) => {
         if (sp.endDate) {
           const ed = sp.endDate.substring(0, 10);
@@ -461,22 +558,30 @@ ${text.trim()}`;
       });
 
       // Theo dõi lịch trình của từng vai trò / người được gợi ý trong từng sprint để các task không bị trùng ngày bắt đầu
-      const memberSprintCursor = new Map<string, { start: string; due: string }>();
+      const memberSprintCursor = new Map<
+        string,
+        { start: string; due: string }
+      >();
 
       for (const item of result.tasks) {
         const rawSprintName = item.sprint || `Sprint ${nextSprintNum}`;
         const { name: cleanSprintName, goal: sprintGoal } = parseSprintHeader(
           rawSprintName,
-          nextSprintNum
+          nextSprintNum,
         );
 
-        let targetSprint = findExistingSprint(rawSprintName) || sprintMap[cleanSprintName];
+        let targetSprint =
+          findExistingSprint(rawSprintName) || sprintMap[cleanSprintName];
 
         // Ràng buộc trạng thái Sprint:
         // Nếu sprint đã đóng (CLOSED): Không được thêm task vào sprint đã đóng!
         if (targetSprint && targetSprint.status === "CLOSED") {
-          console.warn(`Sprint ${targetSprint.name} đã đóng, tự động chuyển task '${item.title}' sang Sprint đang diễn ra.`);
-          targetSprint = activeSprint || (futureSprints.length > 0 ? futureSprints[0] : undefined);
+          console.warn(
+            `Sprint ${targetSprint.name} đã đóng, tự động chuyển task '${item.title}' sang Sprint đang diễn ra.`,
+          );
+          targetSprint =
+            activeSprint ||
+            (futureSprints.length > 0 ? futureSprints[0] : undefined);
         }
 
         // Chỉ tạo sprint mới khi người dùng yêu cầu sprint hoàn toàn mới chưa có trong space
@@ -489,7 +594,9 @@ ${text.trim()}`;
             targetSprint = await sprintService.createSprint({
               spaceId: space.id,
               name: cleanSprintName,
-              goal: sprintGoal || `Sprint ${cleanSprintName} mở rộng phát triển từ phân tích AI Agent`,
+              goal:
+                sprintGoal ||
+                `Sprint ${cleanSprintName} mở rộng phát triển từ phân tích AI Agent`,
               startDate: `${newSprintStart}T08:00:00`,
               endDate: `${newSprintEnd}T18:00:00`,
               status: "FUTURE",
@@ -503,10 +610,20 @@ ${text.trim()}`;
         const cleanedTitle = cleanTaskTitle(item.title);
 
         // Bounding task dates strictly within targetSprint's actual date range:
-        const spStartStr = targetSprint?.startDate ? targetSprint.startDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const spEndStr = targetSprint?.endDate ? targetSprint.endDate.substring(0, 10) : addDays(spStartStr, 13);
+        const spStartStr = targetSprint?.startDate
+          ? targetSprint.startDate.substring(0, 10)
+          : new Date().toISOString().substring(0, 10);
+        const spEndStr = targetSprint?.endDate
+          ? targetSprint.endDate.substring(0, 10)
+          : addDays(spStartStr, 13);
 
-        const assigneeKey = (item.suggestedMemberName || item.assignedRole || "general").toLowerCase().trim();
+        const assigneeKey = (
+          item.suggestedMemberName ||
+          item.assignedRole ||
+          "general"
+        )
+          .toLowerCase()
+          .trim();
         const scheduleKey = `${targetSprint?.id || "sp"}-${assigneeKey}`;
         const prevSchedule = memberSprintCursor.get(scheduleKey);
 
@@ -528,7 +645,10 @@ ${text.trim()}`;
           taskDueStr = spEndStr;
         }
 
-        memberSprintCursor.set(scheduleKey, { start: taskStartStr, due: taskDueStr });
+        memberSprintCursor.set(scheduleKey, {
+          start: taskStartStr,
+          due: taskDueStr,
+        });
 
         const taskStartIso = `${taskStartStr}T08:00:00`;
         const taskDueIso = `${taskDueStr}T18:00:00`;
@@ -536,7 +656,9 @@ ${text.trim()}`;
         const richDescription = `[AI Decomposed - Role: ${item.assignedRole || "Developer"}] (Ước tính: ${item.estimatedDays || 2} ngày làm việc${item.bufferDays ? ` + ${item.bufferDays} ngày dự phòng` : ""})
 ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\n` : ""}${item.description || ""}${item.riskWarning ? `\n⚠️ Cảnh báo rủi ro: ${item.riskWarning}` : ""}`;
 
-        const normalizePriority = (priority?: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" => {
+        const normalizePriority = (
+          priority?: string,
+        ): "LOW" | "MEDIUM" | "HIGH" | "URGENT" => {
           if (!priority) return "MEDIUM";
           const p = priority.toUpperCase().trim();
           if (p === "URGENT" || p.includes("KHẨN")) return "URGENT";
@@ -584,7 +706,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
     setImportSuccess(false);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) { }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -602,7 +724,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
       ownerId?: number | null;
       dueDate?: string;
       description?: string;
-    }
+    },
   ) => {
     try {
       setActionLoadingId(task.id);
@@ -614,10 +736,14 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         spaceId: task.spaceId || space.id,
         sprintId: task.sprintId ?? null,
         title: task.title,
-        description: patch.description !== undefined ? patch.description : (task.description ?? ""),
+        description:
+          patch.description !== undefined
+            ? patch.description
+            : (task.description ?? ""),
         status: patch.status || task.status,
         priority: patch.priority || task.priority,
-        ownerId: patch.ownerId !== undefined ? (patch.ownerId ?? null) : task.ownerId,
+        ownerId:
+          patch.ownerId !== undefined ? (patch.ownerId ?? null) : task.ownerId,
         startDate: task.startDate,
         dueDate: patch.dueDate ? formatIso(patch.dueDate) : task.dueDate,
       });
@@ -638,18 +764,22 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
       parsed.baseDescription,
       parsed.checklist,
       parsed.aiRationale,
-      { assistantVerified: true, createdByUserId: parsed.createdByUserId }
+      { assistantVerified: true, createdByUserId: parsed.createdByUserId },
     );
     await handleQuickTaskUpdate(task, { description: updatedDesc });
   };
 
   // Evaluate all IN_REVIEW tasks for Acceptance Tab
-  const inReviewTasks = existingTasks.filter((t) => !t.isDeleted && t.status === "IN_REVIEW");
+  const inReviewTasks = existingTasks.filter(
+    (t) => !t.isDeleted && t.status === "IN_REVIEW",
+  );
   const evaluatedInReview = inReviewTasks.map((t) => ({
     task: t,
     evalResult: evaluateTaskForAcceptance(t),
   }));
-  const readyForApproveTasks = evaluatedInReview.filter((item) => item.evalResult.readyForApproval);
+  const readyForApproveTasks = evaluatedInReview.filter(
+    (item) => item.evalResult.readyForApproval,
+  );
 
   const handleBatchApprovePassedTasks = async () => {
     if (!isPM || readyForApproveTasks.length === 0) return;
@@ -683,17 +813,25 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   const riskAnalysis = analyzeProjectAndMemberRisks(existingTasks, members);
 
   // Personal AI recommendations for current user
-  const skillMatchedUnassigned = recommendUnassignedTasksForMember(existingTasks, currentUser);
+  const skillMatchedUnassigned = recommendUnassignedTasksForMember(
+    existingTasks,
+    currentUser,
+  );
   const myActiveTasks = existingTasks
     .filter(
       (t) =>
         !t.isDeleted &&
         t.status !== "DONE" &&
         currentUser?.id &&
-        (t.ownerId === currentUser.id || t.assignee?.id === currentUser.id)
+        (t.ownerId === currentUser.id || t.assignee?.id === currentUser.id),
     )
     .sort((a, b) => {
-      const pWeight: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+      const pWeight: Record<string, number> = {
+        URGENT: 4,
+        HIGH: 3,
+        MEDIUM: 2,
+        LOW: 1,
+      };
       return (pWeight[b.priority] || 1) - (pWeight[a.priority] || 1);
     });
 
@@ -798,8 +936,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                 : "text-gray-300 hover:text-white"
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5 text-[#38BDF8]" />
-            <span>Tiến độ &amp; Rủi ro</span>
+            <LineChart className="w-3.5 h-3.5 text-[#10B981]" />
+            <span>PM Agent: Tiến độ &amp; Rủi ro</span>
           </button>
 
           {isCoordinator && (
@@ -870,7 +1008,10 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-2">
                 <h4 className="text-xs font-extrabold text-[#111827] flex items-center gap-1.5">
                   <UserCheck className="w-4 h-4 text-[#1A73E8]" />
-                  <span>Gợi ý việc trống đúng chuyên môn ({skillMatchedUnassigned.length})</span>
+                  <span>
+                    Gợi ý việc trống đúng chuyên môn (
+                    {skillMatchedUnassigned.length})
+                  </span>
                 </h4>
                 <span className="text-[10px] font-mono text-[#6B7280]">
                   {currentUser?.jobTitle || "Member"}
@@ -910,11 +1051,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           type="button"
                           disabled={actionLoadingId === item.task.id}
                           onClick={() =>
-                            handleQuickTaskUpdate(item.task, { ownerId: currentUser.id })
+                            handleQuickTaskUpdate(item.task, {
+                              ownerId: currentUser.id,
+                            })
                           }
                           className="px-3 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] text-white font-mono text-[10px] font-bold shrink-0 cursor-pointer"
                         >
-                          {actionLoadingId === item.task.id ? "..." : "+ Nhận việc"}
+                          {actionLoadingId === item.task.id
+                            ? "..."
+                            : "+ Nhận việc"}
                         </button>
                       )}
                     </div>
@@ -928,7 +1073,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-2">
                 <h4 className="text-xs font-extrabold text-[#111827] flex items-center gap-1.5">
                   <ListTodo className="w-4 h-4 text-[#137333]" />
-                  <span>Thứ tự ưu tiên việc của tôi ({myActiveTasks.length})</span>
+                  <span>
+                    Thứ tự ưu tiên việc của tôi ({myActiveTasks.length})
+                  </span>
                 </h4>
               </div>
 
@@ -956,37 +1103,39 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                               t.priority === "URGENT"
                                 ? "bg-red-50 text-red-700 border-red-200"
                                 : t.priority === "HIGH"
-                                ? "bg-orange-50 text-orange-700 border-orange-200"
-                                : t.priority === "MEDIUM"
-                                ? "bg-blue-50 text-blue-700 border-blue-200"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  ? "bg-orange-50 text-orange-700 border-orange-200"
+                                  : t.priority === "MEDIUM"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
                             }`}
                           >
                             {t.priority === "URGENT"
                               ? "Khẩn cấp"
                               : t.priority === "HIGH"
-                              ? "Cao"
-                              : t.priority === "MEDIUM"
-                              ? "Trung bình"
-                              : "Thấp"}
+                                ? "Cao"
+                                : t.priority === "MEDIUM"
+                                  ? "Trung bình"
+                                  : "Thấp"}
                           </span>
                           <span
                             className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border ${
                               t.status === "TODO"
                                 ? "bg-gray-100 text-gray-700 border-gray-200"
                                 : t.status === "IN_PROGRESS"
-                                ? "bg-blue-50 text-blue-700 border-blue-200"
-                                : "bg-amber-50 text-amber-800 border-amber-200"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-amber-50 text-amber-800 border-amber-200"
                             }`}
                           >
                             {t.status === "TODO"
                               ? "Cần làm"
                               : t.status === "IN_PROGRESS"
-                              ? "Đang làm"
-                              : "Chờ duyệt"}
+                                ? "Đang làm"
+                                : "Chờ duyệt"}
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-[#111827] truncate">{t.title}</p>
+                        <p className="text-xs font-bold text-[#111827] truncate">
+                          {t.title}
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -998,7 +1147,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                             onClick={() => {
                               if (
                                 confirm(
-                                  "Bạn có chắc muốn bỏ nhận công việc này để thành viên khác nhận?"
+                                  "Bạn có chắc muốn bỏ nhận công việc này để thành viên khác nhận?",
                                 )
                               ) {
                                 handleQuickTaskUpdate(t, { ownerId: null });
@@ -1016,7 +1165,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           <button
                             type="button"
                             disabled={actionLoadingId === t.id}
-                            onClick={() => handleQuickTaskUpdate(t, { status: "IN_PROGRESS" })}
+                            onClick={() =>
+                              handleQuickTaskUpdate(t, {
+                                status: "IN_PROGRESS",
+                              })
+                            }
                             className="px-2.5 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] text-white font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <Play className="w-3 h-3" />
@@ -1048,10 +1201,76 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         )}
 
         {/* ====================================================================
-            MODE 2: BƯỚC 3 - AI ĐÁNH GIÁ TIẾN ĐỘ, RỦI RO & ĐỀ XUẤT ĐIỀU PHỐI
+            MODE 2: BƯỚC 3 - AI ĐÁNH GIÁ TIẾN ĐỘ, RỦI RO & ĐỀ XUẤT ĐIỀU PHỐI (PM AGENT)
             ==================================================================== */}
         {activeMode === "risk" && (
           <div className="space-y-4 animate-in fade-in duration-150">
+            {/* PM Agent Live Assistant Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white rounded-2xl p-4 shadow-sm border border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                  <LineChart className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                      PM Agent • Điều Phối &amp; Giám Sát Tiến Độ
+                    </h4>
+                    <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-400/30 font-bold">
+                      Active
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200/80 mt-0.5">
+                    Tự động quét điểm nghẽn Kanban, đánh giá tải thành viên và
+                    dự báo rủi ro trễ deadline cho Space: {space.name}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const report = generateLocalPmReport();
+                    setPmReportText(report);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+                  title="Xuất báo cáo tiến độ và bảng rủi ro ngay lập tức từ dữ liệu Space (0s, không tốn token)"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Lập Báo Cáo Tiến Độ (Tức thì)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoadingPmReport(true);
+                    try {
+                      const rep = await aiService.getPmSummary(space.id);
+                      setPmReportText(rep.messageContent);
+                    } catch (e: any) {
+                      setPmReportText(generateLocalPmReport());
+                    } finally {
+                      setLoadingPmReport(false);
+                    }
+                  }}
+                  disabled={loadingPmReport}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-xl border border-white/20 transition-all cursor-pointer shrink-0"
+                  title="Phân tích sâu bằng AI LLM (có thể mất 5-10s)"
+                >
+                  <span>{loadingPmReport ? "Đang phân tích..." : "AI Phân tích sâu"}</span>
+                </button>
+              </div>
+            </div>
+
+            {pmReportText && (
+              <PmExecutiveReportView
+                reportText={pmReportText}
+                spaceName={space.name}
+                onClose={() => setPmReportText(null)}
+              />
+            )}
+
             {/* Project Health Summary Row */}
             <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
@@ -1064,25 +1283,29 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                       riskAnalysis.riskLevel === "HIGH"
                         ? "bg-red-50 text-red-700 border-red-200"
                         : riskAnalysis.riskLevel === "MEDIUM"
-                        ? "bg-amber-50 text-amber-800 border-amber-300"
-                        : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
+                          ? "bg-amber-50 text-amber-800 border-amber-300"
+                          : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
                     }`}
                   >
                     {riskAnalysis.riskLevel === "HIGH"
                       ? "🔴 "
                       : riskAnalysis.riskLevel === "MEDIUM"
-                      ? "🟡 "
-                      : "🟢 "}
+                        ? "🟡 "
+                        : "🟢 "}
                     {riskAnalysis.riskLabel}
                   </span>
                 </div>
-                <p className="text-xs text-[#4B5563]">{riskAnalysis.riskSummary}</p>
+                <p className="text-xs text-[#4B5563]">
+                  {riskAnalysis.riskSummary}
+                </p>
               </div>
 
               <div className="flex items-center gap-3 text-center font-mono text-xs">
                 <div className="px-3 py-1.5 rounded-xl bg-[#E6F4EA] text-[#137333] border border-[#CEE7D4]">
                   <p className="text-[10px] font-semibold">Đã xong</p>
-                  <p className="font-extrabold">{riskAnalysis.doneTasks}/{riskAnalysis.totalTasks}</p>
+                  <p className="font-extrabold">
+                    {riskAnalysis.doneTasks}/{riskAnalysis.totalTasks}
+                  </p>
                 </div>
                 <div className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
                   <p className="text-[10px] font-semibold">Chờ duyệt</p>
@@ -1101,7 +1324,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600" />
                   <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
-                    Danh sách Điểm nghẽn &amp; Công việc Rủi ro ({riskAnalysis.riskItems.length})
+                    Danh sách Điểm nghẽn &amp; Công việc Rủi ro (
+                    {riskAnalysis.riskItems.length})
                   </h4>
                 </div>
                 <span className="text-[11px] text-[#6B7280]">
@@ -1112,12 +1336,17 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               {riskAnalysis.riskItems.length === 0 ? (
                 <div className="p-4 rounded-xl border border-dashed border-[#CEE7D4] bg-[#E6F4EA]/40 text-center text-xs text-[#137333] font-medium flex items-center justify-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Không có công việc nào bị trễ hạn hoặc có nguy cơ cao trong dự án.</span>
+                  <span>
+                    Không có công việc nào bị trễ hạn hoặc có nguy cơ cao trong
+                    dự án.
+                  </span>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                   {riskAnalysis.riskItems.map((item) => {
-                    const sprint = spaceSprints.find((sp) => sp.id === item.task.sprintId);
+                    const sprint = spaceSprints.find(
+                      (sp) => sp.id === item.task.sprintId,
+                    );
                     return (
                       <div
                         key={item.id}
@@ -1128,10 +1357,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                             <span className="font-mono text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">
                               Task-{item.task.id}
                             </span>
-                            <span className="font-bold text-[#111827] truncate max-w-[360px]" title={item.task.title}>
+                            <span
+                              className="font-bold text-[#111827] truncate max-w-[360px]"
+                              title={item.task.title}
+                            >
                               {item.task.title}
                             </span>
-                            <span className={`px-2 py-0.5 rounded font-mono text-[10px] font-extrabold border ${item.riskBadgeClass}`}>
+                            <span
+                              className={`px-2 py-0.5 rounded font-mono text-[10px] font-extrabold border ${item.riskBadgeClass}`}
+                            >
                               {item.riskBadge}
                             </span>
                             {sprint && (
@@ -1141,13 +1375,16 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                             )}
                           </div>
                           <p className="text-[11px] text-[#4B5563]">
-                            <strong>Nguyên nhân rủi ro:</strong> {item.riskReason}
+                            <strong>Nguyên nhân rủi ro:</strong>{" "}
+                            {item.riskReason}
                           </p>
                         </div>
 
                         <div className="text-right shrink-0 font-mono text-[11px]">
                           <p className="text-[#6B7280]">Người phụ trách:</p>
-                          <p className="font-bold text-[#111827]">{item.assigneeName}</p>
+                          <p className="font-bold text-[#111827]">
+                            {item.assigneeName}
+                          </p>
                         </div>
                       </div>
                     );
@@ -1162,7 +1399,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               <div className="lg:col-span-3 bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
-                    Tiến độ &amp; Khối lượng Công việc từng Thành viên ({riskAnalysis.memberProfiles.length})
+                    Tiến độ &amp; Khối lượng Công việc từng Thành viên (
+                    {riskAnalysis.memberProfiles.length})
                   </h4>
                   <span className="text-[10px] text-[#6B7280] italic">
                     (Bấm vào hàng để xem chi tiết task)
@@ -1178,7 +1416,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                         className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-xs overflow-hidden transition-all"
                       >
                         <div
-                          onClick={() => setExpandedMemberRiskId(isExpanded ? null : mp.member.id)}
+                          onClick={() =>
+                            setExpandedMemberRiskId(
+                              isExpanded ? null : mp.member.id,
+                            )
+                          }
                           className="p-3 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-gray-100/70 transition-colors"
                         >
                           <div className="min-w-0 space-y-0.5">
@@ -1191,8 +1433,8 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                                   mp.loadStatus === "OVERLOADED"
                                     ? "bg-red-50 text-red-700 border-red-200"
                                     : mp.loadStatus === "AVAILABLE"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-[#E6F4EA] text-[#137333] border-[#CEE7D4]"
                                 }`}
                               >
                                 {mp.loadLabel}
@@ -1204,22 +1446,41 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold" title="Đã hoàn thành">
+                            <span
+                              className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+                              title="Đã hoàn thành"
+                            >
                               Đã xong: {mp.doneCount}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold" title="Đang làm">
+                            <span
+                              className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold"
+                              title="Đang làm"
+                            >
                               Đang làm: {mp.inProgressCount}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 font-bold" title="Cần làm (chưa bắt đầu)">
+                            <span
+                              className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 font-bold"
+                              title="Cần làm (chưa bắt đầu)"
+                            >
                               Cần làm: {mp.todoCount}
                             </span>
                             {mp.overdueCount > 0 && (
-                              <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-bold" title="Công việc bị trễ hạn">
+                              <span
+                                className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-bold"
+                                title="Công việc bị trễ hạn"
+                              >
                                 ⚠️ Trễ: {mp.overdueCount}
                               </span>
                             )}
-                            <button type="button" className="p-0.5 text-gray-400 hover:text-gray-600">
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <button
+                              type="button"
+                              className="p-0.5 text-gray-400 hover:text-gray-600"
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -1228,10 +1489,13 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                         {isExpanded && (
                           <div className="p-2.5 bg-white border-t border-[#E5E7EB] space-y-1.5">
                             <p className="text-[10px] font-mono font-bold uppercase text-gray-500 pb-1 border-b border-gray-100">
-                              Các công việc chưa hoàn thành đang giữ ({mp.openTasksList.length}):
+                              Các công việc chưa hoàn thành đang giữ (
+                              {mp.openTasksList.length}):
                             </p>
                             {mp.openTasksList.length === 0 ? (
-                              <p className="text-[11px] text-gray-400 italic">Thành viên không còn công việc nào đang mở.</p>
+                              <p className="text-[11px] text-gray-400 italic">
+                                Thành viên không còn công việc nào đang mở.
+                              </p>
                             ) : (
                               mp.openTasksList.map((ot) => (
                                 <div
@@ -1242,7 +1506,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                                     <span className="font-mono font-bold text-gray-600 shrink-0">
                                       Task-{ot.id}
                                     </span>
-                                    <span className="truncate text-gray-900 font-medium">{ot.title}</span>
+                                    <span className="truncate text-gray-900 font-medium">
+                                      {ot.title}
+                                    </span>
                                   </div>
                                   <span
                                     className={`px-1.5 py-0.2 rounded font-mono text-[9px] font-bold shrink-0 ${
@@ -1251,7 +1517,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                                         : "bg-gray-100 text-gray-700 border border-gray-200"
                                     }`}
                                   >
-                                    {ot.status === "IN_PROGRESS" ? "Đang làm" : "Cần làm"}
+                                    {ot.status === "IN_PROGRESS"
+                                      ? "Đang làm"
+                                      : "Cần làm"}
                                   </span>
                                 </div>
                               ))
@@ -1269,7 +1537,10 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                 <div className="space-y-0.5">
                   <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#1A73E8]" />
-                    <span>Giải pháp Điều phối Rủi ro ({riskAnalysis.suggestions.length})</span>
+                    <span>
+                      Giải pháp Điều phối Rủi ro (
+                      {riskAnalysis.suggestions.length})
+                    </span>
                   </h4>
                   <p className="text-[11px] text-[#6B7280]">
                     Đề xuất xử lý các điểm nghẽn và san sẻ việc quá tải
@@ -1288,7 +1559,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                         className="p-3 rounded-xl border border-[#D2E3FC] bg-[#F0F7FF]/60 space-y-2 text-xs"
                       >
                         <p className="font-bold text-[#111827]">{sug.title}</p>
-                        
+
                         <div className="space-y-1 text-[11px]">
                           <p className="text-red-700">
                             <strong>• Vấn đề:</strong> {sug.problem}
@@ -1305,13 +1576,17 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                             onClick={async () => {
                               setActionLoadingId(sug.id);
                               if (
-                                (sug.type === "REASSIGN" || sug.type === "ASSIGN_UNASSIGNED") &&
+                                (sug.type === "REASSIGN" ||
+                                  sug.type === "ASSIGN_UNASSIGNED") &&
                                 sug.targetMember
                               ) {
                                 await handleQuickTaskUpdate(sug.task, {
                                   ownerId: sug.targetMember.id,
                                 });
-                              } else if (sug.type === "EXTEND_DUE" && sug.newDueDate) {
+                              } else if (
+                                sug.type === "EXTEND_DUE" &&
+                                sug.newDueDate
+                              ) {
                                 await handleQuickTaskUpdate(sug.task, {
                                   dueDate: sug.newDueDate,
                                 });
@@ -1383,7 +1658,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               <div className="space-y-2.5">
                 {evaluatedInReview.map(({ task: t, evalResult }) => {
                   const assigneeUser = members.find(
-                    (m) => m.id === t.ownerId || m.id === t.assignee?.id
+                    (m) => m.id === t.ownerId || m.id === t.assignee?.id,
                   );
                   return (
                     <div
@@ -1395,9 +1670,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#F6F5EF] border border-[#E5E7EB] text-[#111827]">
                             Task-{t.id}
                           </span>
-                          <span className="text-sm font-extrabold text-[#111827]">{t.title}</span>
+                          <span className="text-sm font-extrabold text-[#111827]">
+                            {t.title}
+                          </span>
                           <span className="text-xs text-[#6B7280]">
-                            ({assigneeUser?.fullName || t.ownerName || "Thành viên"})
+                            (
+                            {assigneeUser?.fullName ||
+                              t.ownerName ||
+                              "Thành viên"}
+                            )
                           </span>
                         </div>
 
@@ -1431,7 +1712,10 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                         {isAssistant && !isPM && (
                           <button
                             type="button"
-                            disabled={actionLoadingId === t.id || evalResult.assistantVerified}
+                            disabled={
+                              actionLoadingId === t.id ||
+                              evalResult.assistantVerified
+                            }
                             onClick={() => handleAssistantVerifyTask(t)}
                             className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60"
                           >
@@ -1445,7 +1729,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                           <button
                             type="button"
                             disabled={actionLoadingId === t.id}
-                            onClick={() => handleQuickTaskUpdate(t, { status: "DONE" })}
+                            onClick={() =>
+                              handleQuickTaskUpdate(t, { status: "DONE" })
+                            }
                             className="px-3.5 py-1.5 bg-[#137333] hover:bg-[#0d5324] text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -1456,7 +1742,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                         <button
                           type="button"
                           disabled={actionLoadingId === t.id}
-                          onClick={() => handleQuickTaskUpdate(t, { status: "IN_PROGRESS" })}
+                          onClick={() =>
+                            handleQuickTaskUpdate(t, { status: "IN_PROGRESS" })
+                          }
                           className="px-3 py-1.5 bg-white hover:bg-gray-100 text-[#4B5563] border border-[#D1D5DB] rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
@@ -1480,6 +1768,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               messages={messages}
               onSendMessage={handleSendMessage}
               loading={loading}
+              isExistingSpace={true}
+              currentSpace={space}
+              existingSprintsCount={spaceSprints.length}
+              existingTasksCount={totalExistingTaskCount}
+              nextSprintNum={nextSprintNum}
             />
 
             {result && (
@@ -1503,7 +1796,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                   onUpdateTasks={handleUpdateTasks}
                   existingTaskCount={totalExistingTaskCount}
                   existingSprintsSummary={existingSprintsSummary}
-                  startDate={space.startDate ? space.startDate.split("T")[0] : new Date().toISOString().split("T")[0]}
+                  startDate={
+                    space.startDate
+                      ? space.startDate.split("T")[0]
+                      : new Date().toISOString().split("T")[0]
+                  }
                 />
               </div>
             )}
