@@ -639,7 +639,7 @@ export function SprintKanbanBoard({
 
                         {/* Title */}
                         <h4
-                          className={`text-xs font-bold leading-relaxed ${task.status === "DONE" ? "line-through text-gray-400" : isGhost ? "text-gray-700 italic" : "text-[#111827]"}`}
+                          className={`text-xs font-bold leading-relaxed ${task.status === "DONE" ? "text-gray-400 opacity-75 font-medium" : isGhost ? "text-gray-700 italic" : "text-[#111827]"}`}
                         >
                           {task.title}
                         </h4>

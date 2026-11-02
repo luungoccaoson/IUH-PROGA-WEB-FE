@@ -285,12 +285,23 @@ export function AiDecompositionContainer({
     const text = textToSubmit || requirementText;
     if (!text.trim()) return;
 
+    // Detect if user is uploading a new document
+    const isDocUpload = text.includes("[NẠP TÀI LIỆU KẾ HOẠCH FILE") || text.includes("chunks)]:");
+    let threadIdToSend = activeThreadId;
+
+    if (isDocUpload) {
+      // Start fresh AI session for newly uploaded document
+      threadIdToSend = null;
+      setActiveThreadId(null);
+      setResult(null);
+    }
+
     const contextSpaceId = selectedSpaceId || (spaces.length > 0 ? spaces[0].id : 1);
 
     // Optimistic UI: Append user message bubble immediately into chat feed!
     const userMsgOptimistic: AiChatMessageResponse = {
       id: Date.now(),
-      threadId: activeThreadId || 0,
+      threadId: threadIdToSend || 0,
       senderType: "USER",
       messageContent: text.trim(),
       createdAt: new Date().toISOString(),
@@ -371,7 +382,7 @@ ${text.trim()}`;
       const data = await aiService.decomposeRequirements(
         contextSpaceId,
         finalPromptText,
-        activeThreadId
+        threadIdToSend
       );
       setResult(data.tasks && data.tasks.length > 0 ? data : null);
       setActiveThreadId(data.threadId);

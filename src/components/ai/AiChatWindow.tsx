@@ -20,6 +20,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { AiChatMessageResponse, aiService } from "@/services/ai.service";
+import { Space } from "@/types";
 import { AiMessageContent } from "./AiMessageContent";
 
 interface AiChatWindowProps {
@@ -29,6 +30,11 @@ interface AiChatWindowProps {
   onScrollToWbs?: () => void;
   configuredStartDate?: string;
   configuredEndDate?: string;
+  isExistingSpace?: boolean;
+  currentSpace?: Space;
+  existingSprintsCount?: number;
+  existingTasksCount?: number;
+  nextSprintNum?: number;
 }
 
 export function AiChatWindow({
@@ -38,6 +44,11 @@ export function AiChatWindow({
   onScrollToWbs,
   configuredStartDate,
   configuredEndDate,
+  isExistingSpace = false,
+  currentSpace,
+  existingSprintsCount = 0,
+  existingTasksCount = 0,
+  nextSprintNum = 1,
 }: AiChatWindowProps) {
   const [inputText, setInputText] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -52,6 +63,15 @@ export function AiChatWindow({
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Auto-scale textarea height whenever inputText changes (user typing or options clicked)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "40px";
+      const scrollH = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 40), 160)}px`;
+    }
+  }, [inputText]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,13 +156,17 @@ export function AiChatWindow({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-[#111827]">Requirement AI Co-Pilot</h3>
+              <h3 className="text-sm font-bold text-[#111827]">
+                {isExistingSpace ? "Trợ Lý Bổ Sung Task Cho Space" : "Requirement AI Co-Pilot"}
+              </h3>
               <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
-                Online
+                {isExistingSpace ? `Space: ${currentSpace?.name || "Hiện tại"}` : "Online"}
               </span>
             </div>
             <p className="text-[11px] text-[#6B7280]">
-              Trao đổi yêu cầu, duyệt kế hoạch Sprints và sinh Bảng Task WBS tự động
+              {isExistingSpace
+                ? `Không gian: ${currentSpace?.name || "Space này"} • ${existingSprintsCount} Sprints • ${existingTasksCount} công việc`
+                : "Trao đổi yêu cầu, duyệt kế hoạch Sprints và sinh Bảng Task WBS tự động"}
             </p>
           </div>
         </div>
@@ -390,7 +414,7 @@ export function AiChatWindow({
               }
             }}
             rows={1}
-            placeholder="Mô tả bài toán của bạn, hoặc bấm 📎 để nạp file đặc tả (PDF/Word tối đa 15MB)..."
+            placeholder={isExistingSpace ? `Mô tả tính năng hoặc yêu cầu cần phân rã thêm cho ${currentSpace?.name || "Space này"}...` : "Mô tả bài toán của bạn, hoặc bấm 📎 để nạp file đặc tả (PDF/Word tối đa 15MB)..."}
             className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 rounded-xl text-xs text-slate-900 outline-none transition-all placeholder-slate-400 resize-none min-h-[40px] max-h-[140px] overflow-y-auto leading-relaxed"
           />
 

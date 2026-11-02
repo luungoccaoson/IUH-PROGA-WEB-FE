@@ -211,7 +211,7 @@ export function DemoPreview() {
                       </span>
                       <span className="text-[#6B7280]">TASK-100</span>
                     </div>
-                    <p className="text-xs font-semibold text-[#6B7280] line-through font-sans">
+                    <p className="text-xs font-semibold text-[#6B7280] opacity-75 font-sans">
                       Khởi tạo dự án Next.js 14 App Router &amp; Tailwind
                     </p>
                     <div className="flex items-center justify-between text-[11px] font-mono text-[#6B7280] pt-2 border-t border-[#E5E7EB]">
