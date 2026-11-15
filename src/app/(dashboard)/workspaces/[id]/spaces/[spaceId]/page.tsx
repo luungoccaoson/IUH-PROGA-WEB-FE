@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ShieldAlert } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
 import { userService } from "@/services/user.service";
@@ -21,6 +21,7 @@ import { SpaceTrashModal } from "@/components/space/SpaceTrashModal";
 import { sprintService } from "@/services/sprint.service";
 import { taskService } from "@/services/task.service";
 import { Space, Task, Sprint, Workspace, User } from "@/types";
+import { roleIdToSpaceRole } from "@/utils/roleAssignment";
 
 export default function SpaceDetailPage() {
   const params = useParams();
@@ -40,11 +41,24 @@ export default function SpaceDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [rawSpaceMembers, setRawSpaceMembers] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const isOwner = !!(currentUser?.id && workspace?.ownerId === currentUser.id);
+  const mySpaceRole = React.useMemo(() => {
+    if (!currentUser?.id) return "MEMBER";
+    const isCreator = workspace?.ownerId === currentUser.id;
+    const myMember = rawSpaceMembers.find(
+      (m: any) => (m.id?.userId || m.userId) === currentUser.id
+    );
+    return roleIdToSpaceRole(myMember?.roleId, isCreator);
+  }, [currentUser?.id, workspace?.ownerId, rawSpaceMembers]);
+
+  const isSpacePM = mySpaceRole === "PM";
+  const isSpaceAssistant = mySpaceRole === "ASSISTANT";
 
   const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
 
@@ -105,6 +119,19 @@ export default function SpaceDetailPage() {
       }
       setTasks(taskList || []);
       setSprints(sprintList || []);
+      setRawSpaceMembers(memberList || []);
+
+      // Kiểm tra quyền: nếu thành viên đã bị xóa khỏi Space và không phải Owner của Workspace -> Báo giao diện Không có quyền truy cập
+      const isOwnerUser = !!(currentUser?.id && wsData?.ownerId === currentUser.id);
+      const isMemberUser = (memberList || []).some(
+        (m: any) => (m.id?.userId || m.userId) === currentUser?.id
+      );
+
+      if (currentUser?.id && wsData && !isOwnerUser && !isMemberUser) {
+        setAccessDenied(true);
+        return;
+      }
+      setAccessDenied(false);
 
       // Extract unique user IDs and fetch full user profile details
       const userIds: number[] = Array.from(
@@ -131,18 +158,24 @@ export default function SpaceDetailPage() {
     }
 
     const handleTasksUpdated = () => {
-      fetchData();
+      fetchData(true);
     };
 
     const handleSwitchKanban = () => {
       setActiveTab("kanban");
     };
 
+    const handleToggleCopilot = () => {
+      setIsCopilotOpen((prev) => !prev);
+    };
+
     window.addEventListener("space_tasks_updated", handleTasksUpdated);
     window.addEventListener("switch_to_kanban_tab", handleSwitchKanban);
+    window.addEventListener("toggle_space_ai_copilot", handleToggleCopilot);
     return () => {
       window.removeEventListener("space_tasks_updated", handleTasksUpdated);
       window.removeEventListener("switch_to_kanban_tab", handleSwitchKanban);
+      window.removeEventListener("toggle_space_ai_copilot", handleToggleCopilot);
     };
   }, [workspaceId, spaceId, activeTab]);
 
@@ -180,6 +213,37 @@ export default function SpaceDetailPage() {
       <div className="flex flex-col items-center justify-center py-20 text-[#6B7280]">
         <Sparkles className="w-8 h-8 text-[#111827] animate-spin mb-3" />
         <p className="font-mono text-xs uppercase tracking-wider">Đang tải chi tiết Space...</p>
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="py-20 px-4 font-sans flex items-center justify-center animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-white border border-[#E5E7EB] rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 shadow-2xs">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-base font-extrabold text-[#111827]">
+              Không có quyền truy cập Space
+            </h3>
+            <p className="text-xs text-[#6B7280] leading-relaxed">
+              Bạn hiện không còn là thành viên của Space này hoặc đã được Quản trị viên điều chuyển ra khỏi dự án.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => router.replace(`/workspaces/${workspaceId}`)}
+              className="w-full py-2.5 px-4 bg-[#111827] hover:bg-black text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              Quay về Không gian làm việc (Workspace)
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -228,10 +292,12 @@ export default function SpaceDetailPage() {
           activeTab={activeTab}
           setActiveTab={handleTabChange}
           onOpenSettings={() => setIsEditOpen(true)}
-          onOpenCopilot={() => setIsCopilotOpen(true)}
-          onOpenAddMember={() => setIsAddMemberOpen(true)}
+          onOpenCopilot={() => setIsCopilotOpen((prev) => !prev)}
+          onOpenAddMember={isSpacePM ? () => setIsAddMemberOpen(true) : undefined}
           onOpenTrash={() => setIsTrashOpen(true)}
-          isOwner={isOwner}
+          isOwner={isSpacePM}
+          isLeadPM={isOwner}
+          spaceRole={mySpaceRole}
         />
 
         {/* Tab Contents */}
@@ -255,6 +321,9 @@ export default function SpaceDetailPage() {
               <SprintTaskList
                 spaceId={spaceId}
                 members={members}
+                isPM={isSpacePM}
+                isAssistant={isSpaceAssistant}
+                currentUserId={currentUser?.id}
                 onDrawerStateChange={setIsDrawerOpen}
               />
             </div>
@@ -265,6 +334,10 @@ export default function SpaceDetailPage() {
             <div className="animate-in fade-in duration-200">
               <SprintKanbanBoard
                 spaceId={spaceId}
+                isPM={isSpacePM}
+                isAssistant={isSpaceAssistant}
+                currentUserId={currentUser?.id}
+                members={members}
                 onDrawerStateChange={setIsDrawerOpen}
               />
             </div>
@@ -290,39 +363,54 @@ export default function SpaceDetailPage() {
                 workspaceId={workspaceId}
                 spaceId={spaceId}
                 tasks={tasks}
+                isPM={isSpacePM}
+                workspaceOwnerId={workspace?.ownerId}
+                currentUserId={currentUser?.id}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onSelectTask={handleSelectTaskToggle}
+                onRoleUpdated={() => fetchData(true)}
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* AI Co-Pilot Drawer for Space (Always available via floating bottom-right button) */}
+      {/* AI Co-Pilot Drawer for Space (Available for ALL roles: PM, ASSISTANT, and MEMBER) */}
       {space && (
         <SpaceAiCopilotDrawer
           isOpen={true}
-          onClose={() => {}}
+          isMinimized={!isCopilotOpen}
+          onToggleMinimize={(minimized) => setIsCopilotOpen(!minimized)}
+          onClose={() => setIsCopilotOpen(false)}
           space={space}
           workspaceId={workspaceId}
           existingTasks={tasks}
+          spaceRole={mySpaceRole}
+          currentUser={currentUser}
+          members={members}
+          isTaskDrawerOpen={isDrawerVisible}
         />
       )}
 
       {/* Add Space Member Modal */}
-      <AddSpaceMemberModal
-        isOpen={isAddMemberOpen}
-        workspaceId={workspaceId}
-        spaceId={spaceId}
-        onClose={() => setIsAddMemberOpen(false)}
-        onMemberAdded={fetchData}
-      />
+      {isSpacePM && (
+        <AddSpaceMemberModal
+          isOpen={isAddMemberOpen}
+          workspaceId={workspaceId}
+          spaceId={spaceId}
+          onClose={() => setIsAddMemberOpen(false)}
+          onMemberAdded={fetchData}
+        />
+      )}
 
       {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview */}
       {selectedTask && isDrawerOpen && (
         <TaskDetailDrawer
           task={selectedTask}
           taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+          isPM={isSpacePM}
+          isAssistant={isSpaceAssistant}
+          currentUserId={currentUser?.id}
           members={members}
           isClosedSprint={Boolean(
             selectedTask?.sprintId &&
@@ -377,7 +465,7 @@ export default function SpaceDetailPage() {
       <EditSpaceModal
         isOpen={isEditOpen}
         space={space}
-        isOwner={isOwner}
+        isOwner={isSpacePM}
         onClose={() => setIsEditOpen(false)}
         onUpdate={handleUpdateSpace}
         onDelete={handleDeleteSpace}

@@ -28,8 +28,29 @@ export const taskService = {
     startDate?: string;
     dueDate?: string;
   }): Promise<Task> => {
-    const response = await apiClient.post<ApiResponse<Task>>('/tasks', data);
-    return response.data.data;
+    const rawTitle = (data.title || "Công việc mới").trim();
+    const safeTitle = rawTitle.length > 140 ? rawTitle.substring(0, 140).trim() : rawTitle;
+    const payload = {
+      ...data,
+      spaceId: Number(data.spaceId),
+      title: safeTitle,
+    };
+
+    let lastError: any;
+    for (let attempt = 1; attempt <= 50; attempt++) {
+      try {
+        const response = await apiClient.post<ApiResponse<Task>>('/tasks', payload);
+        return response.data.data;
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.response?.data?.message || err?.message || "").toLowerCase();
+        if (msg.includes("duplicate key") || msg.includes("pkey") || err?.response?.status === 400) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
   },
 
   updateTask: async (

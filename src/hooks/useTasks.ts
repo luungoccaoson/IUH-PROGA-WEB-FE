@@ -27,15 +27,17 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
 
   // Inline Quick Create Task
   const createTask = useCallback(
-    async (data: { title: string; sprintId?: number | null }) => {
+    async (data: { title: string; sprintId?: number | null; ownerId?: number; createdByUserId?: number }) => {
       try {
         setLoading(true);
         const newTask = await taskService.createTask({
           spaceId,
           sprintId: data.sprintId || null,
           title: data.title.trim(),
+          description: data.createdByUserId ? `[CreatedBy:${data.createdByUserId}]` : undefined,
           status: 'TODO',
           priority: 'MEDIUM',
+          ownerId: data.ownerId,
         });
         if (onTasksUpdated) onTasksUpdated(true);
         return newTask;
@@ -88,7 +90,7 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
           description: data.description !== undefined ? data.description : existingTask.description,
           status: data.status || existingTask.status,
           priority: data.priority || existingTask.priority,
-          ownerId: data.ownerId !== undefined ? data.ownerId : existingTask.ownerId,
+          ownerId: data.ownerId !== undefined ? data.ownerId : (existingTask.ownerId ?? existingTask.assignee?.id),
           startDate: formattedStartDate,
           dueDate: formattedDueDate,
         });

@@ -11,6 +11,9 @@ interface SprintAccordionProps {
   tasks: Task[];
   allSpaceTasks?: Task[];
   members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   isTaskOverdue: (task: Task) => boolean;
   selectedTaskIds?: number[];
   onToggleSelectTask?: (taskId: number) => void;
@@ -37,6 +40,9 @@ export function SprintAccordion({
   tasks,
   allSpaceTasks,
   members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   isTaskOverdue,
   selectedTaskIds = [],
   onToggleSelectTask,
@@ -52,6 +58,7 @@ export function SprintAccordion({
   onMoveTask,
 }: SprintAccordionProps) {
   const [isOpen, setIsOpen] = useState(sprint.status !== "CLOSED");
+  const isCoordinator = isPM || isAssistant;
 
   const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
   const isClosed = sprint.status === "CLOSED";
@@ -71,10 +78,10 @@ export function SprintAccordion({
   return (
     <div
       onDragOver={(e) => {
-        if (!isClosed) e.preventDefault();
+        if (isCoordinator && !isClosed) e.preventDefault();
       }}
       onDrop={(e) => {
-        if (isClosed) return;
+        if (!isCoordinator || isClosed) return;
         e.preventDefault();
         const taskIdStr = e.dataTransfer.getData("taskId");
         if (taskIdStr && onMoveTask) {
@@ -95,7 +102,7 @@ export function SprintAccordion({
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
 
-          {onToggleSelectAllSprint && deletableTasks.length > 0 && (
+          {isPM && onToggleSelectAllSprint && deletableTasks.length > 0 && (
             <input
               type="checkbox"
               checked={isAllSelected}
@@ -129,20 +136,20 @@ export function SprintAccordion({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {!isClosed && (
+          {isCoordinator && !isClosed && (
             <button
               onClick={() => onEdit(sprint)}
-              title="Chỉnh sửa ngày / tên Sprint"
+              title="Chỉnh sửa ngày / tên Sprint (PM & Assistant)"
               className="p-1.5 hover:bg-[#E5E7EB] rounded-lg text-[#4B5563] transition-colors cursor-pointer"
             >
               <Edit3 className="w-4 h-4" />
             </button>
           )}
 
-          {isFuture && (
+          {isPM && isFuture && (
             <button
               onClick={() => onDelete(sprint.id)}
-              title="Xóa Sprint (Chỉ áp dụng cho Sprint sắp tới)"
+              title="Xóa Sprint (Chỉ PM & Sprint sắp tới)"
               className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
@@ -169,6 +176,9 @@ export function SprintAccordion({
                     task={task}
                     taskIndex={globalIdx !== -1 ? globalIdx : taskIdx}
                     members={members}
+                    isPM={isPM}
+                    isAssistant={isAssistant}
+                    currentUserId={currentUserId}
                     isOverdue={isTaskOverdue(task)}
                     isClosedSprint={isClosed}
                     isActiveSprint={isActive}

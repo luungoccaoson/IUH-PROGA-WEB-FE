@@ -49,6 +49,27 @@ export default function AiAnalysisPage() {
     );
   }
 
+  const isOwner = Boolean(user?.id && workspace?.ownerId === user.id);
+
+  if (workspace && !isOwner) {
+    return (
+      <div className="bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] p-6 rounded-2xl max-w-xl mx-auto text-center space-y-4 font-sans my-10">
+        <p className="font-extrabold text-sm">
+          🔒 Giới hạn quyền truy cập (RBAC)
+        </p>
+        <p className="text-xs text-[#7F1D1D]">
+          Chỉ Chủ sở hữu Workspace hoặc Project Manager (PM) mới có quyền kích hoạt <strong>AI Khởi Tạo Space &amp; Phân Rã Dự Án Tổng (Macro AI Decomposition)</strong>.
+        </p>
+        <button
+          onClick={() => router.push(`/workspaces/${workspaceId}`)}
+          className="px-4 py-2 bg-[#111827] text-white rounded-xl text-xs font-bold cursor-pointer"
+        >
+          Quay lại Workspace Dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6 font-sans animate-in fade-in duration-300">
       {/* Path Breadcrumbs */}

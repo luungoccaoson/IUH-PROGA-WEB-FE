@@ -9,6 +9,10 @@ import { InlineCreateTask } from "./InlineCreateTask";
 interface BacklogAccordionProps {
   tasks: Task[];
   allSpaceTasks?: Task[];
+  members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   isTaskOverdue: (task: Task) => boolean;
   selectedTaskIds?: number[];
   onToggleSelectTask?: (taskId: number) => void;
@@ -25,6 +29,10 @@ interface BacklogAccordionProps {
 export function BacklogAccordion({
   tasks,
   allSpaceTasks,
+  members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   isTaskOverdue,
   selectedTaskIds = [],
   onToggleSelectTask,
@@ -38,6 +46,7 @@ export function BacklogAccordion({
   onMoveTask,
 }: BacklogAccordionProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const isCoordinator = isPM || isAssistant;
 
   const backlogTaskIds = tasks.map((t) => t.id);
   const isAllSelected = tasks.length > 0 && tasks.every((t) => selectedTaskIds.includes(t.id));
@@ -45,8 +54,11 @@ export function BacklogAccordion({
 
   return (
     <div
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e) => {
+        if (isCoordinator) e.preventDefault();
+      }}
       onDrop={(e) => {
+        if (!isCoordinator) return;
         e.preventDefault();
         const taskIdStr = e.dataTransfer.getData("taskId");
         if (taskIdStr && onMoveTask) {
@@ -65,7 +77,7 @@ export function BacklogAccordion({
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
 
-          {onToggleSelectAllBacklog && tasks.length > 0 && (
+          {isPM && onToggleSelectAllBacklog && tasks.length > 0 && (
             <input
               type="checkbox"
               checked={isAllSelected}
@@ -101,6 +113,10 @@ export function BacklogAccordion({
                     key={task.id}
                     task={task}
                     taskIndex={globalIdx !== -1 ? globalIdx : taskIdx}
+                    members={members}
+                    isPM={isPM}
+                    isAssistant={isAssistant}
+                    currentUserId={currentUserId}
                     isOverdue={isTaskOverdue(task)}
                     isSelected={selectedTaskIds.includes(task.id)}
                     onToggleSelect={onToggleSelectTask}

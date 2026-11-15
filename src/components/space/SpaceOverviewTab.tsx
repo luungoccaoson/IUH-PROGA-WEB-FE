@@ -26,7 +26,7 @@ export function SpaceOverviewTab({
 }: SpaceOverviewTabProps) {
   // Counts by status
   const todoCount = tasks.filter((t) => t.status === "TODO").length;
-  const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS").length;
+  const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS" || t.status === "IN_REVIEW").length;
   const doneCount = tasks.filter((t) => t.status === "DONE").length;
   const totalCount = tasks.length || 1;
 
@@ -592,12 +592,20 @@ export function SpaceOverviewTab({
                             <span
                               className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${t.status === "DONE"
                                   ? "bg-emerald-100 text-emerald-800"
-                                  : t.status === "IN_PROGRESS"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-gray-200 text-gray-700"
+                                  : t.status === "IN_REVIEW"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : t.status === "IN_PROGRESS"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-gray-200 text-gray-700"
                                 }`}
                             >
-                              {t.status === "DONE" ? "Đã xong" : t.status === "IN_PROGRESS" ? "Đang làm" : "Cần làm"}
+                              {t.status === "DONE"
+                                ? "Đã xong"
+                                : t.status === "IN_REVIEW"
+                                  ? "Chờ duyệt"
+                                  : t.status === "IN_PROGRESS"
+                                    ? "Đang làm"
+                                    : "Cần làm"}
                             </span>
                           </div>
                           <p className="font-bold text-xs text-[#0F172A] truncate">{t.title}</p>

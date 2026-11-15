@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Layers, Sparkles, AlertTriangle, Trash2, CheckSquare, X } from "lucide-react";
+import {
+  Plus,
+  Layers,
+  Sparkles,
+  AlertTriangle,
+  Trash2,
+  CheckSquare,
+  X,
+} from "lucide-react";
 import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
@@ -17,14 +25,21 @@ import { AutoAssignModal } from "@/components/space/AutoAssignModal";
 interface SprintTaskListProps {
   spaceId: number;
   members?: any[];
+  isPM?: boolean;
+  isAssistant?: boolean;
+  currentUserId?: number;
   onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
 export function SprintTaskList({
   spaceId,
   members = [],
+  isPM = true,
+  isAssistant = false,
+  currentUserId,
   onDrawerStateChange,
 }: SprintTaskListProps) {
+  const isCoordinator = isPM || isAssistant;
   const {
     sprints,
     tasks,
@@ -58,7 +73,8 @@ export function SprintTaskList({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
-  const [selectedTaskReadOnly, setSelectedTaskReadOnly] = useState<boolean>(false);
+  const [selectedTaskReadOnly, setSelectedTaskReadOnly] =
+    useState<boolean>(false);
 
   const handleOpenTask = (task: Task, isReadOnly?: boolean) => {
     handleSelectTask(task);
@@ -73,7 +89,9 @@ export function SprintTaskList({
 
   const handleToggleSelectTask = (taskId: number) => {
     setSelectedTaskIds((prev) =>
-      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+      prev.includes(taskId)
+        ? prev.filter((id) => id !== taskId)
+        : [...prev, taskId],
     );
   };
 
@@ -103,7 +121,10 @@ export function SprintTaskList({
     }
   };
 
-  const handleDeleteSprintWithOptions = async (sprintId: number, deleteTasks: boolean) => {
+  const handleDeleteSprintWithOptions = async (
+    sprintId: number,
+    deleteTasks: boolean,
+  ) => {
     try {
       await deleteSprint(sprintId, deleteTasks);
       setDeletingSprintId(null);
@@ -125,7 +146,9 @@ export function SprintTaskList({
 
   const handleUpdateOwner = async (taskId: number, ownerId?: number | null) => {
     try {
-      await updateTask(taskId, { ownerId: ownerId !== undefined ? ownerId : null });
+      await updateTask(taskId, {
+        ownerId: ownerId !== undefined ? ownerId : null,
+      });
     } catch (err) {
       alert("Không thể gán người thực hiện!");
     }
@@ -150,10 +173,13 @@ export function SprintTaskList({
     }
   };
 
-  const sprintIds = React.useMemo(() => new Set(sprints.map((s) => s.id)), [sprints]);
+  const sprintIds = React.useMemo(
+    () => new Set(sprints.map((s) => s.id)),
+    [sprints],
+  );
   const backlogTasks = React.useMemo(
     () => tasks.filter((t) => !t.sprintId || !sprintIds.has(t.sprintId)),
-    [tasks, sprintIds]
+    [tasks, sprintIds],
   );
 
   // Sequentially order all space tasks across Sprints (in sprint order) and then Backlog
@@ -161,12 +187,14 @@ export function SprintTaskList({
     const list: Task[] = [];
     // 1. All tasks in each sprint in sequential sprint order
     sprints.forEach((sprint) => {
-      const sTasks = tasks.filter((t) => t.sprintId === sprint.id && !t.isDeleted);
+      const sTasks = tasks.filter(
+        (t) => t.sprintId === sprint.id && !t.isDeleted,
+      );
       list.push(...sTasks);
     });
     // 2. All tasks in Backlog
     const bTasks = tasks.filter(
-      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId))
+      (t) => !t.isDeleted && (!t.sprintId || !sprintIds.has(t.sprintId)),
     );
     list.push(...bTasks);
     return list;
@@ -213,25 +241,40 @@ export function SprintTaskList({
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Auto Assign Tasks by Role button */}
-            {members && members.length > 0 && (
-              <button
-                onClick={() => setIsAutoAssignOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer hover:shadow-md"
-                title="Tự động phân công công việc theo vai trò chuyên môn (FE, BE, Fullstack, QA, DevOps) & Cân bằng tải"
-              >
-                {/* <Sparkles className="w-4 h-4" /> */}
-                TỰ ĐỘNG PHÂN CÔNG
-              </button>
-            )}
+            {isCoordinator ? (
+              <>
+                {/* {isAssistant && !isPM && (
+                  <span className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold hidden lg:inline-flex items-center gap-1.5">
+                    🤝 Trợ lý Điều phối: Phân công, chỉnh hạn &amp; sắp xếp Sprint (PM duyệt DONE)
+                  </span>
+                )} */}
+                {/* Auto Assign Tasks by Role button - PM & Assistant */}
+                {members && members.length > 0 && (
+                  <button
+                    onClick={() => setIsAutoAssignOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer hover:shadow-md"
+                    title="Tự động phân công công việc theo vai trò chuyên môn (FE, BE, Fullstack, QA, DevOps) & Cân bằng tải"
+                  >
+                    TỰ ĐỘNG PHÂN CÔNG
+                  </button>
+                )}
 
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              TẠO SPRINT MỚI
-            </button>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  TẠO SPRINT MỚI
+                </button>
+              </>
+            ) : (
+              <div className="px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold flex items-center gap-2">
+                <span>
+                  Tạo Task mới, tự nhận Task trống &amp; cập nhật tiến độ cá
+                  nhân
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -267,13 +310,27 @@ export function SprintTaskList({
                 tasks={sprintTasks}
                 allSpaceTasks={orderedSpaceTasks}
                 members={members}
+                isPM={isPM}
+                isAssistant={isAssistant}
+                currentUserId={currentUserId}
                 isTaskOverdue={isTaskOverdue}
                 selectedTaskIds={selectedTaskIds}
-                onToggleSelectTask={handleToggleSelectTask}
-                onToggleSelectAllSprint={handleToggleSelectAll}
+                onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
+                onToggleSelectAllSprint={
+                  isPM ? handleToggleSelectAll : undefined
+                }
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
-                onCreateTask={createTask}
+                onCreateTask={(data) =>
+                  createTask({
+                    ...data,
+                    ownerId:
+                      !isCoordinator && currentUserId
+                        ? currentUserId
+                        : undefined,
+                    createdByUserId: currentUserId,
+                  })
+                }
                 onSelectTask={(task, forceReadOnly) =>
                   handleOpenTask(task, forceReadOnly || isClosed)
                 }
@@ -290,11 +347,22 @@ export function SprintTaskList({
           <BacklogAccordion
             tasks={backlogTasks}
             allSpaceTasks={orderedSpaceTasks}
+            members={members}
+            isPM={isPM}
+            isAssistant={isAssistant}
+            currentUserId={currentUserId}
             isTaskOverdue={isTaskOverdue}
             selectedTaskIds={selectedTaskIds}
-            onToggleSelectTask={handleToggleSelectTask}
-            onToggleSelectAllBacklog={handleToggleSelectAll}
-            onCreateTask={createTask}
+            onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
+            onToggleSelectAllBacklog={isPM ? handleToggleSelectAll : undefined}
+            onCreateTask={(data) =>
+              createTask({
+                ...data,
+                ownerId:
+                  !isCoordinator && currentUserId ? currentUserId : undefined,
+                createdByUserId: currentUserId,
+              })
+            }
             onSelectTask={setSelectedTask}
             onUpdateStatus={updateTaskStatus}
             onUpdatePriority={handleUpdatePriority}
@@ -311,7 +379,11 @@ export function SprintTaskList({
           <div className="flex items-center gap-2 text-sm font-semibold">
             <CheckSquare className="w-4 h-4 text-[#10B981]" />
             <span>
-              Đã chọn <strong className="text-[#10B981] font-mono">{selectedTaskIds.length}</strong> công việc
+              Đã chọn{" "}
+              <strong className="text-[#10B981] font-mono">
+                {selectedTaskIds.length}
+              </strong>{" "}
+              công việc
             </span>
           </div>
 
@@ -385,18 +457,24 @@ export function SprintTaskList({
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
       <TaskDetailDrawer
         task={selectedTask}
-        taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+        taskNumber={
+          selectedTask ? taskNumberMap.get(selectedTask.id) : undefined
+        }
+        isPM={isPM}
+        isAssistant={isAssistant}
+        currentUserId={currentUserId}
+        members={members}
         isClosedSprint={Boolean(
           selectedTaskReadOnly ||
           (selectedTask?.sprintId &&
             sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-            "CLOSED")
+              "CLOSED"),
         )}
         isActiveSprint={Boolean(
           !selectedTaskReadOnly &&
           selectedTask?.sprintId &&
           sprints.find((s) => s.id === selectedTask.sprintId)?.status ===
-          "ACTIVE"
+            "ACTIVE",
         )}
         onClose={() => {
           setSelectedTask(null);
@@ -409,7 +487,11 @@ export function SprintTaskList({
       {/* Auto Assign Modal (Role-matching & Workload Balancing) */}
       <AutoAssignModal
         isOpen={isAutoAssignOpen}
-        tasks={selectedTaskIds.length > 0 ? tasks.filter((t) => selectedTaskIds.includes(t.id)) : tasks}
+        tasks={
+          selectedTaskIds.length > 0
+            ? tasks.filter((t) => selectedTaskIds.includes(t.id))
+            : tasks
+        }
         sprints={sprints}
         members={members}
         taskNumberMap={taskNumberMap}

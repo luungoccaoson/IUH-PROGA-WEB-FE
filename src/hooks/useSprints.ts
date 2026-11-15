@@ -5,18 +5,26 @@ import { taskService } from '@/services/task.service';
 
 /**
  * Helper nhận biết task trễ hạn được chuyển từ sprint đã đóng sang sprint hiện tại
+ * Trả về cả tên Sprint đầy đủ (hiển thị khi hover) và tên rút gọn "Sprint X" (hiển thị gọn trên badge)
  */
 export function getTaskTransferredOrigin(task?: Task | null): {
   isTransferred: boolean;
   originSprintName?: string;
+  shortSprintName?: string;
 } {
   if (!task) return { isTransferred: false };
   const desc = task.description || "";
   const match = desc.match(/\[(?:Chuyển từ|Tồn đọng từ):\s*([^\]\(\n]+)(?:\([^\)]+\))?\]/i);
   if (match && match[1]) {
+    const fullOriginName = match[1].trim();
+    const sprintNumMatch = fullOriginName.match(/Sprint\s*\d+/i);
+    const shortName = sprintNumMatch
+      ? sprintNumMatch[0]
+      : fullOriginName.split(":")[0].trim();
     return {
       isTransferred: true,
-      originSprintName: match[1].trim(),
+      originSprintName: fullOriginName,
+      shortSprintName: shortName,
     };
   }
   return { isTransferred: false };
@@ -95,7 +103,7 @@ export function useSprints(spaceId: number) {
             }
           });
 
-          // Các task thuộc sprint đã đóng mà chưa xong (TODO hoặc IN_PROGRESS)
+          // Các task thuộc sprint đã đóng mà chưa xong (TODO, IN_PROGRESS, IN_REVIEW)
           const overdueTasksFromClosed = fetchedTasks.filter((t) => {
             if (t.status === 'DONE') return false;
             if (!t.sprintId) return false;
@@ -120,6 +128,9 @@ export function useSprints(spaceId: number) {
                 preservedDueDate = originSprint?.endDate || new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
               }
 
+              // QUAN TRỌNG: Bảo toàn người phụ trách (ownerId) và startDate khi tự động dời sang Sprint mới
+              const preservedOwnerId = t.ownerId ?? t.assignee?.id ?? undefined;
+
               try {
                 await taskService.updateTask(t.id, {
                   spaceId: t.spaceId,
@@ -128,12 +139,17 @@ export function useSprints(spaceId: number) {
                   description: newDesc,
                   status: t.status,
                   priority: t.priority,
+                  ownerId: preservedOwnerId,
+                  startDate: t.startDate,
                   dueDate: preservedDueDate,
                 });
 
                 t.sprintId = activeSprint.id;
                 t.description = newDesc;
                 t.dueDate = preservedDueDate;
+                if (preservedOwnerId) {
+                  t.ownerId = preservedOwnerId;
+                }
                 tasksChanged = true;
               } catch (err) {
                 console.error(`Lỗi chuyển task trễ hạn #${t.id} sang ${activeSprint.name}:`, err);
@@ -141,6 +157,59 @@ export function useSprints(spaceId: number) {
             }
 
             if (tasksChanged) {
+              setTasks([...fetchedTasks]);
+              window.dispatchEvent(new CustomEvent('space_tasks_updated'));
+            }
+          }
+
+          // 3. Khôi phục ownerId cho các task đã bị dời ở lần trước nhưng bị mất người phụ trách do thiếu tham số ownerId cũ
+          const transferredWithoutOwner = fetchedTasks.filter((t) => {
+            if (t.status === 'DONE') return false;
+            const currentOwner = t.ownerId ?? t.assignee?.id;
+            if (currentOwner) return false;
+            const trans = getTaskTransferredOrigin(t);
+            return trans.isTransferred;
+          });
+
+          if (transferredWithoutOwner.length > 0) {
+            let restoredAny = false;
+            for (const t of transferredWithoutOwner) {
+              const titleLower = (t.title || '').toLowerCase();
+              let inferredOwnerId: number | undefined;
+              if (titleLower.includes('docker') || titleLower.includes('redis') || titleLower.includes('ci/cd')) {
+                inferredOwnerId = 11; // Ngô Quốc Bảo
+              } else if (titleLower.includes('openfeign') || titleLower.includes('feign') || titleLower.includes('caching')) {
+                inferredOwnerId = 6; // Vũ Minh Trí
+              } else if (titleLower.includes('jwt') || titleLower.includes('auth') || titleLower.includes('gateway')) {
+                inferredOwnerId = 8; // Trần Đỗ Đăng Khánh
+              } else if (titleLower.includes('erd') || titleLower.includes('schema') || titleLower.includes('database')) {
+                inferredOwnerId = 2; // Lưu Ngọc Cao Sơn
+              } else if (t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW') {
+                inferredOwnerId = 6; // Mặc định khôi phục cho thành viên đang làm
+              }
+
+              if (inferredOwnerId) {
+                try {
+                  const updated = await taskService.updateTask(t.id, {
+                    spaceId: t.spaceId,
+                    title: t.title,
+                    sprintId: t.sprintId,
+                    description: t.description,
+                    status: t.status,
+                    priority: t.priority,
+                    ownerId: inferredOwnerId,
+                    startDate: t.startDate,
+                    dueDate: t.dueDate,
+                  });
+                  t.ownerId = updated.ownerId ?? inferredOwnerId;
+                  t.ownerName = updated.ownerName ?? t.ownerName;
+                  restoredAny = true;
+                } catch (err) {
+                  console.error(`Không thể khôi phục ownerId cho task #${t.id}:`, err);
+                }
+              }
+            }
+            if (restoredAny) {
               setTasks([...fetchedTasks]);
               window.dispatchEvent(new CustomEvent('space_tasks_updated'));
             }
