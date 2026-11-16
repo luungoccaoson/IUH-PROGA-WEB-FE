@@ -2,7 +2,7 @@
 // Space detail page route: /workspaces/[id]/spaces/[spaceId]
 
 import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, ShieldAlert } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { workspaceService } from "@/services/workspace.service";
@@ -27,13 +27,16 @@ import { roleIdToSpaceRole } from "@/utils/roleAssignment";
 export default function SpaceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryTaskId = searchParams.get("taskId");
   const { user: currentUser } = useAuthStore();
 
   const workspaceId = parseInt(params.id as string, 10);
   const spaceId = parseInt(params.spaceId as string, 10);
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [pageSelectedTask, setPageSelectedTask] = useState<Task | null>(null);
+  const [isChildDrawerOpen, setIsChildDrawerOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   // Data States
@@ -43,7 +46,6 @@ export default function SpaceDetailPage() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [rawSpaceMembers, setRawSpaceMembers] = useState<any[]>([]);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
@@ -180,6 +182,39 @@ export default function SpaceDetailPage() {
     };
   }, [workspaceId, spaceId, activeTab]);
 
+  // Tự động mở bảng chi tiết Task khi liên kết từ thông báo có ?taskId=...
+  useEffect(() => {
+    if (queryTaskId && tasks.length > 0) {
+      const targetId = parseInt(queryTaskId, 10);
+      const found = tasks.find((t) => t.id === targetId);
+      if (found) {
+        setPageSelectedTask(found);
+        // Xóa query param ?taskId=... khỏi thanh địa chỉ để không bị lưu trạng thái cũ
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("taskId");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        }
+      }
+    }
+  }, [queryTaskId, tasks]);
+
+  // Lắng nghe sự kiện mở task trực tiếp từ chuông thông báo (khi đang ở cùng Space)
+  useEffect(() => {
+    const handleOpenTaskEvent = (e: any) => {
+      const { taskId, spaceId: targetSpaceId } = e.detail || {};
+      if (targetSpaceId && targetSpaceId !== spaceId) return;
+      if (taskId && tasks.length > 0) {
+        const found = tasks.find((t) => t.id === Number(taskId));
+        if (found) {
+          setPageSelectedTask(found);
+        }
+      }
+    };
+    window.addEventListener("open_task_detail", handleOpenTaskEvent);
+    return () => window.removeEventListener("open_task_detail", handleOpenTaskEvent);
+  }, [spaceId, tasks]);
+
   // Handle Edit Space
   const handleUpdateSpace = async (data: { name: string; startDate?: string; endDate?: string }) => {
     const updated = await workspaceService.updateSpace(spaceId, {
@@ -203,11 +238,11 @@ export default function SpaceDetailPage() {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    setSelectedTask(null);
-    setIsDrawerOpen(false);
+    setPageSelectedTask(null);
+    setIsChildDrawerOpen(false);
   };
 
-  const isDrawerVisible = isDrawerOpen || Boolean(selectedTask);
+  const isDrawerVisible = Boolean(pageSelectedTask) || isChildDrawerOpen;
 
   if (loading) {
     return (
@@ -264,12 +299,18 @@ export default function SpaceDetailPage() {
   }
 
   const handleSelectTaskToggle = (task: Task) => {
-    if (isDrawerOpen && selectedTask?.id === task.id) {
-      setIsDrawerOpen(false);
-      setSelectedTask(null);
+    if (pageSelectedTask?.id === task.id) {
+      setPageSelectedTask(null);
     } else {
-      setSelectedTask(task);
-      setIsDrawerOpen(true);
+      setPageSelectedTask(task);
+    }
+  };
+
+  const handleChildDrawerStateChange = (isOpen: boolean) => {
+    setIsChildDrawerOpen(isOpen);
+    if (isOpen) {
+      // Khi component con (Kanban / Backlog) mở drawer của nó, đóng drawer của trang để không bao giờ bị đè!
+      setPageSelectedTask(null);
     }
   };
 
@@ -323,7 +364,7 @@ export default function SpaceDetailPage() {
                 isPM={isSpacePM}
                 isAssistant={isSpaceAssistant}
                 currentUserId={currentUser?.id}
-                onDrawerStateChange={setIsDrawerOpen}
+                onDrawerStateChange={handleChildDrawerStateChange}
               />
             </div>
           )}
@@ -337,7 +378,7 @@ export default function SpaceDetailPage() {
                 isAssistant={isSpaceAssistant}
                 currentUserId={currentUser?.id}
                 members={members}
-                onDrawerStateChange={setIsDrawerOpen}
+                onDrawerStateChange={handleChildDrawerStateChange}
               />
             </div>
           )}
@@ -416,29 +457,28 @@ export default function SpaceDetailPage() {
         />
       )}
 
-      {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview */}
-      {selectedTask && isDrawerOpen && (
+      {/* Task Detail Drawer when selecting task from Timeline / Mindmap / Overview / Notifications */}
+      {pageSelectedTask && (
         <TaskDetailDrawer
-          task={selectedTask}
-          taskNumber={selectedTask ? taskNumberMap.get(selectedTask.id) : undefined}
+          task={pageSelectedTask}
+          taskNumber={pageSelectedTask ? taskNumberMap.get(pageSelectedTask.id) : undefined}
           isPM={isSpacePM}
           isAssistant={isSpaceAssistant}
           currentUserId={currentUser?.id}
           members={members}
           isClosedSprint={Boolean(
-            selectedTask?.sprintId &&
-            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "CLOSED"
+            pageSelectedTask?.sprintId &&
+            sprints.find((s) => s.id === pageSelectedTask.sprintId)?.status === "CLOSED"
           )}
           isActiveSprint={Boolean(
-            selectedTask?.sprintId &&
-            sprints.find((s) => s.id === selectedTask.sprintId)?.status === "ACTIVE"
+            pageSelectedTask?.sprintId &&
+            sprints.find((s) => s.id === pageSelectedTask.sprintId)?.status === "ACTIVE"
           )}
           onClose={() => {
-            setSelectedTask(null);
-            setIsDrawerOpen(false);
+            setPageSelectedTask(null);
           }}
           onUpdate={async (tId, data) => {
-            const current = tasks.find((t) => t.id === tId) || selectedTask;
+            const current = tasks.find((t) => t.id === tId) || pageSelectedTask;
             const formatIso = (dateStr?: string, isEnd = false) => {
               if (!dateStr) return undefined;
               if (dateStr.includes("T")) return dateStr;
@@ -458,15 +498,14 @@ export default function SpaceDetailPage() {
             };
 
             const updated = await taskService.updateTask(tId, payload);
-            setSelectedTask(updated);
+            setPageSelectedTask(updated);
             setTasks((prev) => prev.map((t) => (t.id === tId ? updated : t)));
             await fetchData(true); // Silent re-render without remounting page!
             window.dispatchEvent(new CustomEvent("space_tasks_updated"));
           }}
           onDelete={async (tId) => {
             await taskService.deleteTask(tId);
-            setSelectedTask(null);
-            setIsDrawerOpen(false);
+            setPageSelectedTask(null);
             setTasks((prev) => prev.filter((t) => t.id !== tId));
             await fetchData(true); // Silent re-render without remounting page!
             window.dispatchEvent(new CustomEvent("space_tasks_updated"));
