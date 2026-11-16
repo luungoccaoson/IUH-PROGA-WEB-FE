@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toast } from "@/components/shared/ToastProvider";
 import { getTaskTransferredOrigin } from "@/hooks/useSprints";
 import {
   TaskChecklistItem,
@@ -25,6 +26,8 @@ import {
   evaluateTaskForAcceptance,
   canUserDeleteTaskItem,
 } from "@/utils/aiTaskAssistant";
+import { TaskTechnicalAdvisorSection } from "./TaskTechnicalAdvisorSection";
+import { TaskDiscussionSection } from "./TaskDiscussionSection";
 
 interface TaskDetailDrawerProps {
   task: Task | null;
@@ -136,6 +139,17 @@ export function TaskDetailDrawer({
     ]);
   };
 
+  const handleAddAdvisorSteps = (steps: string[]) => {
+    if (!canManageChecklist) return;
+    pushChecklistSnapshot();
+    const newItems: TaskChecklistItem[] = steps.map((s, idx) => ({
+      id: `advisor-${Date.now()}-${idx}`,
+      text: s,
+      completed: false,
+    }));
+    setChecklist((prev) => [...prev, ...newItems]);
+  };
+
   const handleUndoChecklist = () => {
     setChecklistHistory((prev) => {
       if (prev.length === 0) return prev;
@@ -169,14 +183,14 @@ export function TaskDetailDrawer({
       });
       setOwnerId(currentUserId);
     } catch (err) {
-      alert("Không thể nhận công việc này!");
+      toast.error("Không thể nhận công việc này!");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
     if (!title.trim()) return;
 
     let finalStatus: TaskStatus = status;
@@ -197,8 +211,9 @@ export function TaskDetailDrawer({
         task.status !== "IN_REVIEW" &&
         task.status !== "DONE"
       ) {
-        alert(
-          "⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'Chờ duyệt / IN REVIEW'). PM chỉ duyệt sang 'Đã xong' đối với các công việc đang ở trạng thái 'Chờ duyệt'!",
+        toast.alert(
+          "Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa ở trạng thái 'Chờ duyệt'). PM chỉ duyệt sang 'Đã xong' đối với công việc đang ở trạng thái 'Chờ duyệt'!",
+          "Quy trình nghiệm thu"
         );
         return;
       }
@@ -223,7 +238,7 @@ export function TaskDetailDrawer({
       });
       onClose();
     } catch (err) {
-      alert("Không thể lưu chi tiết task. Vui lòng thử lại!");
+      toast.error("Không thể lưu chi tiết task. Vui lòng thử lại!");
     } finally {
       setIsSubmitting(false);
     }
@@ -236,7 +251,7 @@ export function TaskDetailDrawer({
       setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
-      alert("Không thể xóa task!");
+      toast.error("Không thể xóa task!");
     } finally {
       setIsSubmitting(false);
     }
@@ -244,7 +259,7 @@ export function TaskDetailDrawer({
 
   return (
     <>
-      <div className="fixed right-0 top-0 bottom-0 z-40 w-[400px] max-w-full bg-white shadow-xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
+      <div className="fixed right-0 top-0 bottom-0 z-40 w-full sm:w-[500px] lg:w-[540px] max-w-full bg-white shadow-2xl border-l border-[#E5E7EB] flex flex-col font-sans animate-in slide-in-from-right duration-200">
         {/* Header bar */}
         <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F9FAFB]">
           <div className="flex items-center gap-2 flex-wrap">
@@ -306,10 +321,7 @@ export function TaskDetailDrawer({
         </div>
 
         {/* Content body */}
-        <form
-          onSubmit={handleSave}
-          className="flex-1 overflow-y-auto p-5 space-y-5 text-xs"
-        >
+        <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
           {/* IN_REVIEW Approval Banner: Compact & Practical for PM, Assistant, and Member */}
           {!isClosedSprint &&
             task.status === "IN_REVIEW" &&
@@ -361,7 +373,7 @@ export function TaskDetailDrawer({
                       </span>
                       {acceptance.assistantVerified && (
                         <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
-                          ✓ Assistant đã kiểm tra
+                          ✓ Đã kiểm tra
                         </span>
                       )}
                     </div>
@@ -381,7 +393,7 @@ export function TaskDetailDrawer({
                         }}
                         className="flex-1 py-1.5 px-3 bg-[#137333] hover:bg-[#0d5324] text-white font-bold text-[11px] rounded-xl transition-all cursor-pointer shadow-2xs disabled:opacity-50"
                       >
-                        ✓ Duyệt Done
+                        ✓ Duyệt xong
                       </button>
                       <button
                         type="button"
@@ -397,7 +409,7 @@ export function TaskDetailDrawer({
                         }}
                         className="py-1.5 px-3 bg-white hover:bg-gray-100 text-gray-800 border border-amber-300 font-bold text-[11px] rounded-xl transition-all cursor-pointer disabled:opacity-50"
                       >
-                        ↩ Yêu cầu sửa lại
+                        ↩ Yêu cầu sửa
                       </button>
                     </div>
                   </div>
@@ -409,7 +421,7 @@ export function TaskDetailDrawer({
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2 text-xs text-purple-950 shadow-2xs">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-extrabold text-[11px] uppercase">
-                        Kiểm tra bàn giao
+                        Kiểm tra nghiệm thu
                       </span>
                       <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white border border-purple-200">
                         {acceptance.checklistLabel} • {acceptance.timelineLabel}
@@ -438,8 +450,8 @@ export function TaskDetailDrawer({
                         className="flex-1 py-1.5 px-3 bg-purple-700 hover:bg-purple-800 text-white font-bold text-[11px] rounded-xl cursor-pointer disabled:opacity-60"
                       >
                         {assistantVerified
-                          ? "✓ Đã xác nhận đề xuất PM duyệt"
-                          : "✓ Xác nhận đạt – Đề xuất PM duyệt"}
+                          ? "✓ Đã xác nhận đạt"
+                          : "✓ Xác nhận đạt"}
                       </button>
                       <button
                         type="button"
@@ -465,7 +477,7 @@ export function TaskDetailDrawer({
               return (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
                   <p className="font-extrabold text-[11px]">
-                    ⏳ Đang chờ kiểm tra &amp; duyệt
+                    ⏳ Chờ kiểm tra &amp; duyệt
                   </p>
                 </div>
               );
@@ -475,13 +487,12 @@ export function TaskDetailDrawer({
           {!isClosedSprint && !isPM && isUnassigned && currentUserId && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2 text-xs text-blue-900 shadow-2xs">
               <div className="space-y-0.5">
-                <p className="font-extrabold text-[11px] text-blue-950 uppercase tracking-wide flex items-center gap-1">
+                <p className="font-bold text-[11px] text-blue-950 flex items-center gap-1">
                   <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                  Công việc chưa có người phụ trách
+                  Chưa có người phụ trách
                 </p>
                 <p className="text-[11px] text-blue-800">
-                  Bạn có thể tự nhận (Self-assign) công việc này để bắt đầu thực
-                  hiện.
+                  Nhận công việc này để bắt đầu thực hiện.
                 </p>
               </div>
               <button
@@ -490,16 +501,16 @@ export function TaskDetailDrawer({
                 onClick={handleSelfAssign}
                 className="px-3 py-1.5 bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold text-[11px] rounded-xl shrink-0 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
               >
-                ✋ Nhận việc ngay
+                Nhận việc
               </button>
             </div>
           )}
 
           {/* RBAC Read-Only Notice for Another Member's Task */}
           {!isClosedSprint && isOtherMemberTask && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-2 text-xs text-gray-700">
-              <p className="font-bold text-[11px] text-gray-800">
-                Công việc này đang do thành viên khác phụ trách (Chế độ xem).
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs text-gray-600">
+              <p className="font-medium text-[11px] text-gray-700">
+                Công việc do thành viên khác phụ trách (Chỉ xem).
               </p>
             </div>
           )}
@@ -509,19 +520,11 @@ export function TaskDetailDrawer({
             const transferred = getTaskTransferredOrigin(task);
             if (!transferred.isTransferred) return null;
             return (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-[11px] text-amber-950 uppercase tracking-wide">
-                    Nhiệm vụ tồn đọng trễ hạn
-                  </p>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Công việc này trễ hạn từ{" "}
-                    <strong>{transferred.originSprintName}</strong> (Sprint đã
-                    đóng) và đã được chuyển sang Sprint hiện tại để tiếp tục
-                    thực hiện.
-                  </p>
-                </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-2 text-xs text-amber-900 shadow-2xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <p className="text-[11px] text-amber-800 leading-normal">
+                  Chuyển tiếp từ <strong>{transferred.originSprintName}</strong> (chưa hoàn thành).
+                </p>
               </div>
             );
           })()}
@@ -593,7 +596,7 @@ export function TaskDetailDrawer({
             {/* Assignee / Owner */}
             <div className="col-span-2 space-y-1">
               <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px]">
-                Người thực hiện (Assignee)
+                Người thực hiện
               </label>
               <select
                 disabled={
@@ -610,7 +613,7 @@ export function TaskDetailDrawer({
                 }
                 className="w-full px-2 py-1.5 bg-white border border-[#E5E7EB] rounded-xl font-bold text-xs focus:outline-none disabled:bg-gray-100"
               >
-                <option value="">-- Chưa gán người thực hiện --</option>
+                <option value="">-- Chưa phân công --</option>
                 {members && members.length > 0
                   ? members
                       .filter((m) => {
@@ -665,7 +668,7 @@ export function TaskDetailDrawer({
                   <div className="space-y-1">
                     <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      Ngày kết thúc (Due Date)
+                      Hạn chót
                     </label>
                     <input
                       type="date"
@@ -679,9 +682,7 @@ export function TaskDetailDrawer({
 
                 {transferred.isTransferred && !isReadOnly && (
                   <p className="text-[10px] font-mono text-amber-800 bg-amber-50 p-2 rounded-xl border border-amber-200 leading-normal">
-                    🔒 <strong>Khóa chỉnh ngày:</strong> Không được phép chỉnh
-                    sửa ngày vì công việc đã trễ hạn từ sprint trước (bạn vẫn có
-                    thể chỉnh sửa tiêu đề, người phụ trách và trạng thái).
+                    🔒 Không thể đổi ngày do công việc chuyển tiếp từ Sprint trước.
                   </p>
                 )}
               </div>
@@ -692,12 +693,12 @@ export function TaskDetailDrawer({
           <div className="space-y-1 pt-1">
             <label className="font-bold text-[#6B7280] uppercase tracking-wider font-mono text-[10px] flex items-center gap-1">
               <AlignLeft className="w-3 h-3" />
-              Mô tả chi tiết (Description)
+              Mô tả công việc
             </label>
             <textarea
               rows={4}
               disabled={isReadOnly}
-              placeholder="Thêm mô tả chi tiết cho công việc tại đây..."
+              placeholder="Nhập mô tả công việc..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full p-3 border border-[#E5E7EB] rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-[#111827] text-xs font-medium text-[#111827] leading-relaxed disabled:bg-gray-50"
@@ -764,9 +765,7 @@ export function TaskDetailDrawer({
             {/* Explainable AI Rationale Box */}
             {aiRationale && (
               <div className="p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] text-[11px] text-[#4B5563] leading-relaxed">
-                <span className="font-bold text-[#111827]">
-                  Cơ sở gợi ý:{" "}
-                </span>
+                <span className="font-bold text-[#111827]">Cơ sở gợi ý: </span>
                 <span>{aiRationale}</span>
               </div>
             )}
@@ -791,8 +790,8 @@ export function TaskDetailDrawer({
             {checklist.length === 0 ? (
               <p className="text-[11px] text-[#9CA3AF] italic py-1">
                 {canManageChecklist
-                  ? "Chưa có bước thực hiện nhỏ nào. Nhấn “AI Gợi ý bước làm” hoặc tự thêm bước bên dưới để theo dõi tiến độ cá nhân."
-                  : "Thành viên phụ trách chưa tạo các bước thực hiện chi tiết cho công việc này."}
+                  ? "Chưa có bước thực hiện. Nhấn “AI Gợi ý” hoặc tự thêm bước bên dưới."
+                  : "Chưa có bước thực hiện chi tiết."}
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -910,6 +909,29 @@ export function TaskDetailDrawer({
             )}
           </div>
 
+          {/* Technical Advisor Agent - Tư vấn kiến trúc & Gỡ lỗi Bug cho Task */}
+          {/* <div className="pt-2 border-t border-[#E5E7EB]">
+            <TaskTechnicalAdvisorSection
+              taskId={task.id}
+              taskTitle={title}
+              taskDescription={description}
+              onAddStepsToChecklist={canManageChecklist ? handleAddAdvisorSteps : undefined}
+            />
+          </div> */}
+
+          {/* Thảo luận & Nhật ký thay đổi Task */}
+          <div className="pt-2 border-t border-[#E5E7EB]">
+            <TaskDiscussionSection
+              key={task.id}
+              taskId={task.id}
+              taskTitle={title}
+              currentUserId={currentUserId}
+              members={members}
+              taskStatus={task.status}
+              isDone={task.status === "DONE"}
+            />
+          </div>
+
           {/* Footer Bar: Nút Hoàn tác (khôi phục về dữ liệu gốc mà KHÔNG đóng cửa sổ) + Nút Lưu */}
           {!isReadOnly && (
             <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-between gap-2">
@@ -924,7 +946,8 @@ export function TaskDetailDrawer({
               </button>
 
               <button
-                type="submit"
+                type="button"
+                onClick={handleSave}
                 disabled={isSubmitting}
                 className="px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
@@ -933,7 +956,7 @@ export function TaskDetailDrawer({
               </button>
             </div>
           )}
-        </form>
+        </div>
       </div>
 
       {/* Confirmation Dialog for Task Soft Delete */}

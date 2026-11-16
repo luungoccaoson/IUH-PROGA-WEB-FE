@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle2, Edit3, PlusSquare, Calendar, BarChart2, Users, AlertTriangle, X, Check } from "lucide-react";
 import { Task, Space, Sprint } from "@/types";
 import { SpaceMindmapAndSummaryContainer } from "./SpaceMindmapAndSummaryContainer";
+import { computeTaskNumberMap, formatTaskCode } from "@/utils/taskNumber";
 
 interface SpaceOverviewTabProps {
   space?: Space | null;
@@ -11,6 +12,8 @@ interface SpaceOverviewTabProps {
   sprints?: Sprint[];
   members?: any[];
   currentUser?: any;
+  isPM?: boolean;
+  isAssistant?: boolean;
   onViewTasks: () => void;
   onSelectTask?: (task: Task) => void;
 }
@@ -21,10 +24,30 @@ export function SpaceOverviewTab({
   sprints = [],
   members = [],
   currentUser,
+  isPM = true,
+  isAssistant = false,
   onViewTasks,
   onSelectTask,
 }: SpaceOverviewTabProps) {
-  // Counts by status
+  const isManager = Boolean(isPM || isAssistant);
+  const taskNumberMap = React.useMemo(() => computeTaskNumberMap(tasks, sprints), [tasks, sprints]);
+
+  // Member-specific tasks & metrics
+  const myTasks = tasks.filter(
+    (t) => t.ownerId === currentUser?.id || t.assignee?.id === currentUser?.id
+  );
+  const myDoneCount = myTasks.filter((t) => t.status === "DONE").length;
+  const myInProgressCount = myTasks.filter(
+    (t) => t.status === "IN_PROGRESS" || t.status === "IN_REVIEW"
+  ).length;
+  const myTodoCount = myTasks.filter((t) => t.status === "TODO").length;
+  const myTotalCount = myTasks.length || 1;
+  const myDonePercent = Math.round((myDoneCount / myTotalCount) * 100);
+  const myUrgentTasks = myTasks.filter(
+    (t) => t.status !== "DONE" && (t.priority === "URGENT" || t.priority === "HIGH")
+  );
+
+  // Counts by status (Space-wide for managers)
   const todoCount = tasks.filter((t) => t.status === "TODO").length;
   const inProgressCount = tasks.filter((t) => t.status === "IN_PROGRESS" || t.status === "IN_REVIEW").length;
   const doneCount = tasks.filter((t) => t.status === "DONE").length;
@@ -199,7 +222,9 @@ export function SpaceOverviewTab({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* ROW 1: 4 Metric Summary Cards */}
+      {isManager ? (
+        <>
+          {/* ROW 1: 4 Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {/* Card 1: Completed */}
         <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-2xs flex items-center justify-between">
@@ -396,7 +421,7 @@ export function SpaceOverviewTab({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-[11px] font-bold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-md border border-red-200">
-                        #{activeRiskTask.id}
+                        {formatTaskCode(activeRiskTask.id, taskNumberMap)}
                       </span>
                       <span className="text-[11px] font-bold text-gray-500 uppercase">
                         Độ ưu tiên: {activeRiskTask.priority}
@@ -588,7 +613,9 @@ export function SpaceOverviewTab({
                           className="p-2 rounded-xl bg-[#F8FAFC] border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer transition-all space-y-0.5"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-mono text-[10px] font-bold text-gray-500">#{t.id}</span>
+                            <span className="font-mono text-[10px] font-bold text-gray-500">
+                              {formatTaskCode(t.id, taskNumberMap)}
+                            </span>
                             <span
                               className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${t.status === "DONE"
                                   ? "bg-emerald-100 text-emerald-800"
@@ -693,6 +720,112 @@ export function SpaceOverviewTab({
           })()}
         </div>
       </div>
+        </>
+      ) : (
+        /* ================= MEMBER OVERVIEW (FOCUSED & RELEVANT ONLY) ================= */
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Personal 4 Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-2xs flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-2xl font-extrabold text-[#111827] flex items-center gap-1.5">
+                  {myTasks.length} <span className="text-xs font-semibold text-[#4B5563]">được giao</span>
+                </p>
+                <p className="text-[11px] text-[#6B7280]">công việc của bạn</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-200">
+                <Users className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-2xs flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-2xl font-extrabold text-[#10B981] flex items-center gap-1.5">
+                  {myDoneCount} <span className="text-xs font-semibold text-[#4B5563]">hoàn thành</span>
+                </p>
+                <p className="text-[11px] text-[#6B7280]">đạt tỷ lệ {myDonePercent}%</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-[#E6F4EA] flex items-center justify-center text-[#10B981] border border-[#CEE7D4]">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-2xs flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-2xl font-extrabold text-[#1A73E8] flex items-center gap-1.5">
+                  {myInProgressCount} <span className="text-xs font-semibold text-[#4B5563]">đang làm</span>
+                </p>
+                <p className="text-[11px] text-[#6B7280]">bao gồm chờ duyệt</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] flex items-center justify-center text-[#1A73E8] border border-[#DBEAFE]">
+                <Edit3 className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-2xs flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-2xl font-extrabold text-[#4B5563] flex items-center gap-1.5">
+                  {myTodoCount} <span className="text-xs font-semibold text-[#4B5563]">cần làm</span>
+                </p>
+                <p className="text-[11px] text-[#6B7280]">chưa bắt đầu</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-500 border border-gray-200">
+                <Calendar className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Member Focus: Tasks requiring attention */}
+          {myUrgentTasks.length > 0 && (
+            <div className="bg-white border border-amber-200 rounded-2xl p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5 uppercase font-mono">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  Nhiệm vụ cần ưu tiên của bạn ({myUrgentTasks.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={onViewTasks}
+                  className="text-xs text-[#1A73E8] hover:underline font-semibold cursor-pointer"
+                >
+                  Xem danh sách
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {myUrgentTasks.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => onSelectTask && onSelectTask(t)}
+                    className="p-3 bg-amber-50/50 hover:bg-amber-50 border border-amber-200 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <p className="font-bold text-xs text-[#111827] truncate">
+                        {t.title}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-[#6B7280] font-mono">
+                        <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                          {t.priority === "URGENT" ? "Khẩn cấp" : "Cao"}
+                        </span>
+                        {t.dueDate && (
+                          <span>Hạn: {t.dueDate.substring(0, 10)}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="px-2.5 py-1 bg-white hover:bg-gray-100 text-[#111827] border border-amber-300 rounded-lg text-[11px] font-bold shrink-0"
+                    >
+                      Mở
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ROW 4: CÂY MINDMAP TIẾN ĐỘ */}
       <SpaceMindmapAndSummaryContainer

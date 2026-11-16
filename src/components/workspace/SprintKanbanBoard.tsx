@@ -16,12 +16,17 @@ import {
   Check,
   RotateCcw,
   X,
+  Play,
+  Ban,
 } from "lucide-react";
 import { useSprints, getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { useTasks } from "@/hooks/useTasks";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
+import { StartSprintModal } from "./sprint/StartSprintModal";
+import { CompleteSprintModal } from "./sprint/CompleteSprintModal";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toast } from "@/components/shared/ToastProvider";
 import {
   parseTaskDescriptionWithChecklist,
   serializeTaskDescriptionWithChecklist,
@@ -87,8 +92,19 @@ export function SprintKanbanBoard({
   onDrawerStateChange,
 }: SprintKanbanBoardProps) {
   const isCoordinator = isPM || isAssistant;
-  const { sprints, tasks, loading, error, reload, isTaskOverdue } =
-    useSprints(spaceId);
+  const {
+    sprints,
+    tasks,
+    loading,
+    error,
+    reload,
+    startSprint,
+    completeSprint,
+    isTaskOverdue,
+  } = useSprints(spaceId);
+
+  const [startingSprint, setStartingSprint] = useState<Sprint | null>(null);
+  const [completingSprint, setCompletingSprint] = useState<Sprint | null>(null);
 
   const {
     selectedTask,
@@ -102,6 +118,80 @@ export function SprintKanbanBoard({
   const [revertModalTask, setRevertModalTask] = useState<Task | null>(null);
   const [revertReason, setRevertReason] = useState("");
   const [reverting, setReverting] = useState(false);
+
+  // Dragging feedback states (Hiệu ứng cầm kéo & dấu cấm tròn x khi kéo vào cột không được phép)
+  const [draggingTask, setDraggingTask] = useState<Task | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<TaskStatus | null>(null);
+
+  const checkDropPermission = (
+    task: Task,
+    targetCol: TaskStatus,
+  ): { allowed: boolean; reason?: string } => {
+    const taskOwnerId = task.ownerId || task.assignee?.id;
+    const isMyTask = Boolean(currentUserId && taskOwnerId === currentUserId);
+
+    // 1. Task đã DONE: Khóa hoàn toàn với thành viên & trợ lý
+    if (task.status === "DONE" && !isPM) {
+      return {
+        allowed: false,
+        reason: "Công việc đã hoàn thành và được khóa trạng thái.",
+      };
+    }
+
+    // 2. Thành viên (MEMBER): chỉ được di chuyển task của chính mình
+    if (!isCoordinator) {
+      if (!isMyTask) {
+        return {
+          allowed: false,
+          reason: "Bạn chỉ có quyền di chuyển công việc do chính mình phụ trách!",
+        };
+      }
+      return { allowed: true };
+    }
+
+    // 3. Trợ lý (ASSISTANT):
+    if (isAssistant && !isPM) {
+      if (isMyTask) return { allowed: true };
+      if (task.status === "IN_REVIEW" && targetCol === "IN_PROGRESS") {
+        return { allowed: true };
+      }
+      return {
+        allowed: false,
+        reason: "Trợ lý chỉ được chuyển trả công việc Chờ duyệt về Đang làm đối với công việc của thành viên khác!",
+      };
+    }
+
+    // 4. Trưởng dự án (PM):
+    if (isPM) {
+      if (isMyTask || !taskOwnerId) {
+        return { allowed: true };
+      }
+
+      // Đối với task của thành viên khác: PM không tự ý chuyển trạng thái công việc (TODO <-> IN_PROGRESS)!
+      if (task.status === "IN_REVIEW") {
+        if (targetCol === "DONE" || targetCol === "IN_PROGRESS") {
+          return { allowed: true };
+        }
+        return {
+          allowed: false,
+          reason: "PM chỉ duyệt sang 'Đã xong' hoặc chuyển trả về 'Đang làm' đối với công việc 'Chờ duyệt'!",
+        };
+      }
+
+      if (task.status === "DONE") {
+        if (targetCol === "IN_PROGRESS" || targetCol === "TODO") {
+          return { allowed: true };
+        }
+      }
+
+      return {
+        allowed: false,
+        reason: "PM không tự ý chuyển trạng thái công việc của thành viên khác. Thành viên cần tự thực hiện và bấm hoàn thành để gửi Chờ duyệt!",
+      };
+    }
+
+    return { allowed: false, reason: "Thao tác không được phép." };
+  };
 
   // Undo Toast state khi đã xác nhận hoàn tác
   const [revertUndoToast, setRevertUndoToast] = useState<{
@@ -157,7 +247,7 @@ export function SprintKanbanBoard({
       setRevertModalTask(null);
       setRevertReason("");
     } catch (err) {
-      alert("Không thể chuyển trạng thái công việc. Vui lòng thử lại!");
+      toast.error("Không thể chuyển trạng thái công việc. Vui lòng thử lại!");
     } finally {
       setReverting(false);
     }
@@ -174,7 +264,7 @@ export function SprintKanbanBoard({
       );
       await updateTask(task.id, { description: updatedDescription });
     } catch (err) {
-      alert("Không thể cập nhật xác nhận đạt. Vui lòng thử lại!");
+      toast.error("Không thể cập nhật xác nhận đạt. Vui lòng thử lại!");
     }
   };
 
@@ -402,6 +492,35 @@ export function SprintKanbanBoard({
                 <option value="backlog">Công việc tồn đọng (Backlog)</option>
               </select>
             </div>
+
+            {/* Action buttons for Current Sprint (Start / Complete Sprint) */}
+            {currentSprint && isCoordinator && (
+              <div className="flex items-center gap-2">
+                {currentSprint.status === "FUTURE" && (
+                  <button
+                    type="button"
+                    onClick={() => setStartingSprint(currentSprint)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    title="Bắt đầu giai đoạn này"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Bắt đầu Sprint</span>
+                  </button>
+                )}
+
+                {currentSprint.status === "ACTIVE" && (
+                  <button
+                    type="button"
+                    onClick={() => setCompletingSprint(currentSprint)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    title="Kết thúc giai đoạn này và tổng kết công việc"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Kết thúc Sprint</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -417,112 +536,95 @@ export function SprintKanbanBoard({
           {statusColumns.map((col) => {
             const Icon = col.icon;
             const columnTasks = sprintTasks.filter((t) => t.status === col.key);
+            const isDraggingOverThisCol = dragOverColKey === col.key;
+            const dropCheck = draggingTask
+              ? checkDropPermission(draggingTask, col.key)
+              : { allowed: true };
+            const isForbiddenDrop =
+              Boolean(draggingTask) && isDraggingOverThisCol && !dropCheck.allowed;
+            const isAllowedDrop =
+              Boolean(draggingTask) && isDraggingOverThisCol && dropCheck.allowed;
 
             return (
               <div
                 key={col.key}
+                onDragEnter={(e) => {
+                  if (!isClosedSprint) {
+                    e.preventDefault();
+                    setDragOverColKey(col.key);
+                  }
+                }}
                 onDragOver={(e) => {
-                  if (!isClosedSprint) e.preventDefault();
+                  if (!isClosedSprint) {
+                    e.preventDefault();
+                    if (dragOverColKey !== col.key) {
+                      setDragOverColKey(col.key);
+                    }
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget === e.target) {
+                    setDragOverColKey(null);
+                  }
                 }}
                 onDrop={(e) => {
+                  setDragOverColKey(null);
+                  setDraggingTask(null);
                   if (isClosedSprint) return;
                   e.preventDefault();
                   const taskIdStr = e.dataTransfer.getData("taskId");
                   if (!taskIdStr) return;
                   const taskId = parseInt(taskIdStr, 10);
-                  const draggedTask = tasks.find((t) => t.id === taskId);
-                  if (!draggedTask) return;
+                  const targetTask = tasks.find((t) => t.id === taskId);
+                  if (!targetTask) return;
 
-                  const draggedOwnerId =
-                    draggedTask.ownerId || draggedTask.assignee?.id;
-                  const isMyDraggedTask = Boolean(
-                    currentUserId && draggedOwnerId === currentUserId,
-                  );
-
-                  // 1. Task đã duyệt DONE: Chỉ PM mới có quyền di chuyển (Thành viên & Assistant bị khóa hoàn toàn)
-                  if (draggedTask.status === "DONE" && !isPM) {
-                    alert(
-                      "⚠️ Công việc đã được PM duyệt hoàn thành (DONE) và không thể chuyển trạng thái!",
+                  const perm = checkDropPermission(targetTask, col.key);
+                  if (!perm.allowed) {
+                    toast.warning(
+                      perm.reason ||
+                        "Bạn không có quyền chuyển công việc này sang trạng thái đã chọn!",
+                      "Phân quyền thao tác"
                     );
                     return;
                   }
 
-                  // 2. Nghiệp vụ Thành viên (MEMBER): chỉ được kéo task của mình ở Cần làm và Đang làm
-                  if (!isCoordinator) {
-                    if (!isMyDraggedTask) {
-                      alert(
-                        "⚠️ Bạn chỉ có quyền chuyển trạng thái công việc của chính mình!",
-                      );
-                      return;
-                    }
-                    // Thành viên kéo sang cột DONE sẽ tự động chuyển sang CHỜ DUYỆT (IN_REVIEW)
-                    if (col.key === "DONE") {
-                      updateTaskStatus(taskId, "IN_REVIEW");
-                      return;
-                    }
-                    updateTaskStatus(taskId, col.key);
+                  // Thành viên kéo sang DONE sẽ tự động sang CHỜ DUYỆT (IN_REVIEW)
+                  if (!isCoordinator && col.key === "DONE") {
+                    updateTaskStatus(taskId, "IN_REVIEW");
                     return;
                   }
 
-                  // 3. Nghiệp vụ Trợ lý (ASSISTANT):
-                  if (isAssistant && !isPM) {
-                    if (isMyDraggedTask) {
-                      if (col.key === "DONE") {
-                        updateTaskStatus(taskId, "IN_REVIEW");
-                        return;
-                      }
-                      updateTaskStatus(taskId, col.key);
-                      return;
-                    }
-                    // Đối với task của thành viên khác: Assistant CHỈ ĐƯỢC PHÉP kéo trả lại từ IN_REVIEW về IN_PROGRESS
-                    if (
-                      draggedTask.status === "IN_REVIEW" &&
-                      col.key === "IN_PROGRESS"
-                    ) {
-                      openRevertModal(draggedTask);
-                      return;
-                    }
-                    if (col.key === "DONE") {
-                      alert(
-                        "⚠️ Chỉ Trưởng dự án (PM) mới có quyền duyệt hoàn thành công việc (DONE)!",
-                      );
-                      return;
-                    }
-                    alert(
-                      "⚠️ Trợ lý chỉ có quyền duyệt trả lại công việc từ 'CHỜ DUYỆT' về 'ĐANG LÀM', hoặc thao tác trên công việc của chính mình!",
-                    );
+                  // Kéo từ IN_REVIEW về IN_PROGRESS mở modal lý do yêu cầu chỉnh sửa
+                  if (
+                    targetTask.status === "IN_REVIEW" &&
+                    col.key === "IN_PROGRESS"
+                  ) {
+                    openRevertModal(targetTask);
                     return;
                   }
 
-                  // 4. Nghiệp vụ Trưởng dự án (PM):
-                  if (isPM) {
-                    if (col.key === "DONE") {
-                      const isAssignedToOther = Boolean(
-                        draggedOwnerId && draggedOwnerId !== currentUserId,
-                      );
-                      if (
-                        isAssignedToOther &&
-                        draggedTask.status !== "IN_REVIEW" &&
-                        draggedTask.status !== "DONE"
-                      ) {
-                        alert(
-                          "⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa qua cột 'CHỜ DUYỆT / IN REVIEW'). PM chỉ duyệt sang 'ĐÃ XONG' đối với các công việc đang nằm ở cột 'CHỜ DUYỆT'!",
-                        );
-                        return;
-                      }
-                    }
-                    if (
-                      draggedTask.status === "IN_REVIEW" &&
-                      col.key === "IN_PROGRESS"
-                    ) {
-                      openRevertModal(draggedTask);
-                      return;
-                    }
-                    updateTaskStatus(taskId, col.key);
-                  }
+                  updateTaskStatus(taskId, col.key);
                 }}
-                className={`bg-white border border-[#E5E7EB] hover:border-[#111827]/40 rounded-2xl p-3.5 space-y-3.5 border-t-4 ${col.border} shadow-sm min-h-[480px] flex flex-col transition-all`}
+                className={`relative bg-white border border-[#E5E7EB] hover:border-[#111827]/40 rounded-2xl p-3.5 space-y-3.5 border-t-4 ${
+                  col.border
+                } shadow-sm min-h-[480px] flex flex-col transition-all`}
               >
+                {/* Visual Forbidden Indicator: Chỉ hiện icon cấm tròn X và thông báo ngắn gọn, không đổi màu cột */}
+                {isForbiddenDrop && (
+                  <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="bg-white/95 px-4 py-3 rounded-2xl shadow-xl border border-gray-200 flex flex-col items-center justify-center text-center gap-1.5 ring-1 ring-black/5 max-w-[220px]">
+                      <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-600">
+                        <Ban className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <span className="text-xs font-bold text-gray-800">
+                        Không được phép di chuyển
+                      </span>
+                      <span className="text-[10px] text-gray-500 leading-tight">
+                        {dropCheck.reason}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {/* Column Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -554,31 +656,16 @@ export function SprintKanbanBoard({
                     );
                     const isUnassigned = !taskOwnerId;
 
-                    // 1. Task đã duyệt DONE: Thành viên & Trợ lý bị khóa, không được kéo
+                    // Vẫn cầm kéo được tất cả các task (trừ Sprint đã đóng hoặc task lưu vết)
                     const isDoneLocked = !isPM && task.status === "DONE";
-
-                    // 2. Assistant: chỉ kéo task của mình; riêng task ở Chờ duyệt (IN_REVIEW) thì được kéo trả lại
-                    const canAssistantDrag =
-                      isAssistant &&
-                      !isDoneLocked &&
-                      (isMyTask || task.status === "IN_REVIEW");
-
-                    // 3. Member: chỉ kéo task của mình (khi chưa DONE)
-                    const canMemberDrag =
-                      !isCoordinator && isMyTask && !isDoneLocked;
-
-                    // 4. PM: có quyền kéo (trừ closed sprint hoặc ghost)
-                    const canPMDrag = isPM;
-
-                    const canDragCard =
-                      !isClosedSprint &&
-                      !isGhost &&
-                      (canPMDrag || canAssistantDrag || canMemberDrag);
+                    const canDragCard = !isClosedSprint && !isGhost;
 
                     const isReadOnly =
                       isClosedSprint ||
                       isGhost ||
                       (!isCoordinator && !isMyTask);
+
+                    const isCardActive = selectedTask?.id === task.id;
 
                     return (
                       <div
@@ -588,6 +675,11 @@ export function SprintKanbanBoard({
                           if (!canDragCard) return;
                           e.dataTransfer.setData("taskId", task.id.toString());
                           e.dataTransfer.setData("sourceStatus", task.status);
+                          setDraggingTask(task);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingTask(null);
+                          setDragOverColKey(null);
                         }}
                         onClick={() =>
                           setSelectedTask(
@@ -595,15 +687,17 @@ export function SprintKanbanBoard({
                           )
                         }
                         className={`p-3.5 bg-white border rounded-xl shadow-2xs space-y-3 transition-all hover:scale-[1.01] group ${
-                          isGhost
-                            ? "bg-amber-50/25 opacity-60 hover:opacity-95 border-dashed border-amber-300 cursor-pointer"
-                            : isDoneLocked
-                              ? "bg-white border-[#E5E7EB] opacity-90 cursor-pointer"
-                              : isMyTask
-                                ? "border-[#E5E7EB] border-l-[3px] border-l-[#1A73E8] hover:border-[#1A73E8] cursor-grab active:cursor-grabbing"
-                                : isReadOnly
-                                  ? "bg-white border-[#E5E7EB] cursor-pointer"
-                                  : "border-[#E5E7EB] hover:border-[#111827] cursor-grab active:cursor-grabbing"
+                          isCardActive
+                            ? "ring-2 ring-[#1A73E8] bg-blue-50/80 border-[#1A73E8] shadow-md"
+                            : isGhost
+                              ? "bg-amber-50/25 opacity-60 hover:opacity-95 border-dashed border-amber-300 cursor-pointer"
+                              : isDoneLocked
+                                ? "bg-white border-[#E5E7EB] opacity-90 cursor-grab active:cursor-grabbing"
+                                : isMyTask
+                                  ? "border-[#E5E7EB] border-l-[3px] border-l-[#1A73E8] hover:border-[#1A73E8] cursor-grab active:cursor-grabbing"
+                                  : isReadOnly
+                                    ? "bg-white border-[#E5E7EB] cursor-grab active:cursor-grabbing"
+                                    : "border-[#E5E7EB] hover:border-[#111827] cursor-grab active:cursor-grabbing"
                         }`}
                       >
                         {/* Header: Code & Status Action */}
@@ -1002,6 +1096,39 @@ export function SprintKanbanBoard({
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}
         onDelete={deleteTask}
+      />
+
+      {/* Start Sprint Modal */}
+      <StartSprintModal
+        isOpen={Boolean(startingSprint)}
+        sprint={startingSprint}
+        activeSprint={sprints.find((s) => s.status === "ACTIVE") || null}
+        onClose={() => setStartingSprint(null)}
+        onConfirm={async (data) => {
+          await startSprint(data);
+          if (data.sprintId) setSelectedSprintId(data.sprintId);
+        }}
+      />
+
+      {/* Complete Sprint Modal */}
+      <CompleteSprintModal
+        isOpen={Boolean(completingSprint)}
+        sprint={completingSprint}
+        tasks={tasks}
+        nextSprint={
+          completingSprint
+            ? sprints.find((s) => s.id > completingSprint.id && s.status !== "CLOSED") ||
+              sprints.find((s) => s.status === "FUTURE") ||
+              null
+            : null
+        }
+        onClose={() => setCompletingSprint(null)}
+        onConfirm={async (data) => {
+          await completeSprint(data);
+          // Auto select next active sprint or first sprint
+          const next = sprints.find((s) => s.id > data.sprintId && s.status !== "CLOSED");
+          if (next) setSelectedSprintId(next.id);
+        }}
       />
     </>
   );

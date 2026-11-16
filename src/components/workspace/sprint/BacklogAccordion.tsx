@@ -13,6 +13,7 @@ interface BacklogAccordionProps {
   isPM?: boolean;
   isAssistant?: boolean;
   currentUserId?: number;
+  activeTaskId?: number | null;
   isTaskOverdue: (task: Task) => boolean;
   selectedTaskIds?: number[];
   onToggleSelectTask?: (taskId: number) => void;
@@ -33,6 +34,7 @@ export function BacklogAccordion({
   isPM = true,
   isAssistant = false,
   currentUserId,
+  activeTaskId,
   isTaskOverdue,
   selectedTaskIds = [],
   onToggleSelectTask,
@@ -119,6 +121,7 @@ export function BacklogAccordion({
                     currentUserId={currentUserId}
                     isOverdue={isTaskOverdue(task)}
                     isSelected={selectedTaskIds.includes(task.id)}
+                    isActiveDrawerTask={activeTaskId === task.id}
                     onToggleSelect={onToggleSelectTask}
                     onSelect={onSelectTask}
                     onUpdateStatus={onUpdateStatus}

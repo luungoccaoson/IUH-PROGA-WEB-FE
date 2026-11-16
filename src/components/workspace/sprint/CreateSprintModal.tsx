@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Plus, X } from "lucide-react";
+import { toast } from "@/components/shared/ToastProvider";
 
 interface CreateSprintModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export function CreateSprintModal({ isOpen, defaultName, onClose, onSubmit }: Cr
       });
       onClose();
     } catch (err) {
-      alert("Không thể tạo Sprint. Vui lòng thử lại!");
+      toast.error("Không thể tạo giai đoạn mới. Vui lòng thử lại!");
     } finally {
       setIsSubmitting(false);
     }

@@ -61,31 +61,8 @@ export function useSprints(spaceId: number) {
         const now = new Date();
         let sprintsUpdated = false;
 
-        // 1. Tự động kích hoạt / đóng sprint dựa trên ngày
-        for (const sprint of sortedSprints) {
-          const startDate = sprint.startDate ? new Date(sprint.startDate) : null;
-          const endDate = sprint.endDate ? new Date(sprint.endDate) : null;
-
-          if (sprint.status === 'FUTURE' && startDate && startDate <= now && (!endDate || endDate > now)) {
-            try {
-              await sprintService.updateSprintStatus(sprint.id, 'ACTIVE');
-              sprint.status = 'ACTIVE';
-              sprintsUpdated = true;
-            } catch (err) {
-              console.error(`Failed to auto-activate sprint ${sprint.id}`, err);
-            }
-          }
-
-          if (sprint.status !== 'CLOSED' && endDate && endDate <= now) {
-            try {
-              await sprintService.updateSprintStatus(sprint.id, 'CLOSED');
-              sprint.status = 'CLOSED';
-              sprintsUpdated = true;
-            } catch (err) {
-              console.error(`Failed to auto-close sprint ${sprint.id}`, err);
-            }
-          }
-        }
+        // 1. Chuyển giao quản trị trạng thái Sprint: PM chủ động bấm Bắt đầu / Kết thúc Sprint
+        // (Không tự ý đổi trạng thái Sprint ngầm để đảm bảo quyền kiểm soát cho PM)
 
         // 2. Nghiệp vụ: Chuyển task trễ hạn của các sprint đã đóng sang sprint hiện tại (ACTIVE)
         const activeSprint =
@@ -307,6 +284,152 @@ export function useSprints(spaceId: number) {
     }
   };
 
+  // Start Sprint (Bắt đầu giai đoạn - Chuyển sang ACTIVE)
+  const startSprint = async (data: {
+    sprintId: number;
+    startDate: string;
+    endDate: string;
+    goal?: string;
+  }) => {
+    try {
+      // 1. Đóng bất kỳ sprint nào khác đang ACTIVE để đảm bảo chỉ có 1 Sprint chạy duy nhất
+      const otherActive = sprints.find((s) => s.status === 'ACTIVE' && s.id !== data.sprintId);
+      if (otherActive) {
+        await sprintService.updateSprintStatus(otherActive.id, 'CLOSED');
+      }
+
+      // 2. Kích hoạt sprint mục tiêu thành ACTIVE kèm ngày và mục tiêu
+      const targetSprint = sprints.find((s) => s.id === data.sprintId);
+      if (targetSprint) {
+        await sprintService.updateSprint(data.sprintId, {
+          spaceId,
+          name: targetSprint.name,
+          goal: data.goal !== undefined ? data.goal : targetSprint.goal,
+          status: 'ACTIVE',
+          startDate: data.startDate.includes('T') ? data.startDate : `${data.startDate}T00:00:00`,
+          endDate: data.endDate.includes('T') ? data.endDate : `${data.endDate}T23:59:59`,
+        });
+      }
+
+      await loadData(true);
+      window.dispatchEvent(new CustomEvent('space_tasks_updated'));
+    } catch (err: any) {
+      console.error('Failed to start sprint:', err);
+      throw err;
+    }
+  };
+
+  // Complete Sprint (Kết thúc giai đoạn - Chuyển sang CLOSED, dời task dở dang, tối ưu lịch trình AI)
+  const completeSprint = async (data: {
+    sprintId: number;
+    targetSprintId: number | null;
+    scheduleOption: "cascade" | "keep_deadline";
+  }) => {
+    try {
+      const now = new Date();
+      const targetSprint = sprints.find((s) => s.id === data.sprintId);
+      if (!targetSprint) throw new Error("Không tìm thấy giai đoạn cần kết thúc.");
+
+      // 1. Đóng Sprint hiện tại
+      await sprintService.updateSprintStatus(data.sprintId, 'CLOSED');
+
+      // 2. Chuyển các công việc chưa hoàn thành (TODO, IN_PROGRESS, IN_REVIEW)
+      const incompleteTasks = tasks.filter(
+        (t) => t.sprintId === data.sprintId && t.status !== 'DONE' && !t.isDeleted
+      );
+
+      if (incompleteTasks.length > 0) {
+        const marker = `[Chuyển từ: ${targetSprint.name} (Trễ hạn)]`;
+        for (const t of incompleteTasks) {
+          let newDesc = t.description || '';
+          if (!newDesc.includes('[Chuyển từ:') && !newDesc.includes('[Tồn đọng từ:')) {
+            newDesc = `${marker}\n\n${newDesc}`.trim();
+          }
+
+          let preservedDueDate = t.dueDate;
+          if (!preservedDueDate || new Date(preservedDueDate) >= now) {
+            preservedDueDate = targetSprint.endDate || new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+          }
+
+          const preservedOwnerId = t.ownerId ?? t.assignee?.id ?? undefined;
+
+          await taskService.updateTask(t.id, {
+            spaceId: t.spaceId,
+            title: t.title,
+            sprintId: data.targetSprintId, // Chuyển sang next sprint hoặc null (backlog)
+            description: newDesc,
+            status: t.status,
+            priority: t.priority,
+            ownerId: preservedOwnerId,
+            startDate: t.startDate,
+            dueDate: preservedDueDate,
+          });
+        }
+      }
+
+      // 3. Tối ưu lịch trình bằng AI cho các Sprint tiếp theo (nếu có các sprint sau)
+      const sorted = [...sprints].sort((a, b) => a.id - b.id);
+      const currentIndex = sorted.findIndex((s) => s.id === data.sprintId);
+      const futureSprints = sorted.slice(currentIndex + 1).filter((s) => s.status !== 'CLOSED');
+
+      if (futureSprints.length > 0) {
+        const todayStr = now.toISOString().split('T')[0];
+
+        if (data.scheduleOption === 'cascade') {
+          // Lựa chọn 1: Dời lùi toàn bộ lịch trình liên hoàn (không trùng ngày)
+          let currentStartPointer = new Date(now);
+
+          for (let i = 0; i < futureSprints.length; i++) {
+            const fs = futureSprints[i];
+            const fsStart = fs.startDate ? new Date(fs.startDate) : currentStartPointer;
+            const fsEnd = fs.endDate ? new Date(fs.endDate) : new Date(fsStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const durationMs = Math.max(24 * 60 * 60 * 1000, fsEnd.getTime() - fsStart.getTime());
+
+            const newStartDate = new Date(currentStartPointer);
+            const newEndDate = new Date(newStartDate.getTime() + durationMs);
+
+            await sprintService.updateSprint(fs.id, {
+              spaceId,
+              name: fs.name,
+              goal: fs.goal,
+              status: fs.status,
+              startDate: `${newStartDate.toISOString().split('T')[0]}T00:00:00`,
+              endDate: `${newEndDate.toISOString().split('T')[0]}T23:59:59`,
+            });
+
+            // Ngày bắt đầu của Sprint kế tiếp = Ngày kết thúc của Sprint này + 1 ngày
+            currentStartPointer = new Date(newEndDate.getTime() + 24 * 60 * 60 * 1000);
+          }
+        } else if (data.scheduleOption === 'keep_deadline') {
+          // Lựa chọn 2: Giữ nguyên hạn chót dự án (rút ngắn ngày của sprint kế tiếp)
+          const nextSp = futureSprints[0];
+          if (nextSp) {
+            const currentNextEnd = nextSp.endDate ? new Date(nextSp.endDate) : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            let adjustedEnd = currentNextEnd;
+            if (adjustedEnd < now) {
+              adjustedEnd = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+            }
+
+            await sprintService.updateSprint(nextSp.id, {
+              spaceId,
+              name: nextSp.name,
+              goal: nextSp.goal,
+              status: nextSp.status,
+              startDate: `${todayStr}T00:00:00`,
+              endDate: `${adjustedEnd.toISOString().split('T')[0]}T23:59:59`,
+            });
+          }
+        }
+      }
+
+      await loadData(true);
+      window.dispatchEvent(new CustomEvent('space_tasks_updated'));
+    } catch (err: any) {
+      console.error('Failed to complete sprint:', err);
+      throw err;
+    }
+  };
+
   // Helper check if task is overdue
   const isTaskOverdue = (task: Task): boolean => {
     if (!task || task.status === 'DONE') return false;
@@ -329,6 +452,8 @@ export function useSprints(spaceId: number) {
     createSprint,
     updateSprint,
     deleteSprint,
+    startSprint,
+    completeSprint,
     getNextSprintDefaultName,
     isTaskOverdue,
   };

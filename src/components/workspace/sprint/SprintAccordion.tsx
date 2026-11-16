@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronDown, ChevronRight, Calendar, Edit3, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Calendar, Edit3, Trash2, Play, CheckCircle2 } from "lucide-react";
 import { Sprint, Task, TaskStatus, TaskPriority } from "@/types";
 import { TaskRowItem } from "./TaskRowItem";
 import { InlineCreateTask } from "./InlineCreateTask";
@@ -14,12 +14,15 @@ interface SprintAccordionProps {
   isPM?: boolean;
   isAssistant?: boolean;
   currentUserId?: number;
+  activeTaskId?: number | null;
   isTaskOverdue: (task: Task) => boolean;
   selectedTaskIds?: number[];
   onToggleSelectTask?: (taskId: number) => void;
   onToggleSelectAllSprint?: (taskIds: number[], select: boolean) => void;
   onEdit: (sprint: Sprint) => void;
   onDelete: (sprintId: number) => void;
+  onStartSprint?: (sprint: Sprint) => void;
+  onCompleteSprint?: (sprint: Sprint) => void;
   onCreateTask: (data: { title: string; sprintId?: number | null }) => Promise<any>;
   onSelectTask: (task: Task, isReadOnly?: boolean) => void;
   onUpdateStatus: (taskId: number, status: TaskStatus) => void;
@@ -43,12 +46,15 @@ export function SprintAccordion({
   isPM = true,
   isAssistant = false,
   currentUserId,
+  activeTaskId,
   isTaskOverdue,
   selectedTaskIds = [],
   onToggleSelectTask,
   onToggleSelectAllSprint,
   onEdit,
   onDelete,
+  onStartSprint,
+  onCompleteSprint,
   onCreateTask,
   onSelectTask,
   onUpdateStatus,
@@ -60,10 +66,19 @@ export function SprintAccordion({
   const [isOpen, setIsOpen] = useState(sprint.status !== "CLOSED");
   const isCoordinator = isPM || isAssistant;
 
-  const badge = statusBadges[sprint.status] || statusBadges.FUTURE;
   const isClosed = sprint.status === "CLOSED";
   const isActive = sprint.status === "ACTIVE";
   const isFuture = sprint.status === "FUTURE";
+
+  const isStartOverdue = isFuture && Boolean(sprint.startDate && new Date(sprint.startDate) <= new Date());
+  const isEndOverdue = isActive && Boolean(sprint.endDate && new Date(sprint.endDate).setHours(23, 59, 59, 999) < Date.now());
+
+  let badge = statusBadges[sprint.status] || statusBadges.FUTURE;
+  if (isStartOverdue) {
+    badge = { label: "QUÁ HẠN BẮT ĐẦU", bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-300" };
+  } else if (isEndOverdue) {
+    badge = { label: "QUÁ HẠN KẾT THÚC", bg: "bg-red-100", text: "text-red-900", border: "border-red-300" };
+  }
 
   // Only tasks that are allowed to be deleted (CLOSED: none, ACTIVE: only TODO, FUTURE: all)
   const deletableTasks = tasks.filter((t) => {
@@ -136,6 +151,30 @@ export function SprintAccordion({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Nút Bắt đầu Sprint (cho Sprint SẮP TỚI) */}
+          {isCoordinator && isFuture && onStartSprint && (
+            <button
+              onClick={() => onStartSprint(sprint)}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              title="Bắt đầu giai đoạn này"
+            >
+              <Play className="w-3 h-3 fill-white" />
+              <span>Bắt đầu</span>
+            </button>
+          )}
+
+          {/* Nút Kết thúc Sprint (cho Sprint ĐANG DIỄN RA) */}
+          {isCoordinator && isActive && onCompleteSprint && (
+            <button
+              onClick={() => onCompleteSprint(sprint)}
+              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              title="Kết thúc giai đoạn này và tổng kết công việc"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Kết thúc</span>
+            </button>
+          )}
+
           {isCoordinator && !isClosed && (
             <button
               onClick={() => onEdit(sprint)}
@@ -184,6 +223,7 @@ export function SprintAccordion({
                     isActiveSprint={isActive}
                     isGhostTransferred={isGhost}
                     isSelected={selectedTaskIds.includes(task.id)}
+                    isActiveDrawerTask={activeTaskId === task.id}
                     onToggleSelect={onToggleSelectTask}
                     onSelect={() => onSelectTask(task, isClosed || isGhost)}
                     onUpdateStatus={onUpdateStatus}

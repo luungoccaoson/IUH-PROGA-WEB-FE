@@ -18,9 +18,12 @@ import { BacklogAccordion } from "./sprint/BacklogAccordion";
 import { CreateSprintModal } from "./sprint/CreateSprintModal";
 import { EditSprintModal } from "./sprint/EditSprintModal";
 import { DeleteSprintModal } from "./sprint/DeleteSprintModal";
+import { StartSprintModal } from "./sprint/StartSprintModal";
+import { CompleteSprintModal } from "./sprint/CompleteSprintModal";
 import { TaskDetailDrawer } from "./sprint/TaskDetailDrawer";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AutoAssignModal } from "@/components/space/AutoAssignModal";
+import { toast } from "@/components/shared/ToastProvider";
 
 interface SprintTaskListProps {
   spaceId: number;
@@ -49,6 +52,8 @@ export function SprintTaskList({
     createSprint,
     updateSprint,
     deleteSprint,
+    startSprint,
+    completeSprint,
     getNextSprintDefaultName,
     isTaskOverdue,
   } = useSprints(spaceId);
@@ -73,6 +78,8 @@ export function SprintTaskList({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [deletingSprintId, setDeletingSprintId] = useState<number | null>(null);
+  const [startingSprint, setStartingSprint] = useState<Sprint | null>(null);
+  const [completingSprint, setCompletingSprint] = useState<Sprint | null>(null);
   const [selectedTaskReadOnly, setSelectedTaskReadOnly] =
     useState<boolean>(false);
 
@@ -115,7 +122,7 @@ export function SprintTaskList({
       setSelectedTaskIds([]);
       setShowBatchDeleteConfirm(false);
     } catch (err) {
-      alert("Không thể xóa các công việc đã chọn. Vui lòng thử lại!");
+      toast.error("Không thể xóa các công việc đã chọn. Vui lòng thử lại!");
     } finally {
       setIsBatchDeleting(false);
     }
@@ -129,7 +136,7 @@ export function SprintTaskList({
       await deleteSprint(sprintId, deleteTasks);
       setDeletingSprintId(null);
     } catch (err) {
-      alert("Không thể xóa Sprint. Vui lòng thử lại!");
+      toast.error("Không thể xóa Sprint. Vui lòng thử lại!");
     }
   };
 
@@ -140,7 +147,7 @@ export function SprintTaskList({
     try {
       await updateTask(taskId, { priority });
     } catch (err) {
-      alert("Không thể cập nhật độ ưu tiên!");
+      toast.error("Không thể cập nhật độ ưu tiên!");
     }
   };
 
@@ -150,7 +157,7 @@ export function SprintTaskList({
         ownerId: ownerId !== undefined ? ownerId : null,
       });
     } catch (err) {
-      alert("Không thể gán người thực hiện!");
+      toast.error("Không thể gán người thực hiện!");
     }
   };
 
@@ -161,7 +168,7 @@ export function SprintTaskList({
     if (targetSprintId !== null) {
       const targetSprint = sprints.find((s) => s.id === targetSprintId);
       if (targetSprint?.status === "CLOSED") {
-        alert("Không thể di chuyển công việc vào Sprint đã đóng!");
+        toast.warning("Không thể di chuyển công việc vào Sprint đã đóng!", "Thông báo");
         return;
       }
     }
@@ -313,6 +320,7 @@ export function SprintTaskList({
                 isPM={isPM}
                 isAssistant={isAssistant}
                 currentUserId={currentUserId}
+                activeTaskId={selectedTask?.id}
                 isTaskOverdue={isTaskOverdue}
                 selectedTaskIds={selectedTaskIds}
                 onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
@@ -321,6 +329,8 @@ export function SprintTaskList({
                 }
                 onEdit={setEditingSprint}
                 onDelete={(id) => setDeletingSprintId(id)}
+                onStartSprint={setStartingSprint}
+                onCompleteSprint={setCompletingSprint}
                 onCreateTask={(data) =>
                   createTask({
                     ...data,
@@ -351,6 +361,7 @@ export function SprintTaskList({
             isPM={isPM}
             isAssistant={isAssistant}
             currentUserId={currentUserId}
+            activeTaskId={selectedTask?.id}
             isTaskOverdue={isTaskOverdue}
             selectedTaskIds={selectedTaskIds}
             onToggleSelectTask={isPM ? handleToggleSelectTask : undefined}
@@ -452,6 +463,35 @@ export function SprintTaskList({
         taskCount={tasks.filter((t) => t.sprintId === deletingSprintId).length}
         onClose={() => setDeletingSprintId(null)}
         onConfirm={handleDeleteSprintWithOptions}
+      />
+
+      {/* Start Sprint Modal */}
+      <StartSprintModal
+        isOpen={Boolean(startingSprint)}
+        sprint={startingSprint}
+        activeSprint={sprints.find((s) => s.status === "ACTIVE") || null}
+        onClose={() => setStartingSprint(null)}
+        onConfirm={async (data) => {
+          await startSprint(data);
+        }}
+      />
+
+      {/* Complete Sprint Modal */}
+      <CompleteSprintModal
+        isOpen={Boolean(completingSprint)}
+        sprint={completingSprint}
+        tasks={tasks}
+        nextSprint={
+          completingSprint
+            ? sprints.find((s) => s.id > completingSprint.id && s.status !== "CLOSED") ||
+              sprints.find((s) => s.status === "FUTURE") ||
+              null
+            : null
+        }
+        onClose={() => setCompletingSprint(null)}
+        onConfirm={async (data) => {
+          await completeSprint(data);
+        }}
       />
 
       {/* Task Detail Drawer Side Panel (Non-blocking right layout!) */}
