@@ -21,6 +21,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { Space, Task, Sprint } from "@/types";
+import { computeTaskNumberMap, formatTaskCode } from "@/utils/taskNumber";
 
 interface SpaceMindmapOverviewProps {
   space?: Space | null;
@@ -46,6 +47,8 @@ export function SpaceMindmapOverview({
   const [viewMode, setViewMode] = useState<ViewMode>("journey");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [expandedSprints, setExpandedSprints] = useState<Record<number, boolean>>({});
+
+  const taskNumberMap = React.useMemo(() => computeTaskNumberMap(tasks, sprints), [tasks, sprints]);
 
   // Current user matching: by ID or email
   const currentUserId = currentUser?.id;
@@ -272,7 +275,7 @@ export function SpaceMindmapOverview({
                         className="p-2 rounded-lg bg-[#F0FDF4] border border-[#DCFCE7] text-xs space-y-1 hover:border-[#86EFAC] cursor-pointer transition-colors"
                       >
                         <p className="font-semibold text-[#166534] line-clamp-1">{t.title}</p>
-                        <p className="text-[10px] text-[#4ADE80] font-mono">#{t.id} • {t.sprintName || "Backlog"}</p>
+                        <p className="text-[10px] text-[#4ADE80] font-mono">{formatTaskCode(t.id, taskNumberMap)} • {t.sprintName || "Backlog"}</p>
                       </div>
                     ))
                   )}
@@ -550,7 +553,7 @@ export function SpaceMindmapOverview({
                                     {getPriorityBadge(t.priority)}
                                   </div>
                                   <div className="flex items-center justify-between text-[10px] text-[#64748B]">
-                                    <span className="font-mono">#{t.id}</span>
+                                    <span className="font-mono">{formatTaskCode(t.id, taskNumberMap)}</span>
                                     <span className="truncate max-w-[120px]">
                                       {t.assignee?.fullName || t.suggestedMemberName || "Chưa giao"}
                                     </span>

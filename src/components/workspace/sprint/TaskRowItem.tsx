@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { AlertTriangle, ChevronUp, User, Trash2, Check } from "lucide-react";
 import { Task, TaskStatus, TaskPriority } from "@/types";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toast } from "@/components/shared/ToastProvider";
 import { getTaskTransferredOrigin } from "@/hooks/useSprints";
 import { canUserDeleteTaskItem } from "@/utils/aiTaskAssistant";
 
@@ -19,6 +20,7 @@ interface TaskRowItemProps {
   isActiveSprint?: boolean;
   isGhostTransferred?: boolean;
   isSelected?: boolean;
+  isActiveDrawerTask?: boolean;
   onToggleSelect?: (taskId: number) => void;
   onSelect?: (task: Task) => void;
   onUpdateStatus?: (taskId: number, status: TaskStatus) => void;
@@ -53,6 +55,7 @@ export function TaskRowItem({
   isActiveSprint = false,
   isGhostTransferred = false,
   isSelected = false,
+  isActiveDrawerTask = false,
   onToggleSelect,
   onSelect,
   onUpdateStatus,
@@ -164,15 +167,17 @@ export function TaskRowItem({
           );
         }}
         className={`p-3 transition-colors flex items-center justify-between gap-3 font-sans text-xs group ${
-          isSelected
-            ? "bg-[#E8F0FE]/60 border-l-[3px] border-l-[#1A73E8]"
-            : isMyTask
-              ? "bg-[#F8FAFF]/70 hover:bg-[#F0F6FF] border-l-[3px] border-l-[#1A73E8] cursor-pointer"
-              : isReadOnly
-                ? "bg-white hover:bg-[#F9FAFB] cursor-pointer"
-                : canDragAcrossSprints
-                  ? "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
-                  : "bg-white hover:bg-[#F9FAFB] cursor-pointer"
+          isActiveDrawerTask
+            ? "bg-blue-100/90 border-l-[4px] border-l-[#1A73E8] shadow-xs ring-1 ring-blue-300 font-medium"
+            : isSelected
+              ? "bg-[#E8F0FE]/60 border-l-[3px] border-l-[#1A73E8]"
+              : isMyTask
+                ? "bg-[#F8FAFF]/70 hover:bg-[#F0F6FF] border-l-[3px] border-l-[#1A73E8] cursor-pointer"
+                : isReadOnly
+                  ? "bg-white hover:bg-[#F9FAFB] cursor-pointer"
+                  : canDragAcrossSprints
+                    ? "bg-white hover:bg-[#F9FAFB] cursor-grab active:cursor-grabbing"
+                    : "bg-white hover:bg-[#F9FAFB] cursor-pointer"
         }`}
       >
         {/* Left side: Checkbox (PM only) + Task Code & Title */}
@@ -458,8 +463,9 @@ export function TaskRowItem({
                             task.status !== "IN_REVIEW" &&
                             task.status !== "DONE"
                           ) {
-                            alert(
-                              "⚠️ Quy trình nghiệm thu: Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa ở trạng thái 'Chờ duyệt'). PM chỉ duyệt sang 'Đã xong' đối với công việc đang ở trạng thái 'Chờ duyệt'!",
+                            toast.alert(
+                              "Thành viên phụ trách chưa báo cáo hoàn thành công việc này (chưa ở trạng thái 'Chờ duyệt'). PM chỉ duyệt sang 'Đã xong' đối với công việc đang ở trạng thái 'Chờ duyệt'!",
+                              "Quy trình nghiệm thu"
                             );
                             setShowStatusPopover(false);
                             return;

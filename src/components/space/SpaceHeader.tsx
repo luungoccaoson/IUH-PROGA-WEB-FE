@@ -16,11 +16,12 @@ import {
   UserCheck,
   Sparkles,
   Crown,
+  MessageSquare,
 } from "lucide-react";
 import { Space } from "@/types";
 import { SpaceRoleType } from "@/utils/roleAssignment";
 
-export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members";
+export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members" | "discussions";
 
 interface SpaceHeaderProps {
   workspaceId: number;
@@ -246,6 +247,17 @@ export function SpaceHeader({
         >
           <Users className="w-4 h-4" />
           Thành viên Space
+        </button>
+        <button
+          onClick={() => setActiveTab("discussions")}
+          className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-all ${
+            activeTab === "discussions"
+              ? "border-[#111827] text-[#111827]"
+              : "border-transparent hover:text-[#111827]"
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Thảo luận & Nhật ký
         </button>
       </div>
     </div>

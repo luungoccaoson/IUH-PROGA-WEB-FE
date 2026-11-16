@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { workspaceService } from "@/services/workspace.service";
 import { sprintService } from "@/services/sprint.service";
@@ -123,6 +125,7 @@ export function SpaceAiCopilotDrawer({
 
   // Window Size & Resizing State (Smooth Drag to Resize with Min/Max Boundaries)
   const [drawerSize, setDrawerSize] = useState({ width: 1050, height: 680 });
+  const [isMaximized, setIsMaximized] = useState(false);
   const [resizingDirection, setResizingDirection] = useState<string | null>(
     null,
   );
@@ -239,31 +242,27 @@ export function SpaceAiCopilotDrawer({
     const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
     const todoPct = total > 0 ? Math.max(0, 100 - donePct - inReviewPct - inProgressPct) : 0;
 
-    return `# BÁO CÁO TIẾN ĐỘ & ĐÁNH GIÁ RỦI RO DỰ ÁN
+    return `# BÁO CÁO TIẾN ĐỘ DỰ ÁN
 
-### 1. Tóm Tắt Tỷ Lệ Hoàn Thành Dự Án
-- Tổng số công việc: ${total} Tasks
-- Đã hoàn thành (DONE): ${done}/${total} Tasks (${donePct}%)
-- Đang chờ duyệt (IN_REVIEW): ${inReview}/${total} Tasks (${inReviewPct}%)
-- Đang thực hiện (IN_PROGRESS): ${inProgress}/${total} Tasks (${inProgressPct}%)
-- Cần làm (TODO): ${todo}/${total} Tasks (${todoPct}%)
-> **Đánh giá chung:** Dự án '${space.name}' hiện có ${done}/${total} công việc đã hoàn tất (${donePct}%). ${inReview > 0 ? `Hiện có ${inReview} công việc đang chờ nghiệm thu, cần giải phóng sớm để nâng tỷ lệ hoàn thành lên ${donePct + inReviewPct}%.` : "Các luồng công việc đang bám sát tiến độ đề ra."}
+### 1. Chỉ số tổng quan
+- **Tổng công việc:** ${total}
+- **Hoàn thành:** ${done}/${total} (${donePct}%)
+- **Chờ duyệt:** ${inReview} (${inReviewPct}%)
+- **Đang làm:** ${inProgress} (${inProgressPct}%)
+- **Cần làm:** ${todo} (${todoPct}%)
+> **Đánh giá chung:** Dự án đạt ${donePct}% tiến độ.${inReview > 0 ? ` Có ${inReview} công việc đang chờ PM nghiệm thu.` : " Tiến độ các luồng công việc đang ổn định."}
 
-### 2. Phân Tích Rủi Ro & Điểm Nghẽn Tiến Độ
-- **Rủi ro mức độ cao (Critical Risks):** ${riskAnalysis.riskLevel === "HIGH" ? riskAnalysis.riskSummary : "Khối lượng công việc cần làm còn " + todo + " tasks, cần duy trì nhịp độ phân công đều tay cho các thành viên."}
-- **Điểm nghẽn hiện tại (Bottlenecks):** ${inReview > 0 ? `Hiện có ${inReview} công việc đang ở cột Chờ duyệt (IN_REVIEW), cần PM/Assistant nghiệm thu kịp thời để các thành viên tiếp tục nhận task mới.` : "Bảng Kanban đang lưu thông tốt, không có công việc nào bị ứ đọng bất thường."}
+### 2. Điểm nghẽn & Đề xuất hành động
+1. ${inReview > 0 ? `Nghiệm thu dứt điểm ${inReview} công việc tại cột Chờ duyệt.` : "Duy trì kiểm tra định kỳ công việc bàn giao."}
+2. ${riskAnalysis.overdueTasks > 0 ? `Tập trung giải quyết ${riskAnalysis.overdueTasks} công việc trễ hạn.` : `Đôn đốc hoàn thành ${inProgress} công việc đang làm.`}
+3. Cân đối phân bổ công việc cho thành viên còn trống tải.
 
-### 3. Đề Xuất Kế Hoạch Hành Động Cho PM
-1. **Giải quyết điểm nghẽn Review (Thực hiện trong 24h):** ${inReview > 0 ? `Kiểm thử và phê duyệt dứt điểm ${inReview} công việc tại cột Chờ duyệt.` : "Duy trì kiểm tra hàng ngày các công việc bàn giao."}
-2. **Tập trung nguồn lực dứt điểm công việc đang làm:** Đôn đốc thành viên hoàn thành ${inProgress} công việc đang ở trạng thái Đang làm.
-3. **Phân bổ nhân sự hợp lý:** San sẻ các task tồn đọng cho các thành viên đang có công suất trống.
-
-### 4. Bảng Tóm Tắt Thứ Tự Ưu Tiên Xử Lý
-| Task ID | Tên công việc | Trạng thái hiện tại | Ưu tiên | Hành động đề xuất |
-|---|---|---|---|---|
-${inReview > 0 ? `| In-Review | Nghiệm thu ${inReview} công việc cột Chờ duyệt | IN_REVIEW | URGENT | PM Review & Nghiệm thu ngay |` : ""}
-${inProgress > 0 ? `| In-Progress | Dứt điểm ${inProgress} công việc đang làm | IN_PROGRESS | HIGH | Hoàn thành trong 1-2 ngày tới |` : ""}
-${todo > 0 ? `| Backlog | Triển khai các task tồn đọng | TODO | MEDIUM | Phân công nhân sự phù hợp |` : ""}
+### 3. Việc cần xử lý ngay
+| Công việc | Trạng thái | Ưu tiên | Hành động đề xuất |
+|---|---|---|---|
+${inReview > 0 ? `| Nghiệm thu ${inReview} task Chờ duyệt | IN_REVIEW | KHẨN CẤP | PM kiểm tra & Duyệt hoàn thành |` : ""}
+${riskAnalysis.overdueTasks > 0 ? `| Xử lý ${riskAnalysis.overdueTasks} task trễ hạn | IN_PROGRESS | CAO | Đôn đốc hoàn thành sớm |` : ""}
+${inProgress > 0 && inReview === 0 && riskAnalysis.overdueTasks === 0 ? `| ${inProgress} task đang làm | IN_PROGRESS | TRUNG BÌNH | Tiếp tục triển khai |` : ""}
 `;
   };
 
@@ -864,11 +863,15 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
   return (
     <div
       style={{
-        transform: `translate(${position.x}px, ${position.y}px)`,
-        width: `${drawerSize.width}px`,
-        height: `${drawerSize.height}px`,
+        transform: isMaximized ? "none" : `translate(${position.x}px, ${position.y}px)`,
+        width: isMaximized ? undefined : `${drawerSize.width}px`,
+        height: isMaximized ? undefined : `${drawerSize.height}px`,
       }}
-      className="fixed bottom-4 right-4 z-[9999] max-w-[96vw] max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden animate-in slide-in-from-bottom-5 duration-300 group/drawer"
+      className={`fixed z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-300 flex flex-col font-sans overflow-hidden transition-all duration-200 group/drawer ${
+        isMaximized
+          ? "top-[130px] bottom-4 right-4 left-4 lg:left-[275px] w-auto h-auto max-w-none max-h-none"
+          : "bottom-4 right-4 max-w-[96vw] max-h-[92vh]"
+      }`}
     >
       {/* Resize Handle: Mép trên (Top) */}
       <div
@@ -969,18 +972,37 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               <span>Phân rã Task</span>
             </button>
           )}
+
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {activeMode === "decompose" && (
             <button
               onClick={handleNewSession}
-              className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[11px] font-bold text-white transition-all cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[11px] font-bold text-white transition-all cursor-pointer mr-1"
             >
               <RefreshCw className="w-3 h-3 text-[#FBBF24]" />
               <span>Phiên mới</span>
             </button>
           )}
+
+          {/* Nút phóng to / thu nhỏ cửa sổ AI (tiện lợi, không cần kéo góc thủ công) */}
+          <button
+            type="button"
+            onClick={() => setIsMaximized((prev) => !prev)}
+            className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
+            title={
+              isMaximized
+                ? "Thu nhỏ về kích thước chuẩn"
+                : "Phóng to toàn màn hình"
+            }
+          >
+            {isMaximized ? (
+              <Minimize2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </button>
 
           <button
             type="button"
@@ -989,7 +1011,7 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
               onClose();
             }}
             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all cursor-pointer"
-            title="Thu nhỏ"
+            title="Đóng bảng trợ lý"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1206,23 +1228,17 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
         {activeMode === "risk" && (
           <div className="space-y-4 animate-in fade-in duration-150">
             {/* PM Agent Live Assistant Banner */}
-            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white rounded-2xl p-4 shadow-sm border border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
-                  <LineChart className="w-5 h-5 text-emerald-400" />
+            <div className="bg-[#111827] text-white rounded-2xl p-3.5 shadow-sm border border-gray-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                  <LineChart className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                      PM Agent • Điều Phối &amp; Giám Sát Tiến Độ
-                    </h4>
-                    <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-400/30 font-bold">
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                    Tự động quét điểm nghẽn Kanban, đánh giá tải thành viên và
-                    dự báo rủi ro trễ deadline cho Space: {space.name}.
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                    Giám sát Tiến độ &amp; Rủi ro Space
+                  </h4>
+                  <p className="text-[11px] text-gray-300">
+                    Đánh giá tiến độ, phát hiện điểm nghẽn và dự báo rủi ro theo thời gian thực
                   </p>
                 </div>
               </div>
@@ -1234,11 +1250,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                     const report = generateLocalPmReport();
                     setPmReportText(report);
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
-                  title="Xuất báo cáo tiến độ và bảng rủi ro ngay lập tức từ dữ liệu Space (0s, không tốn token)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+                  title="Xuất báo cáo tiến độ tức thì"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>Lập Báo Cáo Tiến Độ (Tức thì)</span>
+                  <span>Báo Cáo Tiến Độ</span>
                 </button>
 
                 <button
@@ -1255,10 +1271,10 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                     }
                   }}
                   disabled={loadingPmReport}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-xl border border-white/20 transition-all cursor-pointer shrink-0"
-                  title="Phân tích sâu bằng AI LLM (có thể mất 5-10s)"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[11px] font-semibold rounded-xl border border-white/20 transition-all cursor-pointer shrink-0"
+                  title="Phân tích sâu bằng AI LLM"
                 >
-                  <span>{loadingPmReport ? "Đang phân tích..." : "AI Phân tích sâu"}</span>
+                  <span>{loadingPmReport ? "Đang phân tích..." : "AI Phân tích"}</span>
                 </button>
               </div>
             </div>
@@ -1272,11 +1288,11 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             )}
 
             {/* Project Health Summary Row */}
-            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
-              <div className="space-y-1">
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-xs font-extrabold text-[#111827] uppercase font-mono">
-                    Đánh giá Tiến độ &amp; Rủi ro Dự án
+                    Tình trạng tổng thể:
                   </h4>
                   <span
                     className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold border ${
@@ -1300,19 +1316,30 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 text-center font-mono text-xs">
-                <div className="px-3 py-1.5 rounded-xl bg-[#E6F4EA] text-[#137333] border border-[#CEE7D4]">
-                  <p className="text-[10px] font-semibold">Đã xong</p>
+              <div className="flex items-center gap-2 text-center font-mono text-xs flex-wrap">
+                <div className="px-2.5 py-1 rounded-xl bg-[#E6F4EA] text-[#137333] border border-[#CEE7D4]">
+                  <p className="text-[9px] font-bold">ĐÃ XONG</p>
                   <p className="font-extrabold">
-                    {riskAnalysis.doneTasks}/{riskAnalysis.totalTasks}
+                    {riskAnalysis.doneTasks}/{riskAnalysis.totalTasks} (
+                    {riskAnalysis.totalTasks > 0
+                      ? Math.round(
+                          (riskAnalysis.doneTasks / riskAnalysis.totalTasks) *
+                            100,
+                        )
+                      : 0}
+                    %)
                   </p>
                 </div>
-                <div className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
-                  <p className="text-[10px] font-semibold">Chờ duyệt</p>
+                <div className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
+                  <p className="text-[9px] font-bold">CHỜ DUYỆT</p>
                   <p className="font-extrabold">{riskAnalysis.inReviewTasks}</p>
                 </div>
-                <div className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200">
-                  <p className="text-[10px] font-semibold">Trễ hạn</p>
+                <div className="px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 border border-blue-200">
+                  <p className="text-[9px] font-bold">ĐANG LÀM</p>
+                  <p className="font-extrabold">{riskAnalysis.inProgressTasks || 0}</p>
+                </div>
+                <div className="px-2.5 py-1 rounded-xl bg-red-50 text-red-700 border border-red-200">
+                  <p className="text-[9px] font-bold">TRỄ HẠN</p>
                   <p className="font-extrabold">{riskAnalysis.overdueTasks}</p>
                 </div>
               </div>

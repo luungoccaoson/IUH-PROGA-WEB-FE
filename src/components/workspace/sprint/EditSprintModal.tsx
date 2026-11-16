@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Edit3, X } from "lucide-react";
 import { Sprint, SprintStatus } from "@/types";
+import { toast } from "@/components/shared/ToastProvider";
 
 interface EditSprintModalProps {
   sprint: Sprint | null;
@@ -45,7 +46,7 @@ export function EditSprintModal({ sprint, onClose, onSubmit }: EditSprintModalPr
       });
       onClose();
     } catch (err) {
-      alert("Không thể cập nhật Sprint. Vui lòng thử lại!");
+      toast.error("Không thể cập nhật giai đoạn. Vui lòng thử lại!");
     } finally {
       setIsSubmitting(false);
     }

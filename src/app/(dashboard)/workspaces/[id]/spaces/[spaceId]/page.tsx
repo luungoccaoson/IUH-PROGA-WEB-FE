@@ -13,6 +13,7 @@ import { SpaceHeader, TabType } from "@/components/space/SpaceHeader";
 import { SpaceOverviewTab } from "@/components/space/SpaceOverviewTab";
 import { SpaceTimelineTab } from "@/components/space/SpaceTimelineTab";
 import { SpaceMembersTab } from "@/components/space/SpaceMembersTab";
+import { SpaceDiscussionsTab } from "@/components/space/SpaceDiscussionsTab";
 import { EditSpaceModal } from "@/components/space/EditSpaceModal";
 import { AddSpaceMemberModal } from "@/components/space/AddSpaceMemberModal";
 import { SpaceAiCopilotDrawer } from "@/components/workspace/SpaceAiCopilotDrawer";
@@ -274,15 +275,11 @@ export default function SpaceDetailPage() {
 
   return (
     <>
-      {/* Outer Page Container: Pushed inward (margin-right 410px) when task detail drawer is open so content is never covered! */}
+      {/* Outer Page Container: Pushed inward (margin-right 540px) when task detail drawer is open so content is never covered! */}
       <div
         className={`space-y-6 animate-in fade-in duration-300 transition-all duration-300 ease-in-out ${
-          isDrawerVisible ? "mr-[410px]" : ""
+          isDrawerVisible ? "lg:mr-[540px] lg:max-w-[calc(100%-540px)]" : ""
         }`}
-        style={{
-          width: isDrawerVisible ? "calc(100% - 410px)" : "100%",
-          transition: "all 0.3s ease-in-out",
-        }}
       >
         {/* Modular Header */}
         <SpaceHeader
@@ -310,6 +307,8 @@ export default function SpaceDetailPage() {
               sprints={sprints}
               members={members}
               currentUser={currentUser}
+              isPM={isSpacePM}
+              isAssistant={isSpaceAssistant}
               onViewTasks={() => setActiveTab("tasks")}
               onSelectTask={handleSelectTaskToggle}
             />
@@ -369,6 +368,20 @@ export default function SpaceDetailPage() {
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onSelectTask={handleSelectTaskToggle}
                 onRoleUpdated={() => fetchData(true)}
+              />
+            </div>
+          )}
+
+          {/* TAB 6: DISCUSSIONS & ACTIVITY LOGS */}
+          {activeTab === "discussions" && (
+            <div className="animate-in fade-in duration-200">
+              <SpaceDiscussionsTab
+                spaceId={spaceId}
+                tasks={tasks}
+                sprints={sprints}
+                members={members}
+                currentUserId={currentUser?.id}
+                onSelectTask={handleSelectTaskToggle}
               />
             </div>
           )}
