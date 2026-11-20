@@ -99,6 +99,15 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
           setSelectedTask(updated);
         }
 
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("space_tasks_updated"));
+          try {
+            const bc = new BroadcastChannel("proga_notifications");
+            bc.postMessage({ type: "REFRESH" });
+            bc.close();
+          } catch {}
+        }
+
         if (onTasksUpdated) onTasksUpdated(true);
         return updated;
       } catch (err) {
@@ -118,6 +127,14 @@ export function useTasks(spaceId: number, onTasksUpdated?: (isSilent?: boolean) 
         const updated = await taskService.updateTaskStatus(taskId, status);
         if (selectedTask && selectedTask.id === taskId) {
           setSelectedTask(updated);
+        }
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("space_tasks_updated"));
+          try {
+            const bc = new BroadcastChannel("proga_notifications");
+            bc.postMessage({ type: "REFRESH" });
+            bc.close();
+          } catch {}
         }
         if (onTasksUpdated) onTasksUpdated(true);
         return updated;

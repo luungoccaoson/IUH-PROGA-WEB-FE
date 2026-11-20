@@ -83,6 +83,12 @@ export function SpaceAiCopilotDrawer({
   const [activeMode, setActiveMode] = useState<CopilotMode>(
     spaceRole === "MEMBER" ? "personal" : "risk",
   );
+
+  useEffect(() => {
+    if (!isCoordinator && activeMode !== "personal") {
+      setActiveMode("personal");
+    }
+  }, [isCoordinator, activeMode]);
   const [actionLoadingId, setActionLoadingId] = useState<
     number | string | null
   >(null);
@@ -907,9 +913,9 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
           </div>
           <div>
             <h3 className="text-xs font-extrabold flex items-center gap-2">
-              <span>Multi-AI Co-Pilot</span>
+              <span>{isCoordinator ? "Trợ lý Trí tuệ Nhân tạo Điều phối" : "Trợ lý Trí tuệ Nhân tạo Cá nhân"}</span>
               <span className="px-2 py-0.5 rounded bg-white/15 text-[10px] font-mono text-[#A7F3D0]">
-                {spaceRole}
+                {spaceRole === "PM" ? "Quản lý Dự án" : spaceRole === "ASSISTANT" ? "Trợ lý Quản lý" : "Thành viên"}
               </span>
             </h3>
           </div>
@@ -930,18 +936,20 @@ ${item.suggestedMemberName ? `👤 Phân công cho: ${item.suggestedMemberName}\
             <span>Việc của tôi ({myActiveTasks.length})</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveMode("risk")}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeMode === "risk"
-                ? "bg-white text-[#111827] shadow-2xs"
-                : "text-gray-300 hover:text-white"
-            }`}
-          >
-            <LineChart className="w-3.5 h-3.5 text-[#10B981]" />
-            <span>PM Agent: Tiến độ &amp; Rủi ro</span>
-          </button>
+          {isCoordinator && (
+            <button
+              type="button"
+              onClick={() => setActiveMode("risk")}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeMode === "risk"
+                  ? "bg-white text-[#111827] shadow-2xs"
+                  : "text-gray-300 hover:text-white"
+              }`}
+            >
+              <LineChart className="w-3.5 h-3.5 text-[#10B981]" />
+              <span>Tiến độ và Rủi ro</span>
+            </button>
+          )}
 
           {isCoordinator && (
             <button

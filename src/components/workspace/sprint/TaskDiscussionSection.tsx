@@ -207,6 +207,10 @@ export function TaskDiscussionSection({
           const bc = new BroadcastChannel("proga_task_notes");
           bc.postMessage({ type: "NEW_NOTE", note: created, taskId });
           bc.close();
+
+          const bcNotif = new BroadcastChannel("proga_notifications");
+          bcNotif.postMessage({ type: "NEW_NOTIFICATION" });
+          bcNotif.close();
         } catch {}
       }
 

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Space } from "@/types";
 import { SpaceRoleType } from "@/utils/roleAssignment";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 
 export type TabType = "overview" | "tasks" | "kanban" | "timeline" | "members" | "discussions";
 
@@ -188,6 +189,9 @@ export function SpaceHeader({
               <Settings className="w-4 h-4" />
             </button>
           )}
+
+          {/* Chuông Thông Báo */}
+          <NotificationBell />
         </div>
       </div>
 

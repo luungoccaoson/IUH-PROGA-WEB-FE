@@ -17,6 +17,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { usePathname } from "next/navigation";
 import { workspaceService } from "@/services/workspace.service";
 import { Workspace, Space } from "@/types";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 
 export default function DashboardLayout({
   children,
@@ -226,15 +227,15 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen flex bg-white text-[#111827]">
-      {/* Left Sidebar - Warm Beige #F6F5EF */}
+      {/* Left Sidebar - Warm Beige #F6F5EF (Cố định toàn màn hình, không bị trôi khi cuộn trang) */}
       <aside
-        className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 ${
+        className={`border-r border-[#E5E7EB] bg-[#F6F5EF] transition-all duration-300 shrink-0 h-screen sticky top-0 flex flex-col justify-between z-30 ${
           isSidebarCollapsed
             ? "hidden"
             : "w-64 p-5 flex flex-col justify-between hidden md:flex"
         }`}
       >
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto flex-1 pr-1 pb-4">
           {/* Logo & Brand & Toggle Button */}
           <div className="flex items-center justify-between px-1">
             <Link href="/" className="flex items-center gap-2.5">
@@ -409,34 +410,38 @@ export default function DashboardLayout({
           )}
         </div>
 
-        {/* Footer User Info & Logout */}
-        <div className="pt-4 border-t border-[#E5E7EB] space-y-3 font-sans">
-          <Link
-            href="/profile"
-            className="flex items-center justify-between px-2.5 py-2 rounded-2xl hover:bg-white/80 border border-transparent hover:border-[#E5E7EB] transition-all group"
-            title="Xem & Chỉnh sửa hồ sơ cá nhân"
-          >
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shrink-0">
-                {mounted && (user?.fullName || user?.username)
-                  ? (user.fullName || user.username)
-                      .substring(0, 2)
-                      .toUpperCase()
-                  : "SL"}
-              </div>
-              <div className="truncate text-xs">
-                <p className="font-bold text-[#111827] group-hover:text-[#1A73E8] transition-colors truncate">
+        {/* Footer User Info & Logout (Cố định ở đáy Sidebar) */}
+        <div className="pt-4 border-t border-[#E5E7EB] space-y-3 font-sans shrink-0 bg-[#F6F5EF]">
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/profile"
+              className="flex-1 flex items-center justify-between px-2.5 py-2 rounded-2xl hover:bg-white/80 border border-transparent hover:border-[#E5E7EB] transition-all group min-w-0"
+              title="Xem & Chỉnh sửa hồ sơ cá nhân"
+            >
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-[#111827] text-white font-bold font-mono text-xs flex items-center justify-center shrink-0">
                   {mounted && (user?.fullName || user?.username)
-                    ? user.fullName || user.username
-                    : "Son Luu"}
-                </p>
-                <p className="text-[10px] text-[#6B7280] font-mono truncate">
-                  {mounted && user?.email ? user.email : "developer@proga.vn"}
-                </p>
+                    ? (user.fullName || user.username)
+                        .substring(0, 2)
+                        .toUpperCase()
+                    : "SL"}
+                </div>
+                <div className="truncate text-xs">
+                  <p className="font-bold text-[#111827] group-hover:text-[#1A73E8] transition-colors truncate">
+                    {mounted && (user?.fullName || user?.username)
+                      ? user.fullName || user.username
+                      : "Son Luu"}
+                  </p>
+                  <p className="text-[10px] text-[#6B7280] font-mono truncate">
+                    {mounted && user?.email ? user.email : "developer@proga.vn"}
+                  </p>
+                </div>
               </div>
-            </div>
-            <UserCircle className="w-4 h-4 text-[#6B7280] group-hover:text-[#1A73E8] shrink-0" />
-          </Link>
+              <UserCircle className="w-4 h-4 text-[#6B7280] group-hover:text-[#1A73E8] shrink-0" />
+            </Link>
+
+            <NotificationBell />
+          </div>
 
           <button
             onClick={() => {
